@@ -6,6 +6,16 @@ export interface NoteTypeConfig {
   warn_only: boolean;
   instructions?: string;
   slug_format?: 'title' | 'date';
+  fields?: Record<string, FieldDefinition>;
+}
+
+export interface FieldDefinition {
+  type: 'text' | 'date' | 'number' | 'boolean' | 'wikilink' | 'list' | 'enum';
+  of?: string;
+  options?: string[];
+  required?: boolean;
+  default?: string;
+  description?: string;
 }
 
 export interface GraniteConfig {
@@ -29,6 +39,9 @@ export interface NoteFrontmatter {
   modified: string;
   tags: string[];
   aliases: string[];
+  status: 'inbox' | 'active' | 'archived';
+  source: 'human' | 'agent' | 'extraction';
+  [key: string]: unknown;
 }
 
 export interface Note {

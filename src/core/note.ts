@@ -50,6 +50,8 @@ export function createNote(
     modified: now,
     tags: [],
     aliases: [],
+    status: 'active',
+    source: 'human',
   };
 
   const body = bodyOverride ?? typeConfig.template;

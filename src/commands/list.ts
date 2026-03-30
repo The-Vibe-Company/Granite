@@ -2,8 +2,38 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { listNotes } from '../core/note.js';
 import { jsonSuccess } from '../core/json-output.js';
+import type { Note } from '../core/types.js';
 
-export function listCommand(options: { type?: string; json?: boolean }): void {
+const AVAILABLE_FIELDS = ['slug', 'title', 'type', 'created', 'modified', 'tags', 'aliases', 'status', 'source', 'filepath'];
+
+interface ListOptions {
+  type?: string;
+  status?: string;
+  source?: string;
+  since?: string;
+  json?: boolean | string;
+}
+
+function pickFields(note: Note, fields: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const f of fields) {
+    switch (f) {
+      case 'slug': out.slug = note.slug; break;
+      case 'title': out.title = note.frontmatter.title; break;
+      case 'type': out.type = note.frontmatter.type; break;
+      case 'created': out.created = note.frontmatter.created; break;
+      case 'modified': out.modified = note.frontmatter.modified; break;
+      case 'tags': out.tags = note.frontmatter.tags; break;
+      case 'aliases': out.aliases = note.frontmatter.aliases; break;
+      case 'status': out.status = note.frontmatter.status; break;
+      case 'source': out.source = note.frontmatter.source; break;
+      case 'filepath': out.filepath = note.filepath; break;
+    }
+  }
+  return out;
+}
+
+export function listCommand(options: ListOptions): void {
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
   let notes = listNotes(vaultRoot, config);
@@ -12,19 +42,36 @@ export function listCommand(options: { type?: string; json?: boolean }): void {
     notes = notes.filter(n => n.frontmatter.type === options.type);
   }
 
+  if (options.status) {
+    notes = notes.filter(n => n.frontmatter.status === options.status);
+  }
+
+  if (options.source) {
+    notes = notes.filter(n => n.frontmatter.source === options.source);
+  }
+
+  if (options.since) {
+    notes = notes.filter(n => n.frontmatter.modified >= options.since!);
+  }
+
   // Sort by modified desc
   notes.sort((a, b) => b.frontmatter.modified.localeCompare(a.frontmatter.modified));
 
-  if (options.json) {
-    const out = notes.map(n => ({
-      slug: n.slug,
-      title: n.frontmatter.title,
-      type: n.frontmatter.type,
-      created: n.frontmatter.created,
-      modified: n.frontmatter.modified,
-      tags: n.frontmatter.tags,
-      filepath: n.filepath,
-    }));
+  if (options.json !== undefined && options.json !== false) {
+    // --json with field selection: --json slug,title,type
+    // --json without value (boolean true): all default fields
+    let fields: string[];
+    if (typeof options.json === 'string') {
+      fields = options.json.split(',').map(f => f.trim()).filter(f => AVAILABLE_FIELDS.includes(f));
+      if (fields.length === 0) {
+        console.log(`Available fields: ${AVAILABLE_FIELDS.join(', ')}`);
+        return;
+      }
+    } else {
+      fields = AVAILABLE_FIELDS;
+    }
+
+    const out = notes.map(n => pickFields(n, fields));
     console.log(jsonSuccess(out));
     return;
   }
@@ -37,7 +84,8 @@ export function listCommand(options: { type?: string; json?: boolean }): void {
   for (const note of notes) {
     const date = note.frontmatter.modified.slice(0, 10);
     const type = note.frontmatter.type.padEnd(10);
-    console.log(`  ${date}  ${type}  ${note.frontmatter.title}  (${note.slug})`);
+    const status = note.frontmatter.status?.padEnd(8) ?? 'active  ';
+    console.log(`  ${date}  ${type}  ${status}  ${note.frontmatter.title}  (${note.slug})`);
   }
 
   console.log(`\n${notes.length} note(s)`);

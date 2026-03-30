@@ -4,6 +4,7 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { findNoteBySlug } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
+import { validateStatus, validateSource } from '../core/json-output.js';
 
 interface EditOptions {
   body?: string;
@@ -11,6 +12,8 @@ interface EditOptions {
   title?: string;
   tag?: string;
   alias?: string;
+  status?: string;
+  source?: string;
 }
 
 export function editCommand(slug: string, options: EditOptions): void {
@@ -23,7 +26,7 @@ export function editCommand(slug: string, options: EditOptions): void {
     process.exit(1);
   }
 
-  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined;
+  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined || options.status !== undefined || options.source !== undefined;
 
   if (hasFlags) {
     // Programmatic edit (agent mode)
@@ -45,6 +48,16 @@ export function editCommand(slug: string, options: EditOptions): void {
       const existing = new Set(frontmatter.aliases);
       for (const a of newAliases) existing.add(a);
       frontmatter.aliases = [...existing];
+    }
+
+    if (options.status) {
+      validateStatus(options.status);
+      frontmatter.status = options.status;
+    }
+
+    if (options.source) {
+      validateSource(options.source);
+      frontmatter.source = options.source;
     }
 
     if (options.body !== undefined) {

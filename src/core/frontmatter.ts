@@ -11,7 +11,15 @@ export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatte
     modified: data.modified ?? '',
     tags: data.tags ?? [],
     aliases: data.aliases ?? [],
+    status: data.status ?? 'active',
+    source: data.source ?? 'human',
   };
+  // Preserve any extra type-specific fields
+  for (const [key, value] of Object.entries(data)) {
+    if (!(key in fm)) {
+      fm[key] = value;
+    }
+  }
   return { frontmatter: fm, body };
 }
 

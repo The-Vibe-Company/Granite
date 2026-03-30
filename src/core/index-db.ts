@@ -6,7 +6,7 @@ import { listNotes } from './note.js';
 import { parseWikilinks, resolveWikilinks } from './wikilinks.js';
 import { getIndexDbPath } from './vault.js';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS notes (
@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS notes (
   tags        TEXT,
   aliases     TEXT,
   body        TEXT NOT NULL,
-  filepath    TEXT NOT NULL
+  filepath    TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'active',
+  source      TEXT NOT NULL DEFAULT 'human'
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
@@ -80,6 +82,16 @@ export function openDatabase(vaultRoot: string): Database.Database {
   }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+
+  // Check schema version — if outdated, drop and recreate
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
+  const currentVersion = row ? Number(row.value) : 0;
+  if (currentVersion < SCHEMA_VERSION) {
+    db.close();
+    fs.unlinkSync(dbPath);
+    return createDatabase(dbPath);
+  }
+
   return db;
 }
 
@@ -92,8 +104,8 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
   db.exec("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
 
   const insertNote = db.prepare(`
-    INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath)
-    VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath)
+    INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
+    VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath, @status, @source)
   `);
 
   const insertLink = db.prepare(`
@@ -114,6 +126,8 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
         aliases: JSON.stringify(note.frontmatter.aliases),
         body: note.body,
         filepath: note.filepath,
+        status: note.frontmatter.status ?? 'active',
+        source: note.frontmatter.source ?? 'human',
       });
 
       // Parse and resolve wikilinks

@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { createNote } from '../core/note.js';
+import { jsonSuccess } from '../core/json-output.js';
 
-export function addNote(text?: string): void {
+export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
   const typeName = config.defaults.note_type;
@@ -30,5 +31,16 @@ export function addNote(text?: string): void {
   const title = firstLine.length > 60 ? firstLine.slice(0, 60).trim() + '...' : firstLine;
 
   const note = createNote(vaultRoot, config, typeName, title, content + '\n');
+
+  if (options.json) {
+    console.log(jsonSuccess({
+      slug: note.slug,
+      title: note.frontmatter.title,
+      type: typeName,
+      filepath: note.filepath,
+    }));
+    return;
+  }
+
   console.log(note.filepath);
 }

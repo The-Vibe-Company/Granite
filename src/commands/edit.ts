@@ -10,6 +10,7 @@ interface EditOptions {
   append?: string;
   title?: string;
   tag?: string;
+  alias?: string;
 }
 
 export function editCommand(slug: string, options: EditOptions): void {
@@ -22,7 +23,7 @@ export function editCommand(slug: string, options: EditOptions): void {
     process.exit(1);
   }
 
-  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined;
+  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined;
 
   if (hasFlags) {
     // Programmatic edit (agent mode)
@@ -37,6 +38,13 @@ export function editCommand(slug: string, options: EditOptions): void {
       const existing = new Set(frontmatter.tags);
       for (const t of newTags) existing.add(t);
       frontmatter.tags = [...existing];
+    }
+
+    if (options.alias) {
+      const newAliases = options.alias.split(',').map(a => a.trim()).filter(Boolean);
+      const existing = new Set(frontmatter.aliases);
+      for (const a of newAliases) existing.add(a);
+      frontmatter.aliases = [...existing];
     }
 
     if (options.body !== undefined) {

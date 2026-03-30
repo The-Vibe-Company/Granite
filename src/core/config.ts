@@ -29,7 +29,7 @@ const DEFAULT_CONFIG: GraniteConfig = {
     reference: {
       folder: 'notes/reference',
       description: 'Notes on external sources (articles, books, talks)',
-      template: '## Source\n\nURL or citation here.\n\n## Key Points\n\n- \n\n## My Take\n\n',
+      template: '## Source\n\nURL or citation here.\n\n## Date\n\n## Key Points\n\n- \n\n## My Take\n\n',
       line_limit: 300,
       warn_only: true,
       instructions: 'Capture the source, the key points in your own words, and your reaction. Link to permanent notes that relate.',
@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: GraniteConfig = {
     person: {
       folder: 'notes/people',
       description: 'Card for a person — contact, context, history',
-      template: '## Role\n\n## Context\n\nHow I know them, what we work on.\n\n## Notes\n\n- \n\n## Links\n\n',
+      template: '## Role\n\n## Context\n\nHow I know them, what we work on.\n\n## Contact\n\n## Notes\n\n- \n\n## Links\n\n',
       line_limit: 150,
       warn_only: true,
       instructions: 'Fill in their role and context. Add timestamped notes as you interact (meetings, emails, calls). Link to projects, companies, or topics they relate to.',
@@ -61,7 +61,7 @@ const DEFAULT_CONFIG: GraniteConfig = {
     decision: {
       folder: 'notes/decisions',
       description: 'Record of a decision — context, options, outcome',
-      template: '## Context\n\nWhat prompted this decision.\n\n## Options Considered\n\n1. \n2. \n\n## Decision\n\n\n\n## Rationale\n\n',
+      template: '## Context\n\nWhat prompted this decision.\n\n## Options Considered\n\n1. \n2. \n\n## Decision\n\n\n\n## Rationale\n\n## Status\n\nActive\n',
       line_limit: 200,
       warn_only: false,
       instructions: 'Document the context, what options were considered, what was decided, and why. This is a permanent record — future-you will thank you. Link to the project or topic.',

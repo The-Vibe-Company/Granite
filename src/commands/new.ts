@@ -1,11 +1,12 @@
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { createNote, listNotes } from '../core/note.js';
+import { jsonSuccess } from '../core/json-output.js';
 
-export function newNote(title: string, typeName?: string): void {
+export function newNote(title: string, options: { type?: string; json?: boolean }): void {
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
-  const resolvedType = typeName || config.defaults.note_type;
+  const resolvedType = options.type || config.defaults.note_type;
   const typeConfig = config.note_types[resolvedType];
 
   // For date-slug types (like fleeting), the title IS the content
@@ -13,18 +14,7 @@ export function newNote(title: string, typeName?: string): void {
   const note = createNote(vaultRoot, config, resolvedType, title, bodyOverride);
 
   const lines = note.body.split('\n').length;
-  if (typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit) {
-    const action = typeConfig.warn_only ? 'Warning' : 'Error';
-    console.warn(`${action}: Note exceeds ${typeConfig.line_limit} line limit for type "${resolvedType}"`);
-  }
-
-  console.log(note.filepath);
-
-  // Show instructions if available
-  if (typeConfig?.instructions) {
-    console.log('');
-    console.log(`  💡 ${typeConfig.instructions}`);
-  }
+  const overLimit = typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit;
 
   // Suggest links: check if any existing note titles/aliases appear in the note content
   const textToScan = (note.body + ' ' + title).toLowerCase();
@@ -46,6 +36,30 @@ export function newNote(title: string, typeName?: string): void {
         break;
       }
     }
+  }
+
+  if (options.json) {
+    console.log(jsonSuccess({
+      slug: note.slug,
+      title: note.frontmatter.title,
+      type: resolvedType,
+      filepath: note.filepath,
+      suggestions,
+    }));
+    return;
+  }
+
+  if (overLimit) {
+    const action = typeConfig.warn_only ? 'Warning' : 'Error';
+    console.warn(`${action}: Note exceeds ${typeConfig.line_limit} line limit for type "${resolvedType}"`);
+  }
+
+  console.log(note.filepath);
+
+  // Show instructions if available
+  if (typeConfig?.instructions) {
+    console.log('');
+    console.log(`  💡 ${typeConfig.instructions}`);
   }
 
   if (suggestions.length > 0) {

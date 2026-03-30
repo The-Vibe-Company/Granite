@@ -8,124 +8,277 @@ allowed-tools: Bash
 
 You are an expert at managing a structured knowledge base using the `mem` CLI — a local-first markdown memory system built on Zettelkasten principles.
 
-## Core Principles
+## Core Workflow
 
-1. **One idea per note.** Never cram multiple concepts into a single note.
-2. **Be brutally concise.** Every word must earn its place.
-3. **Link aggressively.** Use `[[wikilinks]]` to connect ideas. Isolated notes are dead notes.
-4. **Capture now, refine later.** Fleeting notes are raw — don't overthink them.
+Every interaction follows this loop:
 
-## Word Limits (STRICT)
+```
+1. Search  →  check if a related note exists
+2. Create or Append  →  never duplicate
+3. Link  →  connect with [[wikilinks]]
+4. Verify  →  check line limits, run suggest-links
+```
 
-| Type | Max words | Purpose |
-|------|-----------|---------|
-| `fleeting` | **30 words** | Raw thought, single sentence. Inbox item. |
-| `permanent` | **150 words** | One refined idea. Summary + details + links. |
-| `reference` | **200 words** | External source notes. Key points in your own words. |
-| `person` | **100 words** | Contact card. Role, context, interaction log. |
-| `meeting` | **200 words** | Attendees, decisions, action items. No fluff. |
-| `project` | **150 words** | Goal, status, people, key decisions. |
-| `decision` | **150 words** | Context, options, outcome, rationale. |
+## Note Type Decision Tree
 
-If a note exceeds its limit, split it into multiple linked notes.
+| Situation | Type |
+|-----------|------|
+| Quick capture, raw thought | `fleeting` |
+| Refined idea, one concept | `permanent` |
+| External source (article, book, talk) | `reference` |
+| A person you interact with | `person` |
+| Meeting that happened or is planned | `meeting` |
+| Ongoing initiative with goals | `project` |
+| Choice made with rationale | `decision` |
+
+## Line Limits (STRICT)
+
+| Type | Max lines | Enforced | Purpose |
+|------|-----------|----------|---------|
+| `fleeting` | 50 | warn | Raw thought. One sentence or short paragraph. |
+| `permanent` | 200 | hard | One atomic idea. Summary + details + links. |
+| `reference` | 300 | warn | External source. Key points in your own words. |
+| `person` | 150 | warn | Contact card. Role, context, interaction log. |
+| `meeting` | 300 | warn | Attendees, decisions, action items. No fluff. |
+| `project` | 300 | warn | Goal, status, people, key decisions. |
+| `decision` | 200 | hard | Context, options, outcome, rationale. |
+
+If a note exceeds its limit, **split it** into multiple linked notes.
 
 ## CLI Reference
 
-### Create notes
+### Create
 
 ```bash
-# Fleeting note (default type) — title becomes the body
-mem new "Raw thought or observation"
-
-# Typed note — gets the type's template
-mem new "Note title" -t permanent
-mem new "John Doe" -t person
-mem new "Sprint planning 2026-03-30" -t meeting
-
-# Quick capture (also accepts stdin)
-mem add "Quick thought"
-echo "Piped content" | mem add
+mem new "Note title" -t permanent       # Create typed note
+mem new "Quick thought"                  # Fleeting note (default)
+mem new "Sprint review 2026-03-30" -t meeting --json  # JSON output
+mem add "Quick thought"                  # Quick-capture fleeting note
+echo "Piped content" | mem add --json    # Stdin + JSON output
 ```
 
-### Edit notes
+### Read
 
 ```bash
-# Open in $EDITOR (human)
-mem edit <slug>
-
-# Programmatic edits (agent-friendly)
-mem edit <slug> --body $'## Section\n\nContent here.'
-mem edit <slug> --append $'- 2026-03-30: New interaction'
-mem edit <slug> --title "New Title"
-mem edit <slug> --tag "tag1,tag2"
+mem show <slug>              # Display note with header
+mem show <slug> --json       # Full note as JSON (agent-friendly)
+mem show <slug> --body       # Raw body only (for piping)
+mem list                     # All notes, sorted by modified
+mem list -t person           # Filter by type
+mem list --json              # JSON output
+mem search "query"           # Full-text search
+mem search "query" --json    # JSON output
 ```
 
-### Browse and search
+### Update
 
 ```bash
-# List notes
-mem list                    # all notes, sorted by modified
-mem list -t person          # filter by type
-mem list --json             # JSON output (agent-friendly)
-mem ls                      # alias
-
-# Search
-mem search "query"          # full-text search
-
-# Relationships
-mem backlinks <slug>        # who links to this note?
-mem suggest-links <slug>    # find unlinked mentions
+mem edit <slug> --body $'## Section\n\nContent here.'   # Replace body
+mem edit <slug> --append $'- 2026-03-30: Met at conf'   # Append text
+mem edit <slug> --title "New Title"                      # Update title
+mem edit <slug> --tag "tag1,tag2"                        # Add tags
+mem edit <slug> --alias "short-name,abbreviation"        # Add aliases
+mem edit <slug>                                          # Open in $EDITOR
 ```
 
-### Vault management
+### Graph
 
 ```bash
-mem init                    # initialize a new vault
-mem types                   # list available note types
-mem doctor                  # validate vault health
-mem serve                   # start web UI at localhost:4321
+mem backlinks <slug>              # Who links to this note?
+mem backlinks <slug> --json       # JSON output
+mem suggest-links <slug>          # Find unlinked mentions
+mem suggest-links <slug> --json   # JSON output
 ```
 
-## Writing Guidelines
+### Manage
 
-When creating or editing notes:
+```bash
+mem init          # Initialize a new vault
+mem types         # List available note types
+mem doctor        # Validate vault health
+mem serve         # Start web UI at localhost:4321
+```
 
-- **Fleeting notes**: One sentence. No formatting. Just the raw thought.
-  - Good: `mem new "Granite could auto-suggest note type based on content"`
-  - Bad: `mem new "I was thinking today about how it would be really cool if Granite could maybe look at what you're writing and suggest what type of note it should be"`
+All `--json` commands return `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`.
 
-- **Permanent notes**: Start with a one-line summary. Use `## Summary`, `## Details`, `## Links` sections. Link to related notes with `[[wikilinks]]`.
+## Writing by Type
 
-- **Person notes**: Lead with role and context. Add timestamped interaction notes with `--append`. Always link to projects and meetings.
-  ```bash
-  mem new "Jane Smith" -t person
-  mem edit jane-smith --body $'## Role\n\nCTO at Acme Corp\n\n## Context\n\nMet at ReactConf 2026. Working on similar infra problems.\n\n## Notes\n\n## Links\n'
-  mem edit jane-smith --append $'- 2026-03-30: Discussed [[project-x]] migration timeline'
-  ```
+### Fleeting
+One sentence. No formatting. Just the raw thought.
 
-- **Meeting notes**: List attendees as `[[person]]` links. Capture decisions and action items as bullet points. Skip everything that isn't actionable.
+```bash
+mem new "Granite could auto-detect note type from content"
+```
 
-- **Decisions**: State the context in one sentence. List options briefly. State what was decided and why. Link to the project.
+Bad: `mem new "I was thinking about how it would be really cool if Granite could maybe analyze what you write and automatically suggest the type"`
 
-## Agent Workflow
+### Permanent
+Start with a one-line summary. Use `## Summary`, `## Details`, `## Links` sections.
 
-When an agent needs to capture information:
+```
+## Summary
 
-1. **Check if a related note exists**: `mem search "topic"` or `mem list --json | jq`
-2. **Create or append**: Don't duplicate — append to existing notes when possible
-3. **Link**: Always reference related notes with `[[slug]]`
-4. **Stay under word limits**: Count words. Split if needed.
+Atomic notes outperform long documents for knowledge retention.
 
-When an agent needs to retrieve information:
+## Details
 
-1. `mem search "query"` for full-text search
-2. `mem list --json -t <type>` for structured listing
-3. `mem backlinks <slug>` to understand relationships
+When each note captures one idea, linking creates emergent structure.
+The key is [[wikilinks]] between concepts, not folder hierarchies.
+
+## Links
+
+Related: [[Zettelkasten Method]], [[Knowledge Graphs]]
+```
+
+### Reference
+Capture source, date, key points in your own words, and your reaction.
+
+```
+## Source
+
+https://example.com/local-first-article
+
+## Date
+
+2026-03-30
+
+## Key Points
+
+- Data lives on device, not in the cloud
+- Sync is a feature, not a requirement
+
+## My Take
+
+This aligns with how [[Granite]] works. See also [[Local-First Software]].
+```
+
+### Person
+Lead with role and context. Add timestamped interaction notes with `--append`.
+
+```bash
+mem new "Jane Smith" -t person --json
+mem edit jane-smith --body $'## Role\n\nCTO at Acme Corp\n\n## Context\n\nMet at ReactConf 2026. Working on similar infra.\n\n## Contact\n\nSlack: @jsmith\n\n## Notes\n\n## Links\n'
+mem edit jane-smith --append $'- 2026-03-30: Discussed [[project-x]] migration timeline'
+```
+
+### Meeting
+List attendees as `[[person]]` links. Capture only decisions and actions.
+
+```
+## Attendees
+
+- [[jane-smith]]
+- [[bob-chen]]
+
+## Agenda
+
+- Q2 roadmap review
+
+## Notes
+
+Agreed to focus on API v2 first.
+
+## Decisions
+
+- Prioritize API v2 over dashboard redesign
+
+## Actions
+
+- [ ] [[jane-smith]]: Draft API v2 spec by April 5
+- [ ] [[bob-chen]]: Set up staging environment
+```
+
+### Decision
+State context in one sentence. List options. State what was decided and why.
+
+```
+## Context
+
+Need to choose a database for the new analytics service.
+
+## Options Considered
+
+1. PostgreSQL — proven, team knows it well
+2. ClickHouse — optimized for analytics queries
+
+## Decision
+
+ClickHouse for analytics, PostgreSQL for metadata.
+
+## Rationale
+
+Analytics queries are 10x faster on ClickHouse. Keep PostgreSQL for CRUD.
+Linked to [[analytics-service]] project.
+
+## Status
+
+Active
+```
+
+## Tags and Aliases
+
+**Tags**: lowercase, hyphenated. Use sparingly — prefer `[[wikilinks]]` for relationships.
+- Good: `status/active`, `area/infrastructure`, `priority/high`
+- Bad: using tags to replicate what links already do
+
+**Aliases**: set when a note has common abbreviations or alternate names.
+```bash
+mem edit amazon-web-services --alias "AWS,aws"
+mem edit jane-smith --alias "Jane,jsmith"
+```
+This makes wikilinks resolve correctly: `[[AWS]]` will find the `amazon-web-services` note.
+
+## Key Patterns
+
+### Capturing a meeting
+
+```bash
+mem search "sprint review" --json           # Check if note exists
+mem new "Sprint review 2026-03-30" -t meeting --json
+# For each attendee:
+mem search "Jane Smith" --json              # Check if person note exists
+mem new "Jane Smith" -t person --json       # Create if missing
+# Fill meeting body:
+mem edit sprint-review-2026-03-30 --body $'## Attendees\n\n- [[jane-smith]]\n...'
+# Update person notes:
+mem edit jane-smith --append $'- 2026-03-30: [[sprint-review-2026-03-30]]'
+```
+
+### Recording a decision
+
+```bash
+mem search "database choice" --json
+mem new "Analytics database choice" -t decision --json
+mem edit analytics-database-choice --body $'## Context\n\n...\n\n## Decision\n\n...\n\n## Status\n\nActive'
+mem edit analytics-database-choice --tag "area/infrastructure"
+mem edit analytics-service --append $'Key decision: [[analytics-database-choice]]'
+```
+
+### Retrieving knowledge
+
+When the user asks "what do I know about X?":
+
+```bash
+mem search "X" --json                    # Find relevant notes
+mem show <slug> --json                   # Read each note's content
+mem backlinks <slug> --json              # Find what links to it
+# Synthesize across results and present to user
+```
+
+### Maintaining the knowledge graph
+
+```bash
+mem suggest-links <slug> --json          # Find unlinked mentions → add links
+mem doctor                               # Check vault health
+# Build hub notes for major topics (permanent notes that are mostly links)
+```
 
 ## Anti-patterns
 
-- Writing essays in fleeting notes → split into permanent notes
-- Notes without links → add `[[wikilinks]]` to at least one other note
-- Vague titles → be specific: "Auth migration decision" not "Decision"
-- Duplicating information → use `--append` on existing notes
-- Ignoring `suggest-links` output → if it detects a mention, link it
+- **Essays in fleeting notes** — split into permanent notes
+- **Notes without links** — add `[[wikilinks]]` to at least one other note
+- **Vague titles** — be specific: "Auth migration decision" not "Decision"
+- **Duplicating information** — search first, use `--append` on existing notes
+- **Ignoring suggest-links** — if it detects a mention, link it
+- **Tags instead of links** — if it's a relationship, use a `[[wikilink]]`
+- **Creating without searching** — always check if a related note exists first

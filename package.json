@@ -6,12 +6,30 @@
   "bin": {
     "mem": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "memory",
+    "notes",
+    "markdown",
+    "zettelkasten",
+    "cli",
+    "local-first",
+    "claude-code"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/The-Vibe-Company/Granite"
+  },
   "scripts": {
     "build": "tsup && rm -rf dist/public && cp -r src/web/public dist/public",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepare": "husky"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
@@ -23,13 +41,28 @@
     "uuid": "^11.0.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.0.0",
+    "@commitlint/config-conventional": "^20.0.0",
     "@types/better-sqlite3": "^7.6.0",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/uuid": "^10.0.0",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "^9.1.7",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   }
 }

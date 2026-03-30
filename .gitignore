@@ -9,3 +9,6 @@ notes/
 
 # Test vault SQLite
 test-vault/.granite/index.db
+
+# NPM artifacts
+*.tgz

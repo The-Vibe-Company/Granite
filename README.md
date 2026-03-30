@@ -77,7 +77,7 @@ npm run build
 npm link
 ```
 
-Create a vault and start capturing:
+Create the default vault in `~/.granite` and start capturing:
 
 ```bash
 mem init
@@ -153,8 +153,9 @@ Granite keeps the source of truth boring and durable:
 
 - notes are Markdown files
 - metadata lives in YAML frontmatter
-- vault configuration lives in `granite.yml`
-- full-text search and link resolution are backed by a local SQLite index in `.granite/index.db`
+- the default vault lives in `~/.granite`
+- vault configuration lives in `~/.granite/granite.yml`
+- full-text search and link resolution are backed by a local SQLite index in `~/.granite/index.db`
 - the index can be rebuilt from the files at any time
 
 This keeps the system transparent, portable, and inspectable.

@@ -23,9 +23,9 @@ program
 
 program
   .command('init')
-  .description('Initialize a new vault in the current directory')
+  .description('Initialize the default vault in ~/.granite')
   .action(() => {
-    initVault(process.cwd());
+    initVault();
   });
 
 program

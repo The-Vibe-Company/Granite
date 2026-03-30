@@ -1,7 +1,8 @@
 /**
  * Granite — App Controller
- * Sidebar (DOM) + Canvas note rendering
- * Linear/Attio-inspired interactions
+ *
+ * Sidebar, HTML note rendering, wikilink previews,
+ * note creation, graph toggle, keyboard navigation.
  */
 
 (function () {
@@ -11,6 +12,12 @@
   let currentType = '';
   let searchTimeout = null;
   let isSearchMode = false;
+  let currentView = 'note'; // 'note' | 'graph'
+  let isCreateOpen = false;
+  let graphData = null;
+  let previewCache = {};
+  let previewTimeout = null;
+  let keyboardIndex = -1;
 
   // ── DOM ──
   const sidebar = document.getElementById('sidebar');
@@ -23,17 +30,20 @@
   const noteTypeBadge = document.getElementById('note-type-badge');
   const noteDate = document.getElementById('note-date');
   const noteTags = document.getElementById('note-tags');
-  const canvasContainer = document.getElementById('canvas-container');
-  const canvas = document.getElementById('note-canvas');
+  const noteBody = document.getElementById('note-body');
   const backlinksPanel = document.getElementById('backlinks-panel');
   const backlinksList = document.getElementById('backlinks-list');
   const backlinksCount = document.getElementById('backlinks-count');
   const emptyState = document.getElementById('empty-state');
   const contentWrapper = document.getElementById('content-wrapper');
+  const graphView = document.getElementById('graph-view');
+  const graphCanvas = document.getElementById('graph-canvas');
+  const createPanel = document.getElementById('create-panel');
+  const previewEl = document.getElementById('wikilink-preview');
 
   // ── API ──
-  async function api(url) {
-    const res = await fetch(url);
+  async function api(url, opts) {
+    const res = await fetch(url, opts);
     return res.json();
   }
 
@@ -49,16 +59,29 @@
       typeFilters.appendChild(btn);
     }
 
+    // Populate create panel type selector
+    const createTypeSelect = document.getElementById('create-type');
+    for (const name of Object.keys(types)) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      createTypeSelect.appendChild(opt);
+    }
+
     typeFilters.querySelector('[data-type=""]').addEventListener('click', () => filterByType(''));
 
     await loadNotes();
     setupSearch();
-    setupCanvas();
     setupKeyboard();
     setupSidebar();
+    setupCreate();
+    setupWikilinkPreviews();
   }
 
-  // ── Search ──
+  // ═══════════════════════════════════
+  // SEARCH
+  // ═══════════════════════════════════
+
   function setupSearch() {
     searchBox.addEventListener('input', () => {
       clearTimeout(searchTimeout);
@@ -71,6 +94,7 @@
           isSearchMode = false;
           renderNoteList(allNotes);
         }
+        keyboardIndex = -1;
       }, 180);
     });
 
@@ -80,83 +104,106 @@
         searchBox.blur();
         isSearchMode = false;
         renderNoteList(allNotes);
+        keyboardIndex = -1;
       }
       if (e.key === 'Enter') {
-        const first = noteList.querySelector('.note-item');
-        if (first) first.click();
+        const items = noteList.querySelectorAll('.note-item');
+        const target = keyboardIndex >= 0 ? items[keyboardIndex] : items[0];
+        if (target) target.click();
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateList(1);
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateList(-1);
       }
     });
   }
 
-  // ── Canvas interactions ──
-  function setupCanvas() {
-    canvas._scrollOffset = 0;
+  // ═══════════════════════════════════
+  // KEYBOARD NAVIGATION
+  // ═══════════════════════════════════
 
-    // Smooth scroll with momentum
-    canvas.addEventListener('wheel', (e) => {
-      if (!currentNote) return;
-      e.preventDefault();
-      const delta = e.deltaY;
-      canvas._scrollOffset = Math.max(0, (canvas._scrollOffset || 0) + delta);
-      const maxScroll = Math.max(0, (canvas._contentHeight || 0) - canvasContainer.clientHeight + 40);
-      canvas._scrollOffset = Math.min(canvas._scrollOffset, maxScroll);
-      CanvasRenderer.render(canvas, currentNote);
-    }, { passive: false });
+  function navigateList(delta) {
+    const items = noteList.querySelectorAll('.note-item');
+    if (items.length === 0) return;
 
-    // Click — wikilink navigation
-    canvas.addEventListener('click', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top + (canvas._scrollOffset || 0);
-      const hit = CanvasRenderer.hitTest(x, y);
-      if (hit && hit.slug) loadNote(hit.slug);
-    });
+    // Clear old focus
+    items.forEach(el => el.classList.remove('keyboard-focus'));
 
-    // Hover — cursor change on links
-    canvas.addEventListener('mousemove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top + (canvas._scrollOffset || 0);
-      const hit = CanvasRenderer.hitTest(x, y);
-      canvas.style.cursor = hit ? 'pointer' : 'default';
-    });
+    keyboardIndex += delta;
+    if (keyboardIndex < 0) keyboardIndex = items.length - 1;
+    if (keyboardIndex >= items.length) keyboardIndex = 0;
 
-    // Resize
-    const ro = new ResizeObserver(() => {
-      if (currentNote) CanvasRenderer.render(canvas, currentNote);
-    });
-    ro.observe(canvasContainer);
+    items[keyboardIndex].classList.add('keyboard-focus');
+    items[keyboardIndex].scrollIntoView({ block: 'nearest' });
   }
 
-  // ── Keyboard shortcuts ──
   function setupKeyboard() {
     document.addEventListener('keydown', (e) => {
       // ⌘K — focus search
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (sidebar.classList.contains('collapsed')) toggleSidebar();
+        closeCreate();
         searchBox.focus();
         searchBox.select();
       }
-      // Escape — clear search / deselect note
+
+      // ⌘N — new note
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        toggleCreate();
+      }
+
+      // ⌘G — toggle graph
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault();
+        toggleGraph();
+      }
+
+      // Escape — close panels / deselect
       if (e.key === 'Escape' && document.activeElement !== searchBox) {
-        if (currentNote) {
+        if (isCreateOpen) {
+          closeCreate();
+        } else if (currentView === 'graph') {
+          setView('note');
+        } else if (currentNote) {
           currentNote = null;
           showEmptyState();
+        }
+      }
+
+      // ↑/↓ in note list (when not focused on inputs)
+      if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); navigateList(1); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); navigateList(-1); }
+        if (e.key === 'Enter' && keyboardIndex >= 0) {
+          const items = noteList.querySelectorAll('.note-item');
+          if (items[keyboardIndex]) items[keyboardIndex].click();
         }
       }
     });
   }
 
-  // ── Sidebar toggle ──
+  // ═══════════════════════════════════
+  // SIDEBAR
+  // ═══════════════════════════════════
+
   function setupSidebar() {
     document.getElementById('rail-toggle').addEventListener('click', toggleSidebar);
     document.getElementById('rail-search').addEventListener('click', () => {
       if (sidebar.classList.contains('collapsed')) toggleSidebar();
+      closeCreate();
       setTimeout(() => { searchBox.focus(); searchBox.select(); }, 200);
     });
+    document.getElementById('rail-graph').addEventListener('click', toggleGraph);
+    document.getElementById('rail-new').addEventListener('click', toggleCreate);
     document.getElementById('brand-mark').addEventListener('click', () => {
       currentNote = null;
+      setView('note');
       showEmptyState();
     });
   }
@@ -164,17 +211,215 @@
   function toggleSidebar() {
     sidebar.classList.toggle('expanded');
     sidebar.classList.toggle('collapsed');
-    // Re-render canvas after transition
-    setTimeout(() => {
-      if (currentNote) CanvasRenderer.render(canvas, currentNote);
-    }, 320);
   }
 
-  // ── Data loading ──
+  // ═══════════════════════════════════
+  // NOTE CREATION
+  // ═══════════════════════════════════
+
+  function setupCreate() {
+    document.getElementById('create-panel-close').addEventListener('click', closeCreate);
+    document.getElementById('create-submit').addEventListener('click', submitCreate);
+
+    // Enter in title field submits if body is empty
+    document.getElementById('create-title').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('create-body').focus();
+      }
+    });
+  }
+
+  function toggleCreate() {
+    if (isCreateOpen) {
+      closeCreate();
+    } else {
+      openCreate();
+    }
+  }
+
+  function openCreate() {
+    if (sidebar.classList.contains('collapsed')) toggleSidebar();
+    isCreateOpen = true;
+    noteList.style.display = 'none';
+    document.getElementById('type-filters').style.display = 'none';
+    createPanel.style.display = 'flex';
+    document.getElementById('rail-new').classList.add('active');
+    setTimeout(() => document.getElementById('create-title').focus(), 100);
+  }
+
+  function closeCreate() {
+    isCreateOpen = false;
+    createPanel.style.display = 'none';
+    noteList.style.display = '';
+    document.getElementById('type-filters').style.display = '';
+    document.getElementById('rail-new').classList.remove('active');
+    // Reset form
+    document.getElementById('create-title').value = '';
+    document.getElementById('create-body').value = '';
+  }
+
+  async function submitCreate() {
+    const type = document.getElementById('create-type').value;
+    const title = document.getElementById('create-title').value.trim();
+    const body = document.getElementById('create-body').value;
+
+    if (!title) {
+      document.getElementById('create-title').focus();
+      return;
+    }
+
+    const result = await api('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, title, body }),
+    });
+
+    if (result.slug) {
+      closeCreate();
+      await loadNotes();
+      loadNote(result.slug);
+    }
+  }
+
+  // ═══════════════════════════════════
+  // GRAPH
+  // ═══════════════════════════════════
+
+  function toggleGraph() {
+    if (currentView === 'graph') {
+      setView('note');
+    } else {
+      setView('graph');
+    }
+  }
+
+  function setView(view) {
+    currentView = view;
+    const graphBtn = document.getElementById('rail-graph');
+
+    if (view === 'graph') {
+      graphBtn.classList.add('active');
+      contentWrapper.style.display = 'none';
+      emptyState.style.display = 'none';
+      graphView.style.display = 'flex';
+      loadGraph();
+    } else {
+      graphBtn.classList.remove('active');
+      graphView.style.display = 'none';
+      GraphEngine.stop();
+      if (currentNote) {
+        contentWrapper.style.display = 'flex';
+        emptyState.style.display = 'none';
+      } else {
+        contentWrapper.style.display = 'none';
+        emptyState.style.display = 'flex';
+      }
+    }
+  }
+
+  async function loadGraph() {
+    if (!graphData) {
+      graphData = await api('/api/graph');
+    }
+    GraphEngine.init(graphCanvas, graphData, {
+      activeSlug: currentNote?.slug || null,
+      onNavigate: (slug) => {
+        loadNote(slug);
+        setView('note');
+      },
+    });
+  }
+
+  // ═══════════════════════════════════
+  // WIKILINK PREVIEWS
+  // ═══════════════════════════════════
+
+  function setupWikilinkPreviews() {
+    document.addEventListener('mouseover', (e) => {
+      const link = e.target.closest('.wikilink');
+      if (!link) return;
+
+      clearTimeout(previewTimeout);
+      previewTimeout = setTimeout(() => showPreview(link), 300);
+    });
+
+    document.addEventListener('mouseout', (e) => {
+      const link = e.target.closest('.wikilink');
+      if (link || e.relatedTarget?.closest?.('.wikilink-preview')) return;
+
+      clearTimeout(previewTimeout);
+      hidePreview();
+    });
+
+    previewEl.addEventListener('mouseleave', hidePreview);
+
+    // Click navigation
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('.wikilink');
+      if (!link) return;
+      e.preventDefault();
+      hidePreview();
+      const slug = link.dataset.slug;
+      if (slug) loadNote(slug);
+    });
+  }
+
+  async function showPreview(linkEl) {
+    const slug = linkEl.dataset.slug;
+    if (!slug) return;
+
+    let data = previewCache[slug];
+    if (!data) {
+      data = await api(`/api/notes/${slug}`);
+      if (data.error) return;
+      previewCache[slug] = data;
+    }
+
+    // Position
+    const rect = linkEl.getBoundingClientRect();
+    const previewWidth = 280;
+    let left = rect.left;
+    let top = rect.bottom + 8;
+
+    // Keep on screen
+    if (left + previewWidth > window.innerWidth - 16) {
+      left = window.innerWidth - previewWidth - 16;
+    }
+    if (top + 160 > window.innerHeight) {
+      top = rect.top - 8;
+      previewEl.style.transform = 'translateY(-100%)';
+    } else {
+      previewEl.style.transform = '';
+    }
+
+    previewEl.style.left = left + 'px';
+    previewEl.style.top = top + 'px';
+
+    // Content
+    previewEl.querySelector('.preview-type').textContent = data.type || '';
+    previewEl.querySelector('.preview-title').textContent = data.title || '';
+    previewEl.querySelector('.preview-snippet').textContent = (data.body || '').slice(0, 150).replace(/[#*_`>\[\]]/g, '');
+    const tagsEl = previewEl.querySelector('.preview-tags');
+    tagsEl.innerHTML = (data.tags || []).map(t => `<span class="preview-tag">${esc(t)}</span>`).join('');
+
+    previewEl.classList.add('visible');
+  }
+
+  function hidePreview() {
+    clearTimeout(previewTimeout);
+    previewEl.classList.remove('visible');
+  }
+
+  // ═══════════════════════════════════
+  // DATA LOADING
+  // ═══════════════════════════════════
+
   async function loadNotes() {
     const url = currentType ? `/api/notes?type=${currentType}` : '/api/notes';
     const data = await api(url);
     allNotes = data.notes;
+    graphData = null; // Invalidate graph cache
     renderNoteList(allNotes);
   }
 
@@ -183,6 +428,7 @@
     typeFilters.querySelectorAll('.type-chip').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === type);
     });
+    keyboardIndex = -1;
     loadNotes();
   }
 
@@ -196,9 +442,13 @@
     })));
   }
 
-  // ── Render sidebar note list ──
+  // ═══════════════════════════════════
+  // RENDER NOTE LIST
+  // ═══════════════════════════════════
+
   function renderNoteList(notes) {
     noteList.innerHTML = '';
+    keyboardIndex = -1;
 
     if (notes.length === 0) {
       noteList.innerHTML = '<div style="padding: 16px 12px; color: var(--text-3); font-size: 12px;">No notes found</div>';
@@ -233,25 +483,33 @@
     }
   }
 
-  // ── Load and display a note ──
+  // ═══════════════════════════════════
+  // LOAD + RENDER NOTE
+  // ═══════════════════════════════════
+
   async function loadNote(slug) {
     const note = await api(`/api/notes/${slug}`);
     if (note.error) return;
 
     currentNote = note;
-    canvas._scrollOffset = 0;
+
+    // Switch to note view if in graph
+    if (currentView === 'graph') {
+      setView('note');
+    }
 
     // Show content, hide empty state
     emptyState.style.display = 'none';
+    contentWrapper.style.display = 'flex';
     noteHeader.style.display = 'block';
-    canvasContainer.style.display = 'flex';
+    noteBody.style.display = 'block';
 
-    // Fade in animation
+    // Animate header
     noteHeader.style.animation = 'none';
-    noteHeader.offsetHeight; // reflow
+    noteHeader.offsetHeight;
     noteHeader.style.animation = 'fadeSlideIn 0.35s var(--ease-out)';
 
-    // Header
+    // Header content
     noteBreadcrumb.textContent = note.type;
     noteTitle.textContent = note.title;
     noteTypeBadge.textContent = note.type;
@@ -259,13 +517,11 @@
     noteDate.textContent = formatDate(note.created);
     noteTags.innerHTML = (note.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
 
-    // Render canvas with fade
-    canvas.style.opacity = '0';
-    CanvasRenderer.render(canvas, note);
-    requestAnimationFrame(() => {
-      canvas.style.transition = 'opacity 0.3s';
-      canvas.style.opacity = '1';
-    });
+    // Render markdown body as HTML
+    noteBody.style.animation = 'none';
+    noteBody.offsetHeight;
+    noteBody.style.animation = 'fadeSlideIn 0.45s var(--ease-out) 0.05s both';
+    noteBody.innerHTML = MarkdownRenderer.render(note.body, note.outgoing_links);
 
     // Backlinks
     if (note.backlinks && note.backlinks.length > 0) {
@@ -290,24 +546,31 @@
     }
 
     // Update active state in list
-    noteList.querySelectorAll('.note-item').forEach(el => {
-      const idx = Array.from(noteList.children).indexOf(el);
-      const noteData = allNotes[idx];
+    noteList.querySelectorAll('.note-item').forEach((el, idx) => {
+      const noteData = isSearchMode ? null : allNotes[idx];
       el.classList.toggle('active', noteData?.slug === slug);
     });
 
-    // Scroll content to top
+    // Update graph if it was loaded
+    if (graphData) {
+      GraphEngine.setActiveSlug(slug);
+    }
+
     contentWrapper.scrollTop = 0;
   }
 
   function showEmptyState() {
     noteHeader.style.display = 'none';
-    canvasContainer.style.display = 'none';
+    noteBody.style.display = 'none';
     backlinksPanel.style.display = 'none';
+    contentWrapper.style.display = 'none';
     emptyState.style.display = 'flex';
   }
 
-  // ── Helpers ──
+  // ═══════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════
+
   function esc(str) {
     const d = document.createElement('div');
     d.textContent = str;

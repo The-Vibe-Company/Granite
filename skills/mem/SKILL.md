@@ -8,16 +8,18 @@ allowed-tools: Bash
 
 You are an expert at managing a structured knowledge base using the `mem` CLI — a local-first markdown memory system built on Zettelkasten principles.
 
-## Core Workflow
+## Core Workflow (ECDA Loop)
 
 Every interaction follows this loop:
 
 ```
-1. Search  →  check if a related note exists
-2. Create or Append  →  never duplicate
-3. Link  →  connect with [[wikilinks]]
-4. Verify  →  check line limits, run suggest-links
+1. Extract   →  identify facts, entities, relationships from conversation
+2. Compare   →  search vault for existing notes about the same entities
+3. Decide    →  ADD (new note), UPDATE (append/edit), or NOOP (skip)
+4. Act       →  create/update, link with [[wikilinks]], verify limits
 ```
+
+**Always set `--source agent`** when creating or editing notes as an agent.
 
 ## Note Type Decision Tree
 
@@ -50,24 +52,27 @@ If a note exceeds its limit, **split it** into multiple linked notes.
 ### Create
 
 ```bash
-mem new "Note title" -t permanent       # Create typed note
-mem new "Quick thought"                  # Fleeting note (default)
-mem new "Sprint review 2026-03-30" -t meeting --json  # JSON output
-mem add "Quick thought"                  # Quick-capture fleeting note
-echo "Piped content" | mem add --json    # Stdin + JSON output
+mem new "Note title" -t permanent                      # Create typed note
+mem new "Quick thought"                                # Fleeting note (default)
+mem new "Sprint review" -t meeting --source agent --json  # Agent-created, JSON output
+mem add "Quick thought"                                # Quick-capture fleeting note
+echo "Piped content" | mem add --json                  # Stdin + JSON output
 ```
 
 ### Read
 
 ```bash
-mem show <slug>              # Display note with header
-mem show <slug> --json       # Full note as JSON (agent-friendly)
-mem show <slug> --body       # Raw body only (for piping)
-mem list                     # All notes, sorted by modified
-mem list -t person           # Filter by type
-mem list --json              # JSON output
-mem search "query"           # Full-text search
-mem search "query" --json    # JSON output
+mem show <slug>                          # Display note with header
+mem show <slug> --json                   # Full note as JSON (agent-friendly)
+mem show <slug> --body                   # Raw body only (for piping)
+mem list                                 # All notes, sorted by modified
+mem list -t person                       # Filter by type
+mem list -s active                       # Filter by status
+mem list --source agent                  # Filter by source
+mem list --since 2026-03-01              # Filter by modified date
+mem list --json slug,title,type,status   # Field selection (gh-style)
+mem search "query"                       # Full-text search
+mem search "query" --json                # JSON output
 ```
 
 ### Update
@@ -78,6 +83,8 @@ mem edit <slug> --append $'- 2026-03-30: Met at conf'   # Append text
 mem edit <slug> --title "New Title"                      # Update title
 mem edit <slug> --tag "tag1,tag2"                        # Add tags
 mem edit <slug> --alias "short-name,abbreviation"        # Add aliases
+mem edit <slug> --status archived                        # Archive a note
+mem edit <slug> --source agent                           # Mark as agent-edited
 mem edit <slug>                                          # Open in $EDITOR
 ```
 
@@ -228,16 +235,44 @@ mem edit jane-smith --alias "Jane,jsmith"
 ```
 This makes wikilinks resolve correctly: `[[AWS]]` will find the `amazon-web-services` note.
 
+## Status and Source (Provenance)
+
+Every note has `status` and `source` fields in frontmatter:
+
+**Status** — lifecycle state, orthogonal to type:
+- `inbox` — raw capture, needs processing
+- `active` — in use, current (default)
+- `archived` — done, kept for reference
+
+**Source** — who created it:
+- `human` — created by a person (default)
+- `agent` — created by an AI agent
+- `extraction` — extracted from another source
+
+**Trust levels** — when reading notes to inform responses:
+| Combo | Trust |
+|-------|-------|
+| human + permanent | Highest — authoritative knowledge |
+| human + decision | High — established choices |
+| agent + permanent | Medium — verify before citing |
+| human + fleeting | Low — raw, unprocessed |
+| agent + fleeting | Lowest — needs human review |
+
+**Agents must always use `--source agent`** when creating notes:
+```bash
+mem new "Insight from conversation" -t permanent --source agent --json
+```
+
 ## Key Patterns
 
 ### Capturing a meeting
 
 ```bash
 mem search "sprint review" --json           # Check if note exists
-mem new "Sprint review 2026-03-30" -t meeting --json
+mem new "Sprint review 2026-03-30" -t meeting --source agent --json
 # For each attendee:
 mem search "Jane Smith" --json              # Check if person note exists
-mem new "Jane Smith" -t person --json       # Create if missing
+mem new "Jane Smith" -t person --source agent --json  # Create if missing
 # Fill meeting body:
 mem edit sprint-review-2026-03-30 --body $'## Attendees\n\n- [[jane-smith]]\n...'
 # Update person notes:
@@ -248,7 +283,7 @@ mem edit jane-smith --append $'- 2026-03-30: [[sprint-review-2026-03-30]]'
 
 ```bash
 mem search "database choice" --json
-mem new "Analytics database choice" -t decision --json
+mem new "Analytics database choice" -t decision --source agent --json
 mem edit analytics-database-choice --body $'## Context\n\n...\n\n## Decision\n\n...\n\n## Status\n\nActive'
 mem edit analytics-database-choice --tag "area/infrastructure"
 mem edit analytics-service --append $'Key decision: [[analytics-database-choice]]'

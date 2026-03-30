@@ -27,6 +27,8 @@ export function showCommand(slug: string, options: { json?: boolean; body?: bool
       modified: note.frontmatter.modified,
       tags: note.frontmatter.tags,
       aliases: note.frontmatter.aliases,
+      status: note.frontmatter.status,
+      source: note.frontmatter.source,
       body: note.body,
       filepath: note.filepath,
     }));

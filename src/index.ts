@@ -32,8 +32,10 @@ program
   .description('Create a new note')
   .argument('<title>', 'Note title')
   .option('-t, --type <type>', 'Note type (e.g. fleeting, permanent, reference)')
+  .option('--source <source>', 'Set source (human, agent, extraction)')
+  .option('--status <status>', 'Set status (inbox, active, archived)')
   .option('--json', 'Output as JSON (agent-friendly)')
-  .action((title: string, options: { type?: string; json?: boolean }) => {
+  .action((title: string, options: { type?: string; source?: string; status?: string; json?: boolean }) => {
     newNote(title, options);
   });
 
@@ -51,8 +53,11 @@ program
   .alias('ls')
   .description('List notes')
   .option('-t, --type <type>', 'Filter by note type')
-  .option('--json', 'Output as JSON (agent-friendly)')
-  .action((options: { type?: string; json?: boolean }) => {
+  .option('-s, --status <status>', 'Filter by status (inbox, active, archived)')
+  .option('--source <source>', 'Filter by source (human, agent, extraction)')
+  .option('--since <date>', 'Filter notes modified since date (YYYY-MM-DD)')
+  .option('--json [fields]', 'Output as JSON; optionally specify fields (e.g. --json slug,title,type)')
+  .action((options: { type?: string; status?: string; source?: string; since?: string; json?: boolean | string }) => {
     listCommand(options);
   });
 
@@ -65,7 +70,9 @@ program
   .option('--title <title>', 'Update the note title')
   .option('--tag <tags>', 'Add tags (comma-separated)')
   .option('--alias <aliases>', 'Add aliases (comma-separated)')
-  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string }) => {
+  .option('--status <status>', 'Set status (inbox, active, archived)')
+  .option('--source <source>', 'Set source (human, agent, extraction)')
+  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string }) => {
     editCommand(slug, options);
   });
 

@@ -11,6 +11,8 @@ interface EditOptions {
   title?: string;
   tag?: string;
   alias?: string;
+  status?: string;
+  source?: string;
 }
 
 export function editCommand(slug: string, options: EditOptions): void {
@@ -23,7 +25,7 @@ export function editCommand(slug: string, options: EditOptions): void {
     process.exit(1);
   }
 
-  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined;
+  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined || options.status !== undefined || options.source !== undefined;
 
   if (hasFlags) {
     // Programmatic edit (agent mode)
@@ -45,6 +47,14 @@ export function editCommand(slug: string, options: EditOptions): void {
       const existing = new Set(frontmatter.aliases);
       for (const a of newAliases) existing.add(a);
       frontmatter.aliases = [...existing];
+    }
+
+    if (options.status) {
+      frontmatter.status = options.status as 'inbox' | 'active' | 'archived';
+    }
+
+    if (options.source) {
+      frontmatter.source = options.source as 'human' | 'agent' | 'extraction';
     }
 
     if (options.body !== undefined) {

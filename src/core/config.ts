@@ -41,6 +41,11 @@ const DEFAULT_CONFIG: GraniteConfig = {
       line_limit: 150,
       warn_only: true,
       instructions: 'Fill in their role and context. Add timestamped notes as you interact (meetings, emails, calls). Link to projects, companies, or topics they relate to.',
+      fields: {
+        role: { type: 'text', description: 'Job title or role' },
+        org: { type: 'text', description: 'Organization or company' },
+        contact: { type: 'text', description: 'Email, Slack, phone' },
+      },
     },
     meeting: {
       folder: 'notes/meetings',
@@ -49,6 +54,11 @@ const DEFAULT_CONFIG: GraniteConfig = {
       line_limit: 300,
       warn_only: true,
       instructions: 'List attendees as [[person]] links. Capture decisions and action items clearly. Link to relevant projects or topics.',
+      fields: {
+        attendees: { type: 'list', of: 'wikilink', description: 'People present' },
+        date: { type: 'date', description: 'Meeting date' },
+        project: { type: 'wikilink', description: 'Related project' },
+      },
     },
     project: {
       folder: 'notes/projects',
@@ -57,6 +67,10 @@ const DEFAULT_CONFIG: GraniteConfig = {
       line_limit: 300,
       warn_only: true,
       instructions: 'Define the goal clearly. Keep status updated. Link to people involved, meeting notes, and related permanent notes.',
+      fields: {
+        people: { type: 'list', of: 'wikilink', description: 'Team members involved' },
+        project_status: { type: 'enum', options: ['planning', 'active', 'paused', 'completed'], default: 'active', description: 'Project lifecycle' },
+      },
     },
     decision: {
       folder: 'notes/decisions',
@@ -65,6 +79,11 @@ const DEFAULT_CONFIG: GraniteConfig = {
       line_limit: 200,
       warn_only: false,
       instructions: 'Document the context, what options were considered, what was decided, and why. This is a permanent record — future-you will thank you. Link to the project or topic.',
+      fields: {
+        context_for: { type: 'wikilink', description: 'Project or area this decision belongs to' },
+        decision_status: { type: 'enum', options: ['active', 'superseded', 'revisit'], default: 'active', description: 'Decision lifecycle' },
+        superseded_by: { type: 'wikilink', description: 'Replacement decision if superseded' },
+      },
     },
   },
   defaults: {

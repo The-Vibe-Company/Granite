@@ -15,6 +15,7 @@ const DEFAULT_CONFIG: GraniteConfig = {
       template: '',
       line_limit: 50,
       warn_only: true,
+      slug_format: 'date',
       instructions: 'Write a short thought, observation, or idea. Keep it raw — refine later into a permanent note.',
     },
     permanent: {

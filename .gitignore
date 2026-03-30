@@ -1,4 +1,11 @@
 node_modules/
 dist/
-.granite/index.db
+.granite/
 *.tsbuildinfo
+
+# Local vault data (created by mem init)
+granite.yml
+notes/
+
+# Test vault SQLite
+test-vault/.granite/index.db

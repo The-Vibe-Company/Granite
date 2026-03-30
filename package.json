@@ -7,7 +7,7 @@
     "mem": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && rm -rf dist/public && cp -r src/web/public dist/public",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

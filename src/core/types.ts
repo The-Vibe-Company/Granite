@@ -5,6 +5,7 @@ export interface NoteTypeConfig {
   line_limit: number;
   warn_only: boolean;
   instructions?: string;
+  slug_format?: 'title' | 'date';
 }
 
 export interface GraniteConfig {

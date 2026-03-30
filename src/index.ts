@@ -9,6 +9,8 @@ import { suggestLinksCommand } from './commands/suggest-links.js';
 import { doctorCommand } from './commands/doctor.js';
 import { serveCommand } from './commands/serve.js';
 import { typesCommand } from './commands/types.js';
+import { listCommand } from './commands/list.js';
+import { editCommand } from './commands/edit.js';
 
 const program = new Command();
 
@@ -35,15 +37,37 @@ program
 
 program
   .command('add')
-  .description('Quick-capture a fleeting note')
-  .argument('<text>', 'Note text')
-  .action((text: string) => {
+  .description('Quick-capture a fleeting note (reads stdin if no text given)')
+  .argument('[text]', 'Note text (or pipe via stdin)')
+  .action((text?: string) => {
     addNote(text);
   });
 
 program
+  .command('list')
+  .alias('ls')
+  .description('List notes')
+  .option('-t, --type <type>', 'Filter by note type')
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((options: { type?: string; json?: boolean }) => {
+    listCommand(options);
+  });
+
+program
+  .command('edit')
+  .description('Edit a note (opens $EDITOR, or use flags for programmatic edits)')
+  .argument('<slug>', 'Note slug')
+  .option('--body <text>', 'Replace the note body')
+  .option('--append <text>', 'Append text to the note body')
+  .option('--title <title>', 'Update the note title')
+  .option('--tag <tags>', 'Add tags (comma-separated)')
+  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string }) => {
+    editCommand(slug, options);
+  });
+
+program
   .command('open')
-  .description('Open a note in your editor')
+  .description('Open a note in your editor (alias for edit)')
   .argument('<slug>', 'Note slug')
   .action((slug: string) => {
     openNote(slug);

@@ -17,16 +17,28 @@ export function createNote(
     throw new Error(`Unknown note type: "${typeName}". Available: ${Object.keys(config.note_types).join(', ')}`);
   }
 
-  let slug = slugify(title);
-  if (!slug) slug = 'untitled';
-
-  // Handle slug collision
   const folder = path.join(vaultRoot, typeConfig.folder);
-  let finalSlug = slug;
-  let counter = 2;
-  while (fs.existsSync(path.join(folder, `${finalSlug}.md`))) {
-    finalSlug = `${slug}-${counter}`;
-    counter++;
+  let finalSlug: string;
+
+  if (typeConfig.slug_format === 'date') {
+    // Date-based slug: 2026-03-30-a1b2
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const rand = Math.random().toString(36).slice(2, 6);
+    finalSlug = `${date}-${rand}`;
+    while (fs.existsSync(path.join(folder, `${finalSlug}.md`))) {
+      const r = Math.random().toString(36).slice(2, 6);
+      finalSlug = `${date}-${r}`;
+    }
+  } else {
+    let slug = slugify(title);
+    if (!slug) slug = 'untitled';
+    finalSlug = slug;
+    let counter = 2;
+    while (fs.existsSync(path.join(folder, `${finalSlug}.md`))) {
+      finalSlug = `${slug}-${counter}`;
+      counter++;
+    }
   }
 
   const now = new Date().toISOString();

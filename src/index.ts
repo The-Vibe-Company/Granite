@@ -7,6 +7,7 @@ import { showCommand } from './commands/show.js';
 import { searchCommand } from './commands/search.js';
 import { backlinksCommand } from './commands/backlinks.js';
 import { suggestLinksCommand } from './commands/suggest-links.js';
+import { recommendCommand } from './commands/recommend.js';
 import { doctorCommand } from './commands/doctor.js';
 import { serveCommand } from './commands/serve.js';
 import { typesCommand } from './commands/types.js';
@@ -120,6 +121,15 @@ program
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
     suggestLinksCommand(slug, options);
+  });
+
+program
+  .command('recommend')
+  .description('Suggest links, tags, and the next note to create')
+  .argument('<slug>', 'Note slug')
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((slug: string, options: { json?: boolean }) => {
+    recommendCommand(slug, options);
   });
 
 program

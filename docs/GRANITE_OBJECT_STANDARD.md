@@ -96,10 +96,11 @@ note_types:
       context_for:
         type: wikilink
         description: Project or area this decision belongs to
-      status:
+      decision_status:
         type: enum
         options: [active, superseded, revisit]
         default: active
+        description: Decision lifecycle (distinct from universal note status)
       superseded_by:
         type: wikilink
         description: If superseded, link to replacement decision

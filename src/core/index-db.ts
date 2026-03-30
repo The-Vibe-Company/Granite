@@ -82,6 +82,16 @@ export function openDatabase(vaultRoot: string): Database.Database {
   }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+
+  // Check schema version — if outdated, drop and recreate
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
+  const currentVersion = row ? Number(row.value) : 0;
+  if (currentVersion < SCHEMA_VERSION) {
+    db.close();
+    fs.unlinkSync(dbPath);
+    return createDatabase(dbPath);
+  }
+
   return db;
 }
 

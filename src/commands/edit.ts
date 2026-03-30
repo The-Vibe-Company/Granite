@@ -4,6 +4,7 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { findNoteBySlug } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
+import { validateStatus, validateSource } from '../core/json-output.js';
 
 interface EditOptions {
   body?: string;
@@ -50,11 +51,13 @@ export function editCommand(slug: string, options: EditOptions): void {
     }
 
     if (options.status) {
-      frontmatter.status = options.status as 'inbox' | 'active' | 'archived';
+      validateStatus(options.status);
+      frontmatter.status = options.status;
     }
 
     if (options.source) {
-      frontmatter.source = options.source as 'human' | 'agent' | 'extraction';
+      validateSource(options.source);
+      frontmatter.source = options.source;
     }
 
     if (options.body !== undefined) {

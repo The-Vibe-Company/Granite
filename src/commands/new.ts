@@ -3,7 +3,7 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { createNote, listNotes } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
-import { jsonSuccess } from '../core/json-output.js';
+import { jsonSuccess, validateStatus, validateSource } from '../core/json-output.js';
 
 export function newNote(title: string, options: { type?: string; source?: string; status?: string; json?: boolean }): void {
   const vaultRoot = requireVaultRoot();
@@ -17,10 +17,12 @@ export function newNote(title: string, options: { type?: string; source?: string
 
   // Apply source/status overrides
   if (options.source || options.status) {
+    if (options.source) validateSource(options.source);
+    if (options.status) validateStatus(options.status);
     const raw = fs.readFileSync(note.filepath, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
-    if (options.source) frontmatter.source = options.source as 'human' | 'agent' | 'extraction';
-    if (options.status) frontmatter.status = options.status as 'inbox' | 'active' | 'archived';
+    if (options.source) frontmatter.source = options.source as typeof frontmatter.source;
+    if (options.status) frontmatter.status = options.status as typeof frontmatter.status;
     fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
     note.frontmatter = frontmatter;
   }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.2...granite-mem-v0.1.3) (2026-03-30)
+
+
+### Bug Fixes
+
+* default vault location for mem init ([#9](https://github.com/The-Vibe-Company/Granite/issues/9)) ([7db715b](https://github.com/The-Vibe-Company/Granite/commit/7db715b1aa08bec582e845629bffc7178a921f19))
+
 ## [0.1.2](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.1...granite-mem-v0.1.2) (2026-03-30)
 
 

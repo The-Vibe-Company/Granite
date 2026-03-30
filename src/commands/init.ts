@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeDefaultConfig, CONFIG_FILENAME, loadConfig } from '../core/config.js';
+import { getDefaultVaultRoot, getIndexDbPath } from '../core/vault.js';
 
-export function initVault(dir: string): void {
+export function initVault(dir = getDefaultVaultRoot()): void {
   const targetDir = path.resolve(dir);
+  fs.mkdirSync(targetDir, { recursive: true });
 
   if (fs.existsSync(path.join(targetDir, CONFIG_FILENAME))) {
     console.error(`Vault already exists in ${targetDir}`);
@@ -13,8 +15,7 @@ export function initVault(dir: string): void {
   // Write config
   writeDefaultConfig(targetDir);
 
-  // Create .granite directory
-  fs.mkdirSync(path.join(targetDir, '.granite'), { recursive: true });
+  fs.mkdirSync(path.dirname(getIndexDbPath(targetDir)), { recursive: true });
 
   // Create default note type folders
   const config = loadConfig(targetDir);
@@ -26,10 +27,13 @@ export function initVault(dir: string): void {
   console.log('');
   console.log('Created:');
   console.log(`  ${CONFIG_FILENAME}`);
-  console.log('  .granite/');
+  const indexDir = path.relative(targetDir, path.dirname(getIndexDbPath(targetDir)));
+  if (indexDir) {
+    console.log(`  ${indexDir}/`);
+  }
   for (const [name, typeConfig] of Object.entries(config.note_types)) {
     console.log(`  ${typeConfig.folder}/  (${name})`);
   }
   console.log('');
-  console.log('Next: mem new fleeting "My first note"');
+  console.log('Next: mem new "My first note" --type fleeting');
 }

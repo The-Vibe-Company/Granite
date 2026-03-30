@@ -1,6 +1,7 @@
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { listNotes } from '../core/note.js';
+import { jsonSuccess } from '../core/json-output.js';
 
 export function listCommand(options: { type?: string; json?: boolean }): void {
   const vaultRoot = requireVaultRoot();
@@ -24,7 +25,7 @@ export function listCommand(options: { type?: string; json?: boolean }): void {
       tags: n.frontmatter.tags,
       filepath: n.filepath,
     }));
-    console.log(JSON.stringify(out, null, 2));
+    console.log(jsonSuccess(out));
     return;
   }
 

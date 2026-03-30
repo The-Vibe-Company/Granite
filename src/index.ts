@@ -3,6 +3,7 @@ import { initVault } from './commands/init.js';
 import { newNote } from './commands/new.js';
 import { addNote } from './commands/add.js';
 import { openNote } from './commands/open.js';
+import { showCommand } from './commands/show.js';
 import { searchCommand } from './commands/search.js';
 import { backlinksCommand } from './commands/backlinks.js';
 import { suggestLinksCommand } from './commands/suggest-links.js';
@@ -31,16 +32,18 @@ program
   .description('Create a new note')
   .argument('<title>', 'Note title')
   .option('-t, --type <type>', 'Note type (e.g. fleeting, permanent, reference)')
-  .action((title: string, options: { type?: string }) => {
-    newNote(title, options.type);
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((title: string, options: { type?: string; json?: boolean }) => {
+    newNote(title, options);
   });
 
 program
   .command('add')
   .description('Quick-capture a fleeting note (reads stdin if no text given)')
   .argument('[text]', 'Note text (or pipe via stdin)')
-  .action((text?: string) => {
-    addNote(text);
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((text: string | undefined, options: { json?: boolean }) => {
+    addNote(text, options);
   });
 
 program
@@ -61,7 +64,8 @@ program
   .option('--append <text>', 'Append text to the note body')
   .option('--title <title>', 'Update the note title')
   .option('--tag <tags>', 'Add tags (comma-separated)')
-  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string }) => {
+  .option('--alias <aliases>', 'Add aliases (comma-separated)')
+  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string }) => {
     editCommand(slug, options);
   });
 
@@ -74,27 +78,41 @@ program
   });
 
 program
+  .command('show')
+  .alias('cat')
+  .description('Display a note by slug')
+  .argument('<slug>', 'Note slug')
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .option('--body', 'Output body only (no frontmatter)')
+  .action((slug: string, options: { json?: boolean; body?: boolean }) => {
+    showCommand(slug, options);
+  });
+
+program
   .command('search')
   .description('Full-text search across notes')
   .argument('<query>', 'Search query')
-  .action((query: string) => {
-    searchCommand(query);
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((query: string, options: { json?: boolean }) => {
+    searchCommand(query, options);
   });
 
 program
   .command('backlinks')
   .description('Show notes that link to a given note')
   .argument('<slug>', 'Note slug')
-  .action((slug: string) => {
-    backlinksCommand(slug);
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((slug: string, options: { json?: boolean }) => {
+    backlinksCommand(slug, options);
   });
 
 program
   .command('suggest-links')
   .description('Suggest wikilinks based on unlinked mentions')
   .argument('<slug>', 'Note slug')
-  .action((slug: string) => {
-    suggestLinksCommand(slug);
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((slug: string, options: { json?: boolean }) => {
+    suggestLinksCommand(slug, options);
   });
 
 program

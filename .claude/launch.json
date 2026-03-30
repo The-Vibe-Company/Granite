@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "granite",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "../src/index.ts", "serve"],
+      "port": 4321,
+      "autoPort": true,
+      "cwd": "test-vault"
+    }
+  ]
+}

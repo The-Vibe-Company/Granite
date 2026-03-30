@@ -1,0 +1,34 @@
+vault_name: My Vault
+version: 1
+note_types:
+  fleeting:
+    folder: notes/fleeting
+    description: Quick captures, inbox items
+    template: ''
+    line_limit: 50
+    warn_only: true
+  permanent:
+    folder: notes/permanent
+    description: Refined, linked notes
+    template: |
+      ## Summary
+
+      ## Details
+
+      ## Links
+    line_limit: 200
+    warn_only: false
+  reference:
+    folder: notes/reference
+    description: External source notes
+    template: |
+      ## Source
+
+      ## Key Points
+    line_limit: 300
+    warn_only: true
+defaults:
+  note_type: fleeting
+  editor: $EDITOR
+index:
+  auto_rebuild: true

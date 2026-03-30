@@ -1,0 +1,35 @@
+{
+  "name": "granite-mem",
+  "version": "0.1.0",
+  "description": "A local-first markdown memory system for humans and agents",
+  "type": "module",
+  "bin": {
+    "mem": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "commander": "^13.0.0",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.13.0",
+    "js-yaml": "^4.1.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/js-yaml": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

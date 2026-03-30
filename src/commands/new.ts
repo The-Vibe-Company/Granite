@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
-import { createNote, listNotes } from '../core/note.js';
+import { createNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
 import { jsonSuccess, validateStatus, validateSource } from '../core/json-output.js';
+import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 
 export function newNote(title: string, options: { type?: string; source?: string; status?: string; json?: boolean }): void {
   const vaultRoot = requireVaultRoot();
@@ -27,30 +28,10 @@ export function newNote(title: string, options: { type?: string; source?: string
     note.frontmatter = frontmatter;
   }
 
+  const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
+
   const lines = note.body.split('\n').length;
   const overLimit = typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit;
-
-  // Suggest links: check if any existing note titles/aliases appear in the note content
-  const textToScan = (note.body + ' ' + title).toLowerCase();
-  const allNotes = listNotes(vaultRoot, config).filter(n => n.slug !== note.slug);
-  const suggestions: Array<{ slug: string; title: string; type: string }> = [];
-
-  for (const other of allNotes) {
-    const otherTitle = other.frontmatter.title.toLowerCase();
-    if (otherTitle.length < 3) continue; // skip very short titles
-    if (textToScan.includes(otherTitle)) {
-      suggestions.push({ slug: other.slug, title: other.frontmatter.title, type: other.frontmatter.type });
-      continue;
-    }
-    // Check aliases
-    for (const alias of other.frontmatter.aliases) {
-      if (alias.length < 3) continue;
-      if (textToScan.includes(alias.toLowerCase())) {
-        suggestions.push({ slug: other.slug, title: other.frontmatter.title, type: other.frontmatter.type });
-        break;
-      }
-    }
-  }
 
   if (options.json) {
     console.log(jsonSuccess({
@@ -60,7 +41,12 @@ export function newNote(title: string, options: { type?: string; source?: string
       status: note.frontmatter.status,
       source: note.frontmatter.source,
       filepath: note.filepath,
-      suggestions,
+      suggestions: recommendations.links.map(link => ({
+        slug: link.slug,
+        title: link.title,
+        type: link.type,
+      })),
+      recommendations,
     }));
     return;
   }
@@ -78,11 +64,12 @@ export function newNote(title: string, options: { type?: string; source?: string
     console.log(`  💡 ${typeConfig.instructions}`);
   }
 
-  if (suggestions.length > 0) {
+  const recommendationLines = formatRecommendations(recommendations);
+  if (recommendationLines.length > 0) {
     console.log('');
-    console.log('  🔗 Linked notes detected:');
-    for (const s of suggestions) {
-      console.log(`     [[${s.slug}]] — ${s.title} (${s.type})`);
+    console.log('Recommendations:');
+    for (const line of recommendationLines) {
+      console.log(line);
     }
   }
 }

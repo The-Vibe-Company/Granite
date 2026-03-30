@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { GraniteConfig, Note } from './types.js';
 import { listNotes } from './note.js';
-import { parseWikilinks, resolveWikilinks } from './wikilinks.js';
+import { parseWikilinks } from './wikilinks.js';
+import { slugify } from './slugify.js';
 import { getIndexDbPath } from './vault.js';
 
 const SCHEMA_VERSION = 2;
@@ -132,7 +133,7 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
 
       // Parse and resolve wikilinks
       const links = parseWikilinks(note.body);
-      const resolved = resolveWikilinks(links, notes);
+      const resolved = resolveLinksAgainstNotes(links, notes);
 
       for (const link of resolved) {
         // Find context line
@@ -154,6 +155,25 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
   transaction();
 }
 
+export function syncNoteInIndex(
+  vaultRoot: string,
+  config: GraniteConfig,
+  db: Database.Database,
+  note: Note,
+): void {
+  const noteCountInDb = db.prepare('SELECT COUNT(*) as c FROM notes').get() as { c: number };
+  const noteCountOnDisk = countNoteFiles(vaultRoot, config);
+  const noteExists = db.prepare('SELECT 1 FROM notes WHERE slug = ?').get(note.slug) as { 1: number } | undefined;
+  const allowedCount = noteExists ? noteCountOnDisk : noteCountOnDisk - 1;
+
+  if (noteCountInDb.c !== allowedCount) {
+    rebuildIndex(vaultRoot, config, db);
+    return;
+  }
+
+  upsertNoteAndLinks(db, note);
+}
+
 export function ensureIndex(vaultRoot: string, config: GraniteConfig): Database.Database {
   const db = openDatabase(vaultRoot);
 
@@ -162,4 +182,121 @@ export function ensureIndex(vaultRoot: string, config: GraniteConfig): Database.
   }
 
   return db;
+}
+
+function countNoteFiles(vaultRoot: string, config: GraniteConfig): number {
+  let count = 0;
+
+  for (const typeConfig of Object.values(config.note_types)) {
+    const folder = path.join(vaultRoot, typeConfig.folder);
+    if (!fs.existsSync(folder)) continue;
+    count += fs.readdirSync(folder).filter(file => file.endsWith('.md')).length;
+  }
+
+  return count;
+}
+
+function upsertNoteAndLinks(db: Database.Database, note: Note): void {
+  const upsertNote = db.prepare(`
+    INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath)
+    VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath)
+    ON CONFLICT(slug) DO UPDATE SET
+      id = excluded.id,
+      title = excluded.title,
+      type = excluded.type,
+      created = excluded.created,
+      modified = excluded.modified,
+      tags = excluded.tags,
+      aliases = excluded.aliases,
+      body = excluded.body,
+      filepath = excluded.filepath
+  `);
+
+  const deleteLinks = db.prepare('DELETE FROM links WHERE source_slug = ?');
+  const insertLink = db.prepare(`
+    INSERT INTO links (source_slug, target_slug, target_raw, context)
+    VALUES (@source_slug, @target_slug, @target_raw, @context)
+  `);
+
+  const transaction = db.transaction(() => {
+    upsertNote.run({
+      slug: note.slug,
+      id: note.frontmatter.id,
+      title: note.frontmatter.title,
+      type: note.frontmatter.type,
+      created: note.frontmatter.created,
+      modified: note.frontmatter.modified,
+      tags: JSON.stringify(note.frontmatter.tags),
+      aliases: JSON.stringify(note.frontmatter.aliases),
+      body: note.body,
+      filepath: note.filepath,
+    });
+
+    deleteLinks.run(note.slug);
+
+    const links = parseWikilinks(note.body);
+    for (const link of links) {
+      const resolvedSlug = resolveLinkTarget(db, link.target);
+      const contextLine = note.body.split('\n').find(line => line.includes(link.raw)) ?? '';
+
+      insertLink.run({
+        source_slug: note.slug,
+        target_slug: resolvedSlug,
+        target_raw: link.target,
+        context: contextLine.trim(),
+      });
+    }
+
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_rebuild', new Date().toISOString());
+  });
+
+  transaction();
+}
+
+function resolveLinksAgainstNotes(links: ReturnType<typeof parseWikilinks>, allNotes: Note[]) {
+  return links.map(link => {
+    const targetSlug = slugify(link.target);
+
+    let found = allNotes.find(note => note.slug === targetSlug);
+    if (!found) {
+      found = allNotes.find(note => note.frontmatter.title.toLowerCase() === link.target.toLowerCase());
+    }
+    if (!found) {
+      found = allNotes.find(note =>
+        note.frontmatter.aliases.some(alias => alias.toLowerCase() === link.target.toLowerCase()),
+      );
+    }
+
+    return {
+      ...link,
+      resolved: !!found,
+      resolved_slug: found?.slug,
+    };
+  });
+}
+
+function resolveLinkTarget(db: Database.Database, target: string): string | null {
+  const targetSlug = slugify(target);
+  const exact = db.prepare(`
+    SELECT slug
+    FROM notes
+    WHERE slug = ? OR lower(title) = ?
+    LIMIT 1
+  `).get(targetSlug, target.toLowerCase()) as { slug: string } | undefined;
+
+  if (exact) return exact.slug;
+
+  const rows = db.prepare('SELECT slug, aliases FROM notes').all() as Array<{ slug: string; aliases: string }>;
+  for (const row of rows) {
+    try {
+      const aliases = JSON.parse(row.aliases || '[]') as unknown[];
+      if (aliases.some(alias => typeof alias === 'string' && alias.toLowerCase() === target.toLowerCase())) {
+        return row.slug;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }

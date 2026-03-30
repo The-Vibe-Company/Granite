@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
-import { findNoteBySlug } from '../core/note.js';
+import { findNoteBySlug, readNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
 import { validateStatus, validateSource } from '../core/json-output.js';
+import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 
 interface EditOptions {
   body?: string;
@@ -72,6 +73,7 @@ export function editCommand(slug: string, options: EditOptions): void {
     fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
     console.log(note.filepath);
+    printRecommendations(vaultRoot, config, note.filepath);
   } else {
     // Interactive edit (human mode) — open in $EDITOR
     const editor = process.env.EDITOR || 'vi';
@@ -91,6 +93,21 @@ export function editCommand(slug: string, options: EditOptions): void {
       frontmatter.modified = new Date().toISOString();
       fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
       console.log(`Updated: ${note.filepath}`);
+      printRecommendations(vaultRoot, config, note.filepath);
     }
+  }
+}
+
+function printRecommendations(vaultRoot: string, config: ReturnType<typeof loadConfig>, filepath: string): void {
+  const updatedNote = readNote(filepath);
+  const recommendations = recommendNote(vaultRoot, config, updatedNote, { strategy: 'incremental' });
+  const lines = formatRecommendations(recommendations);
+
+  if (lines.length === 0) return;
+
+  console.log('');
+  console.log('Recommendations:');
+  for (const line of lines) {
+    console.log(line);
   }
 }

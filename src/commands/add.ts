@@ -3,6 +3,7 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { createNote } from '../core/note.js';
 import { jsonSuccess } from '../core/json-output.js';
+import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 
 export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const vaultRoot = requireVaultRoot();
@@ -31,6 +32,7 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const title = firstLine.length > 60 ? firstLine.slice(0, 60).trim() + '...' : firstLine;
 
   const note = createNote(vaultRoot, config, typeName, title, content + '\n');
+  const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
 
   if (options.json) {
     console.log(jsonSuccess({
@@ -38,9 +40,19 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
       title: note.frontmatter.title,
       type: typeName,
       filepath: note.filepath,
+      recommendations,
     }));
     return;
   }
 
   console.log(note.filepath);
+
+  const recommendationLines = formatRecommendations(recommendations);
+  if (recommendationLines.length > 0) {
+    console.log('');
+    console.log('Recommendations:');
+    for (const line of recommendationLines) {
+      console.log(line);
+    }
+  }
 }

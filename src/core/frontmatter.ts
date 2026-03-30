@@ -4,11 +4,11 @@ import type { NoteFrontmatter } from './types.js';
 export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatter; body: string } {
   const { data, content: body } = matter(content);
   const fm: NoteFrontmatter = {
-    id: data.id ?? '',
-    title: data.title ?? '',
-    type: data.type ?? '',
-    created: data.created ?? '',
-    modified: data.modified ?? '',
+    id: toFrontmatterString(data.id),
+    title: toFrontmatterString(data.title),
+    type: toFrontmatterString(data.type),
+    created: toFrontmatterString(data.created),
+    modified: toFrontmatterString(data.modified),
     tags: data.tags ?? [],
     aliases: data.aliases ?? [],
     status: data.status ?? 'active',
@@ -25,4 +25,10 @@ export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatte
 
 export function serializeFrontmatter(fm: NoteFrontmatter, body: string): string {
   return matter.stringify(body, fm);
+}
+
+function toFrontmatterString(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
 }

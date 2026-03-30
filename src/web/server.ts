@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import type { GraniteConfig } from '../core/types.js';
 import { ensureIndex } from '../core/index-db.js';
-import { findNoteBySlug, listNotes } from '../core/note.js';
+import { createNote, findNoteBySlug, listNotes } from '../core/note.js';
 import { searchNotes } from '../core/search.js';
 import { getBacklinks } from '../core/backlinks.js';
 import { parseWikilinks, resolveWikilinks } from '../core/wikilinks.js';
@@ -80,6 +80,37 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
 
   app.get('/api/types', (c) => {
     return c.json({ types: config.note_types });
+  });
+
+  // Create a new note
+  app.post('/api/notes', async (c) => {
+    const body = await c.req.json();
+    const { type, title, body: noteBody } = body;
+
+    if (!type || !title) {
+      return c.json({ error: 'type and title are required' }, 400);
+    }
+
+    try {
+      const note = createNote(vaultRoot, config, type, title, noteBody || undefined);
+      return c.json({
+        slug: note.slug,
+        title: note.frontmatter.title,
+        type: note.frontmatter.type,
+        created: note.frontmatter.created,
+      });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 400);
+    }
+  });
+
+  // Graph data — all nodes and edges
+  app.get('/api/graph', (c) => {
+    const db = ensureIndex(vaultRoot, config);
+    const nodes = db.prepare('SELECT slug, title, type FROM notes').all();
+    const edges = db.prepare('SELECT source_slug AS source, target_slug AS target FROM links WHERE target_slug IS NOT NULL').all();
+    db.close();
+    return c.json({ nodes, edges });
   });
 
   // Static files — serve from the web/public directory

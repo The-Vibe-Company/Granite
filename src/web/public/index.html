@@ -28,6 +28,20 @@
             <path d="M10.5 10.5L14 14"/>
           </svg>
         </button>
+        <button id="rail-graph" class="rail-btn" title="Graph (⌘G)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="4" cy="4" r="2"/>
+            <circle cx="12" cy="4" r="2"/>
+            <circle cx="8" cy="13" r="2"/>
+            <path d="M5.5 5.5L7 11M10.5 5.5L9 11M6 4h4"/>
+          </svg>
+        </button>
+        <button id="rail-new" class="rail-btn" title="New note (⌘N)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M8 3v10M3 8h10"/>
+          </svg>
+        </button>
+        <div style="flex:1"></div>
         <button id="rail-toggle" class="rail-btn" title="Toggle sidebar">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="1" y="2" width="14" height="12" rx="2"/>
@@ -36,6 +50,7 @@
         </button>
       </div>
       <div id="sidebar-panel">
+        <!-- Search -->
         <div id="sidebar-search">
           <div id="search-wrapper">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
@@ -49,14 +64,37 @@
         <div id="type-filters">
           <button class="type-chip active" data-type="">All</button>
         </div>
+
+        <!-- Note list (default view) -->
         <div id="note-list"></div>
+
+        <!-- Creation panel (hidden by default) -->
+        <div id="create-panel" style="display:none">
+          <div id="create-panel-header">
+            <span class="create-panel-title">New note</span>
+            <button id="create-panel-close" class="create-panel-close" title="Cancel">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4l8 8M12 4l-8 8"/>
+              </svg>
+            </button>
+          </div>
+          <div id="create-form">
+            <label class="create-label">Type</label>
+            <select id="create-type" class="create-select"></select>
+            <label class="create-label">Title</label>
+            <input type="text" id="create-title" class="create-input" placeholder="Note title…" autocomplete="off" spellcheck="false">
+            <label class="create-label">Content</label>
+            <textarea id="create-body" class="create-textarea" placeholder="Start writing… (markdown supported)" spellcheck="false"></textarea>
+            <button id="create-submit" class="create-submit">Create note</button>
+          </div>
+        </div>
       </div>
     </aside>
 
     <!-- Main content -->
     <main id="main">
+      <!-- Note view -->
       <div id="content-wrapper">
-        <!-- Note header -->
         <header id="note-header">
           <div id="note-breadcrumb"></div>
           <h1 id="note-title"></h1>
@@ -67,16 +105,14 @@
           </div>
         </header>
 
-        <!-- Canvas -->
-        <div id="canvas-container">
-          <canvas id="note-canvas"></canvas>
-        </div>
+        <!-- HTML rendered note body (replaces canvas) -->
+        <article id="note-body"></article>
 
         <!-- Backlinks -->
         <section id="backlinks-panel">
           <div id="backlinks-header">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5">
-              <path d="M8 3v10M3 8h10"/>
+              <path d="M10 2L6 14M4 5L1 8l3 3M12 5l3 3-3 3"/>
             </svg>
             <span id="backlinks-count">0</span> references
           </div>
@@ -84,23 +120,38 @@
         </section>
       </div>
 
+      <!-- Graph view -->
+      <div id="graph-view" style="display:none">
+        <canvas id="graph-canvas"></canvas>
+        <div id="graph-tooltip"></div>
+      </div>
+
       <!-- Empty state -->
       <div id="empty-state">
         <div id="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2">
-            <rect x="4" y="4" width="10" height="10" rx="2"/>
-            <rect x="18" y="4" width="10" height="10" rx="2"/>
-            <rect x="4" y="18" width="10" height="10" rx="2"/>
-            <rect x="18" y="18" width="10" height="10" rx="2"/>
-            <path d="M14 9h4M9 14v4M23 14v4M14 23h4" stroke-dasharray="1 2"/>
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.15">
+            <circle cx="12" cy="12" r="4"/>
+            <circle cx="28" cy="12" r="4"/>
+            <circle cx="20" cy="30" r="4"/>
+            <path d="M15.5 14L18 26M24.5 14L22 26M16 12h8" stroke-dasharray="2 3"/>
           </svg>
         </div>
-        <p>Select a note</p>
-        <p class="empty-hint">or press <kbd>⌘K</kbd> to search</p>
+        <p>Select a note to begin</p>
+        <p class="empty-hint"><kbd>⌘K</kbd> search · <kbd>⌘N</kbd> new note · <kbd>⌘G</kbd> graph</p>
       </div>
     </main>
   </div>
-  <script src="/canvas-renderer.js"></script>
+
+  <!-- Wikilink preview popup -->
+  <div id="wikilink-preview" class="wikilink-preview">
+    <div class="preview-type"></div>
+    <div class="preview-title"></div>
+    <div class="preview-snippet"></div>
+    <div class="preview-tags"></div>
+  </div>
+
+  <script src="/markdown-renderer.js"></script>
+  <script src="/graph.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

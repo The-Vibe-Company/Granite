@@ -73,7 +73,8 @@ export function editCommand(slug: string, options: EditOptions): void {
     fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
     console.log(note.filepath);
-    printRecommendations(vaultRoot, config, note.filepath);
+    const recommendationStrategy = options.title !== undefined || options.alias !== undefined ? 'rebuild' : 'incremental';
+    printRecommendations(vaultRoot, config, note.filepath, recommendationStrategy);
   } else {
     // Interactive edit (human mode) — open in $EDITOR
     const editor = process.env.EDITOR || 'vi';
@@ -93,14 +94,19 @@ export function editCommand(slug: string, options: EditOptions): void {
       frontmatter.modified = new Date().toISOString();
       fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
       console.log(`Updated: ${note.filepath}`);
-      printRecommendations(vaultRoot, config, note.filepath);
+      printRecommendations(vaultRoot, config, note.filepath, 'rebuild');
     }
   }
 }
 
-function printRecommendations(vaultRoot: string, config: ReturnType<typeof loadConfig>, filepath: string): void {
+function printRecommendations(
+  vaultRoot: string,
+  config: ReturnType<typeof loadConfig>,
+  filepath: string,
+  strategy: 'rebuild' | 'incremental',
+): void {
   const updatedNote = readNote(filepath);
-  const recommendations = recommendNote(vaultRoot, config, updatedNote, { strategy: 'incremental' });
+  const recommendations = recommendNote(vaultRoot, config, updatedNote, { strategy });
   const lines = formatRecommendations(recommendations);
 
   if (lines.length === 0) return;

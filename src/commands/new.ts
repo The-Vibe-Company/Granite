@@ -28,7 +28,8 @@ export function newNote(title: string, options: { type?: string; source?: string
     note.frontmatter = frontmatter;
   }
 
-  const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
+  const recommendationStrategy = typeConfig?.slug_format === 'date' ? 'incremental' : 'rebuild';
+  const recommendations = recommendNote(vaultRoot, config, note, { strategy: recommendationStrategy });
 
   const lines = note.body.split('\n').length;
   const overLimit = typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit;

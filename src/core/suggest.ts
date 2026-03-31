@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import type { Note } from './types.js';
 import { parseWikilinks } from './wikilinks.js';
 
-interface LinkSuggestion {
+export interface LinkSuggestion {
   target_slug: string;
   target_title: string;
   mentions: number;

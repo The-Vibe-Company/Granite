@@ -1,0 +1,107 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { loadConfig, writeDefaultConfig } from '../../src/core/config.js';
+import { getBacklinks } from '../../src/core/backlinks.js';
+import { createDatabase, rebuildIndex } from '../../src/core/index-db.js';
+import { createNote, findNoteBySlug } from '../../src/core/note.js';
+import { searchNotes } from '../../src/core/search.js';
+import { suggestLinks } from '../../src/core/suggest.js';
+import type { GraniteConfig } from '../../src/core/types.js';
+
+describe('querying helpers', () => {
+  let tmpDir: string;
+  let config: GraniteConfig;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'granite-querying-'));
+    writeDefaultConfig(tmpDir);
+    config = loadConfig(tmpDir);
+
+    for (const typeConfig of Object.values(config.note_types)) {
+      fs.mkdirSync(path.join(tmpDir, typeConfig.folder), { recursive: true });
+    }
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns normalized search results with snippet and score', () => {
+    createNote(tmpDir, config, 'permanent', 'Graph Memory', 'A graph memory stores linked ideas.\n');
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const results = searchNotes(db, 'linked ideas');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      slug: 'graph-memory',
+      title: 'Graph Memory',
+    });
+    expect(results[0].snippet).toContain('>>>');
+    expect(typeof results[0].score).toBe('number');
+
+    db.close();
+  });
+
+  it('returns backlinks sorted by source title', () => {
+    createNote(tmpDir, config, 'permanent', 'Zulu Source', 'Points to [[Target Note]].\n');
+    createNote(tmpDir, config, 'permanent', 'Alpha Source', 'Also points to [[Target Note]].\n');
+    createNote(tmpDir, config, 'permanent', 'Target Note', 'Referenced note.\n');
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const backlinks = getBacklinks(db, 'target-note');
+    expect(backlinks.map(link => link.source_title)).toEqual(['Alpha Source', 'Zulu Source']);
+
+    db.close();
+  });
+
+  it('suggests notes mentioned in body and skips existing wikilinks', () => {
+    createNote(tmpDir, config, 'permanent', 'Machine Learning', 'Base concept.\n');
+    createNote(tmpDir, config, 'permanent', 'Large Language Model', 'Alias-heavy concept.\n');
+
+    const llmNotePath = path.join(tmpDir, config.note_types.permanent.folder, 'large-language-model.md');
+    const llmContent = fs.readFileSync(llmNotePath, 'utf-8');
+    fs.writeFileSync(
+      llmNotePath,
+      llmContent.replace('aliases: []', 'aliases:\n  - LLM\n  - foundation model'),
+      'utf-8',
+    );
+
+    const current = createNote(
+      tmpDir,
+      config,
+      'permanent',
+      'Draft Note',
+      [
+        'Machine learning appears twice.',
+        'Machine Learning enables modern systems.',
+        'An LLM can be a foundation model.',
+        'There is already a wikilink to [[Machine Learning]].',
+      ].join('\n'),
+    );
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const refreshedCurrent = findNoteBySlug(tmpDir, config, current.slug);
+    expect(refreshedCurrent).not.toBeNull();
+
+    const suggestions = suggestLinks(db, refreshedCurrent!).toSorted(
+      (a, b) => a.target_slug.localeCompare(b.target_slug),
+    );
+    expect(suggestions).toEqual([
+      {
+        target_slug: 'large-language-model',
+        target_title: 'Large Language Model',
+        mentions: 2,
+      },
+    ]);
+
+    db.close();
+  });
+});

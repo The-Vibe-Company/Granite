@@ -6,6 +6,7 @@ import { R2NoteStorage } from '../storage/r2.js';
 import { D1IndexDatabase } from '../storage/d1.js';
 import { parseJsonArray } from '../lib/json.js';
 import { resolveTypeFolder } from '../lib/config.js';
+import { indexLinks } from '../lib/wikilinks.js';
 
 interface SyncChange {
   note_id: string;
@@ -35,13 +36,15 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   const payload = await c.req.json<SyncPushPayload>();
   let accepted = 0;
 
-  // Enforce per-vault note limit for creates
+  // Enforce per-vault note limit (net creates = creates - deletes in batch)
   const tier: Tier = c.get('tier');
   const maxNotes = TIER_LIMITS[tier].maxNotesPerVault;
   const createCount = payload.changes.filter(ch => ch.operation === 'create').length;
-  if (createCount > 0) {
+  const deleteCount = payload.changes.filter(ch => ch.operation === 'delete').length;
+  const netCreates = Math.max(createCount - deleteCount, 0);
+  if (netCreates > 0) {
     const currentCount = await db.countNotes();
-    if (currentCount + createCount > maxNotes) {
+    if (currentCount + netCreates > maxNotes) {
       return c.json({
         error: `Vault note limit reached (${maxNotes}). Upgrade to pro for more.`,
         current: currentCount,
@@ -49,6 +52,9 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       }, 403);
     }
   }
+
+  // Track slugs that need wikilink indexing (deferred to avoid N+1)
+  const slugsToIndex: Array<{ slug: string; body: string }> = [];
 
   for (const change of payload.changes) {
     // Resolve slug once — used for storage, DB, and changelog
@@ -80,8 +86,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
         source: String(change.frontmatter.source ?? 'human'),
       });
 
-      // Index wikilinks for backlinks/suggest-links
-      await indexSyncedLinks(db, resolvedSlug, change.body);
+      slugsToIndex.push({ slug: resolvedSlug, body: change.body });
     } else if (change.operation === 'delete') {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {
@@ -100,6 +105,11 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
     );
 
     accepted++;
+  }
+
+  // Batch index wikilinks after all notes are upserted (single metadata fetch)
+  for (const { slug, body } of slugsToIndex) {
+    await indexLinks(db, slug, body);
   }
 
   await db.upsertDevice(payload.device_id, payload.device_id);
@@ -181,43 +191,4 @@ export async function handleSyncDevices(c: Context<{ Bindings: Env }>) {
 function getTypeFolder(frontmatter: Record<string, unknown>): string {
   const type = String(frontmatter.type ?? 'fleeting');
   return resolveTypeFolder(type);
-}
-
-/**
- * Parse wikilinks from body and index them in D1 for backlinks/suggest-links.
- */
-async function indexSyncedLinks(db: D1IndexDatabase, slug: string, body: string): Promise<void> {
-  const cleaned = body
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`[^`]*`/g, '');
-
-  const regex = /\[\[([^\]]+)\]\]/g;
-  const allNotes = await db.getAllNotesMeta();
-  const bodyLines = body.split('\n');
-  const links: Array<{ target_slug: string | null; target_raw: string; context: string }> = [];
-  let match;
-
-  while ((match = regex.exec(cleaned)) !== null) {
-    const inner = match[1];
-    const pipeIdx = inner.indexOf('|');
-    const target = pipeIdx >= 0 ? inner.slice(0, pipeIdx).trim() : inner.trim();
-    const raw = match[0];
-
-    const targetSlug = target
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
-
-    const found = allNotes.find(n =>
-      n.slug === targetSlug || n.title.toLowerCase() === target.toLowerCase(),
-    );
-
-    const contextLine = bodyLines.find(l => l.includes(raw)) ?? '';
-    links.push({
-      target_slug: found?.slug ?? null,
-      target_raw: target,
-      context: contextLine.trim(),
-    });
-  }
-
-  await db.setLinks(slug, links);
 }

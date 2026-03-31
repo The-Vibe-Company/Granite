@@ -3,6 +3,7 @@ import type { R2NoteStorage } from './storage/r2.js';
 import type { D1IndexDatabase } from './storage/d1.js';
 import { parseJsonArray } from './lib/json.js';
 import { DEFAULT_TYPE_FOLDERS, resolveTypeFolder } from './lib/config.js';
+import { parseWikilinks, resolveWikilinks, indexLinks } from './lib/wikilinks.js';
 
 // --- Pure function imports (same logic as src/core/) ---
 
@@ -16,39 +17,8 @@ function slugify(title: string): string {
     || 'untitled';
 }
 
-interface WikiLink {
-  raw: string;
-  target: string;
-  display: string;
-  resolved: boolean;
-  resolved_slug?: string;
-}
-
-function parseWikilinks(body: string): WikiLink[] {
-  const cleaned = body
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`[^`]*`/g, '');
-
-  const links: WikiLink[] = [];
-  const regex = /\[\[([^\]]+)\]\]/g;
-  let match;
-
-  while ((match = regex.exec(cleaned)) !== null) {
-    const inner = match[1];
-    const pipeIndex = inner.indexOf('|');
-    const target = pipeIndex >= 0 ? inner.slice(0, pipeIndex).trim() : inner.trim();
-    const display = pipeIndex >= 0 ? inner.slice(pipeIndex + 1).trim() : inner.trim();
-
-    links.push({
-      raw: match[0],
-      target,
-      display,
-      resolved: false,
-    });
-  }
-
-  return links;
-}
+// WikiLink type re-exported from shared module
+type WikiLink = ReturnType<typeof parseWikilinks>[number];
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const { data, content: body } = matter(content);
@@ -264,14 +234,7 @@ export class CloudMcpRuntime {
 
     const allNotes = await this.db.getAllNotesMeta();
     const links = parseWikilinks(body);
-    const resolvedLinks = links.map(link => {
-      const targetSlug = slugify(link.target);
-      const found = allNotes.find(n =>
-        n.slug === targetSlug ||
-        n.title.toLowerCase() === link.target.toLowerCase()
-      );
-      return { ...link, resolved: !!found, resolved_slug: found?.slug };
-    });
+    const resolvedLinks = resolveWikilinks(links, allNotes);
 
     return {
       ...this.toNoteSummary(indexed),
@@ -390,7 +353,7 @@ export class CloudMcpRuntime {
       source: input.source ?? 'human',
     });
 
-    await this.indexLinks(finalSlug, body, links);
+    await indexLinks(this.db,finalSlug, body, links);
 
     const note = await this.getNote(finalSlug);
     return { note, recommendations: emptyRecommendations() };
@@ -459,7 +422,7 @@ export class CloudMcpRuntime {
       source: String(frontmatter.source),
     });
 
-    await this.indexLinks(slug, body);
+    await indexLinks(this.db,slug, body);
 
     const note = await this.getNote(slug);
     return { note, recommendations: emptyRecommendations() };
@@ -476,25 +439,6 @@ export class CloudMcpRuntime {
     const typeConfig = config.note_types[indexed.type];
     const folder = resolveTypeFolder(indexed.type, typeConfig?.folder);
     return this.storage.readNote(folder, slug);
-  }
-
-  private async indexLinks(slug: string, body: string, links?: WikiLink[]): Promise<void> {
-    const wikilinks = links ?? parseWikilinks(body);
-    const allNotes = await this.db.getAllNotesMeta();
-    const bodyLines = body.split('\n');
-    const indexedLinks = wikilinks.map(link => {
-      const targetSlug = slugify(link.target);
-      const found = allNotes.find(n =>
-        n.slug === targetSlug || n.title.toLowerCase() === link.target.toLowerCase(),
-      );
-      const contextLine = bodyLines.find(l => l.includes(link.raw)) ?? '';
-      return {
-        target_slug: found?.slug ?? null,
-        target_raw: link.target,
-        context: contextLine.trim(),
-      };
-    });
-    await this.db.setLinks(slug, indexedLinks);
   }
 
   private toNoteSummary(n: { slug: string; title: string; type: string; created: string; modified: string; tags: string; aliases: string; status: string; source: string; filepath: string }): NoteSummary {

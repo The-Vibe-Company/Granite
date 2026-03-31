@@ -55,7 +55,8 @@ const auth = new Hono<{ Bindings: Env }>();
  */
 auth.get('/auth/github', async (c) => {
   const clientId = c.env.GITHUB_CLIENT_ID;
-  if (!clientId) {
+  const clientSecret = c.env.GITHUB_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
     return c.json({ error: 'GitHub OAuth not configured' }, 503);
   }
 
@@ -63,7 +64,7 @@ auth.get('/auth/github', async (c) => {
   const redirect = c.req.query('redirect') || '';
 
   const payload = btoa(JSON.stringify({ session, redirect }));
-  const state = await signState(payload, c.env.GITHUB_CLIENT_SECRET);
+  const state = await signState(payload, clientSecret);
 
   const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
   githubAuthUrl.searchParams.set('client_id', clientId);
@@ -188,6 +189,19 @@ auth.get('/auth/callback', async (c) => {
     `).bind(vaultId, userId, `${ghUser.login}'s vault`).run();
   }
 
+  // Enforce 10-key limit: revoke oldest if at cap
+  const keyCount = await c.env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM api_keys WHERE user_id = ? AND revoked_at IS NULL',
+  ).bind(userId).first<{ cnt: number }>();
+
+  if (keyCount && keyCount.cnt >= 10) {
+    await c.env.DB.prepare(`
+      UPDATE api_keys SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE user_id = ? AND revoked_at IS NULL
+      ORDER BY created_at ASC LIMIT 1
+    `).bind(userId).run();
+  }
+
   // Generate API key
   const apiKey = generateApiKey();
   const keyHash = await hashApiKey(apiKey);
@@ -195,7 +209,7 @@ auth.get('/auth/callback', async (c) => {
 
   await c.env.DB.prepare(`
     INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
-    VALUES (?, ?, ?, 'default')
+    VALUES (?, ?, ?, 'oauth-login')
   `).bind(keyHash, userId, keyPrefix).run();
 
   // If CLI session, store API key for polling

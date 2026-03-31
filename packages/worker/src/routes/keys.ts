@@ -84,7 +84,7 @@ keys.delete('/keys/:prefix', async (c) => {
   const prefix = c.req.param('prefix');
 
   const result = await c.env.DB.prepare(`
-    UPDATE api_keys SET revoked_at = datetime('now')
+    UPDATE api_keys SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     WHERE user_id = ? AND key_prefix = ? AND revoked_at IS NULL
   `).bind(user.id, prefix).run();
 

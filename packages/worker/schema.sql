@@ -49,8 +49,8 @@ CREATE INDEX IF NOT EXISTS idx_vaults_user ON vaults(user_id);
 -- === NOTE INDEX (same as local SQLite) ===
 
 CREATE TABLE IF NOT EXISTS notes (
-  slug TEXT PRIMARY KEY,
-  id TEXT UNIQUE NOT NULL,
+  slug TEXT NOT NULL,
+  id TEXT NOT NULL,
   title TEXT NOT NULL,
   type TEXT NOT NULL,
   created TEXT NOT NULL,
@@ -61,10 +61,10 @@ CREATE TABLE IF NOT EXISTS notes (
   filepath TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
   source TEXT NOT NULL DEFAULT 'human',
-  vault_id TEXT NOT NULL REFERENCES vaults(vault_id) ON DELETE CASCADE
+  vault_id TEXT NOT NULL REFERENCES vaults(vault_id) ON DELETE CASCADE,
+  PRIMARY KEY (vault_id, slug),
+  UNIQUE (vault_id, id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_notes_vault ON notes(vault_id);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title,

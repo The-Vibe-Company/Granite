@@ -63,7 +63,7 @@ export class D1IndexDatabase {
     await this.db.prepare(`
       INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source, vault_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(slug) DO UPDATE SET
+      ON CONFLICT(vault_id, slug) DO UPDATE SET
         id = excluded.id,
         title = excluded.title,
         type = excluded.type,

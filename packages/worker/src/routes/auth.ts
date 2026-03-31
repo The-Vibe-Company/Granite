@@ -15,6 +15,15 @@ interface GitHubTokenResponse {
   scope: string;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const auth = new Hono<{ Bindings: Env }>();
 
 /**
@@ -170,7 +179,7 @@ auth.get('/auth/callback', async (c) => {
     `).bind(session, apiKey, ghUser.login, expiresAt).run();
   }
 
-  // If web redirect
+  // If web redirect (only allow same-origin redirects)
   if (redirect) {
     try {
       const url = new URL(redirect, c.env.BASE_URL);
@@ -179,12 +188,16 @@ auth.get('/auth/callback', async (c) => {
         return c.redirect(url.pathname + url.search);
       }
     } catch {
-      // Invalid URL, fall through
+      // Invalid URL, fall through to success page
     }
-    return c.redirect(`${redirect}?success=true`);
   }
 
   // Default: show success page with API key
+  const safeLogin = escapeHtml(ghUser.login);
+  const safeKey = escapeHtml(apiKey);
+  const safeTier = escapeHtml(tier);
+  const safeBaseUrl = escapeHtml(c.env.BASE_URL);
+
   const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Granite Cloud - Logged in</title>
@@ -207,16 +220,17 @@ auth.get('/auth/callback', async (c) => {
 </style></head>
 <body>
   <main>
-    <h1>Welcome, @${ghUser.login}!</h1>
-    <p>Your Granite Cloud account is set up (${tier} tier). Here's your API key:</p>
-    <div class="key" id="key" role="status">${apiKey}</div>
-    <button class="copy-btn" onclick="navigator.clipboard.writeText('${apiKey}');this.textContent='Copied!'">Copy to clipboard</button>
+    <h1>Welcome, @${safeLogin}!</h1>
+    <p>Your Granite Cloud account is set up (${safeTier} tier). Here's your API key:</p>
+    <div class="key" id="key" role="status">${safeKey}</div>
+    <button class="copy-btn" id="copy-btn">Copy to clipboard</button>
+    <script>document.getElementById('copy-btn').addEventListener('click',function(){navigator.clipboard.writeText(document.getElementById('key').textContent);this.textContent='Copied!'});</script>
     <p class="warning">This key is shown only once. Save it now.</p>
     <p>If you used <code>mem cloud login</code>, the CLI has already picked it up. You can close this tab.</p>
     <p>Add to your <code>granite.yml</code>:</p>
     <pre>sync:
-  server: ${c.env.BASE_URL}
-  api_key: ${apiKey}</pre>
+  server: ${safeBaseUrl}
+  api_key: ${safeKey}</pre>
   </main>
 </body></html>`;
 

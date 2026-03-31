@@ -183,6 +183,7 @@ export class CloudMcpRuntime {
   constructor(
     private storage: R2NoteStorage,
     private db: D1IndexDatabase,
+    private maxNotesPerVault = Infinity,
   ) {}
 
   private async getConfig(): Promise<GraniteConfig> {
@@ -319,6 +320,14 @@ export class CloudMcpRuntime {
   }
 
   async createNote(input: CreateNoteInput): Promise<NoteMutationResult> {
+    // Enforce per-vault note limit
+    if (this.maxNotesPerVault < Infinity) {
+      const count = await this.db.countNotes();
+      if (count >= this.maxNotesPerVault) {
+        throw new Error(`Vault note limit reached (${this.maxNotesPerVault}). Upgrade to pro for more.`);
+      }
+    }
+
     const config = await this.getConfig();
     const typeName = input.type ?? config.defaults.note_type;
     const typeConfig = config.note_types[typeName];

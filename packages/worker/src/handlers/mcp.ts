@@ -2,7 +2,8 @@ import type { Context } from 'hono';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import * as z from 'zod/v4';
-import type { Env } from '../env.js';
+import type { Env, Tier } from '../env.js';
+import { TIER_LIMITS } from '../env.js';
 import { R2NoteStorage } from '../storage/r2.js';
 import { D1IndexDatabase } from '../storage/d1.js';
 import { CloudMcpRuntime } from '../runtime.js';
@@ -13,9 +14,10 @@ function getVaultId(c: Context<{ Bindings: Env }>): string {
 
 function createRuntime(c: Context<{ Bindings: Env }>): CloudMcpRuntime {
   const vaultId = getVaultId(c);
+  const tier: Tier = c.get('tier');
   const storage = new R2NoteStorage(c.env.VAULT_BUCKET, vaultId);
   const db = new D1IndexDatabase(c.env.DB, vaultId);
-  return new CloudMcpRuntime(storage, db);
+  return new CloudMcpRuntime(storage, db, TIER_LIMITS[tier].maxNotesPerVault);
 }
 
 function createMcpServer(runtime: CloudMcpRuntime): McpServer {

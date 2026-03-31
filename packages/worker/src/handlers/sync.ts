@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import matter from 'gray-matter';
-import type { Env } from '../env.js';
+import type { Env, Tier } from '../env.js';
+import { TIER_LIMITS } from '../env.js';
 import { R2NoteStorage } from '../storage/r2.js';
 import { D1IndexDatabase } from '../storage/d1.js';
 import { parseJsonArray } from '../lib/json.js';
@@ -34,7 +35,25 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   const payload = await c.req.json<SyncPushPayload>();
   let accepted = 0;
 
+  // Enforce per-vault note limit for creates
+  const tier: Tier = c.get('tier');
+  const maxNotes = TIER_LIMITS[tier].maxNotesPerVault;
+  const createCount = payload.changes.filter(ch => ch.operation === 'create').length;
+  if (createCount > 0) {
+    const currentCount = await db.countNotes();
+    if (currentCount + createCount > maxNotes) {
+      return c.json({
+        error: `Vault note limit reached (${maxNotes}). Upgrade to pro for more.`,
+        current: currentCount,
+        limit: maxNotes,
+      }, 403);
+    }
+  }
+
   for (const change of payload.changes) {
+    // Resolve slug once — used for storage, DB, and changelog
+    const resolvedSlug = change.slug || change.note_id;
+
     if (change.operation === 'create' || change.operation === 'update') {
       if (!change.frontmatter || change.body === undefined) {
         // Skip unprocessable changes — don't record in changelog
@@ -42,13 +61,12 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       }
 
       const typeFolder = getTypeFolder(change.frontmatter);
-      const slug = change.slug || change.note_id;
 
       const content = matter.stringify(change.body, change.frontmatter);
-      await storage.writeNote(typeFolder, slug, content);
+      await storage.writeNote(typeFolder, resolvedSlug, content);
 
       await db.upsertNote({
-        slug,
+        slug: resolvedSlug,
         id: String(change.note_id),
         title: String(change.frontmatter.title ?? ''),
         type: String(change.frontmatter.type ?? 'fleeting'),
@@ -57,10 +75,13 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
         tags: JSON.stringify(change.frontmatter.tags ?? []),
         aliases: JSON.stringify(change.frontmatter.aliases ?? []),
         body: change.body,
-        filepath: `${typeFolder}/${slug}.md`,
+        filepath: `${typeFolder}/${resolvedSlug}.md`,
         status: String(change.frontmatter.status ?? 'active'),
         source: String(change.frontmatter.source ?? 'human'),
       });
+
+      // Index wikilinks for backlinks/suggest-links
+      await indexSyncedLinks(db, resolvedSlug, change.body);
     } else if (change.operation === 'delete') {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {
@@ -75,7 +96,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       change.operation,
       payload.device_id,
       change.checksum,
-      change.slug || '',
+      resolvedSlug,
     );
 
     accepted++;
@@ -160,4 +181,43 @@ export async function handleSyncDevices(c: Context<{ Bindings: Env }>) {
 function getTypeFolder(frontmatter: Record<string, unknown>): string {
   const type = String(frontmatter.type ?? 'fleeting');
   return resolveTypeFolder(type);
+}
+
+/**
+ * Parse wikilinks from body and index them in D1 for backlinks/suggest-links.
+ */
+async function indexSyncedLinks(db: D1IndexDatabase, slug: string, body: string): Promise<void> {
+  const cleaned = body
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]*`/g, '');
+
+  const regex = /\[\[([^\]]+)\]\]/g;
+  const allNotes = await db.getAllNotesMeta();
+  const bodyLines = body.split('\n');
+  const links: Array<{ target_slug: string | null; target_raw: string; context: string }> = [];
+  let match;
+
+  while ((match = regex.exec(cleaned)) !== null) {
+    const inner = match[1];
+    const pipeIdx = inner.indexOf('|');
+    const target = pipeIdx >= 0 ? inner.slice(0, pipeIdx).trim() : inner.trim();
+    const raw = match[0];
+
+    const targetSlug = target
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+
+    const found = allNotes.find(n =>
+      n.slug === targetSlug || n.title.toLowerCase() === target.toLowerCase(),
+    );
+
+    const contextLine = bodyLines.find(l => l.includes(raw)) ?? '';
+    links.push({
+      target_slug: found?.slug ?? null,
+      target_raw: target,
+      context: contextLine.trim(),
+    });
+  }
+
+  await db.setLinks(slug, links);
 }

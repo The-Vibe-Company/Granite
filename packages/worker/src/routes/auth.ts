@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { Env } from '../env.js';
 import { generateApiKey, getKeyPrefix, hashApiKey } from '../lib/api-key.js';
+import { timingSafeEqual } from '../lib/stripe.js';
 
 interface GitHubUser {
   id: number;
@@ -37,8 +38,10 @@ async function verifyState(signed: string, secret: string): Promise<string | nul
   const dotIdx = signed.lastIndexOf('.');
   if (dotIdx < 0) return null;
   const payload = signed.slice(0, dotIdx);
+  const sig = signed.slice(dotIdx + 1);
   const expected = await signState(payload, secret);
-  if (expected !== signed) return null;
+  const expectedSig = expected.slice(expected.lastIndexOf('.') + 1);
+  if (!timingSafeEqual(sig, expectedSig)) return null;
   return payload;
 }
 

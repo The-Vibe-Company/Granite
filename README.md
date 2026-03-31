@@ -86,8 +86,13 @@ mem add "Talked to Alice about local-first sync tradeoffs"
 mem new "Local-first sync tradeoffs" --type permanent
 mem list
 mem search "sync"
-mem serve
-mem mcp
+```
+
+Start one long-running interface when you need it:
+
+```bash
+mem serve   # local web UI
+mem mcp     # MCP server for agent clients
 ```
 
 `mem new` does more than create a file. It can immediately suggest related links, tags, and the next note to create, which is the core of Granite's value loop.

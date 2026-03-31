@@ -180,6 +180,10 @@ export class GraniteMcpRuntime {
     }));
   }
 
+  getDefaultNoteType(): string {
+    return this.config.defaults.note_type;
+  }
+
   listNotes(input: ListNotesInput = {}): NoteSummary[] {
     let notes = this.readAllNotes();
 
@@ -373,7 +377,9 @@ export class GraniteMcpRuntime {
       shouldRebuild = true;
     } else if (this.config.index.auto_rebuild) {
       if (!this.lastSignature) {
-        shouldRebuild = signature.latestMutationMs > this.getLastRebuildMs();
+        shouldRebuild =
+          signature.noteCount !== this.getIndexedNoteCount() ||
+          signature.latestMutationMs > this.getLastRebuildMs();
       } else {
         shouldRebuild =
           signature.noteCount !== this.lastSignature.noteCount ||
@@ -523,6 +529,11 @@ export class GraniteMcpRuntime {
   private getMetaValue(key: string): string | undefined {
     const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
     return row?.value;
+  }
+
+  private getIndexedNoteCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number };
+    return row.count;
   }
 }
 

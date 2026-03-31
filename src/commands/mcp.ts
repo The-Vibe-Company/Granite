@@ -13,7 +13,7 @@ interface McpCommandOptions {
 }
 
 export async function mcpCommand(options: McpCommandOptions): Promise<void> {
-  const transport = options.transport ?? 'stdio';
+  const transport = parseTransport(options.transport);
   const vaultRoot = resolveVaultRoot(options.vault);
   const runtime = new GraniteMcpRuntime(vaultRoot);
 
@@ -50,10 +50,23 @@ function resolveVaultRoot(explicitVault?: string): string {
   return requireVaultRoot();
 }
 
-function parsePort(value?: string): number {
-  const parsed = Number.parseInt(process.env.MCP_PORT || value || '3321', 10);
-  if (Number.isNaN(parsed) || parsed <= 0) {
-    throw new Error(`Invalid MCP port: ${value ?? process.env.MCP_PORT}`);
+export function parseTransport(value?: string): 'stdio' | 'http' {
+  const transport = value ?? 'stdio';
+  if (transport !== 'stdio' && transport !== 'http') {
+    throw new Error(`Invalid MCP transport: ${transport}. Expected "stdio" or "http".`);
+  }
+  return transport;
+}
+
+export function parsePort(value?: string): number {
+  const raw = (value ?? process.env.MCP_PORT ?? '3321').trim();
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`Invalid MCP port: ${raw}`);
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (parsed <= 0) {
+    throw new Error(`Invalid MCP port: ${raw}`);
   }
   return parsed;
 }

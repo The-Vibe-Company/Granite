@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { initVault } from './commands/init.js';
 import { newNote } from './commands/new.js';
 import { addNote } from './commands/add.js';
@@ -13,7 +13,7 @@ import { serveCommand } from './commands/serve.js';
 import { typesCommand } from './commands/types.js';
 import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
-import { mcpCommand } from './commands/mcp.js';
+import { mcpCommand, parseTransport } from './commands/mcp.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -160,7 +160,7 @@ program
   .command('mcp')
   .description('Start Granite as an MCP server')
   .option('--vault <path>', 'Vault root. Defaults to the current Granite vault or $GRANITE_VAULT')
-  .option('--transport <transport>', 'Transport to use: stdio or http', 'stdio')
+  .option('--transport <transport>', 'Transport to use: stdio or http', parseTransportOption, 'stdio')
   .option('--host <host>', 'Host for HTTP transport', '127.0.0.1')
   .option('--port <port>', 'Port for HTTP transport', '3321')
   .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
@@ -180,4 +180,12 @@ await program.parseAsync();
 
 function collectValues(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+function parseTransportOption(value: string): 'stdio' | 'http' {
+  try {
+    return parseTransport(value);
+  } catch (error) {
+    throw new InvalidArgumentError(error instanceof Error ? error.message : String(error));
+  }
 }

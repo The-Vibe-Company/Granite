@@ -207,7 +207,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   }, async () => {
     const noteTypes = runtime.listNoteTypes();
     return toolResult({
-      default_type: runtime.getVaultOverview(1).default_type,
+      default_type: runtime.getDefaultNoteType(),
       note_types: noteTypes,
     }, `Loaded ${noteTypes.length} Granite note types.`);
   });

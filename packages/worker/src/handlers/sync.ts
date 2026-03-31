@@ -32,17 +32,14 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   let accepted = 0;
 
   for (const change of payload.changes) {
-    // Write/delete note in R2
     if ((change.operation === 'create' || change.operation === 'update') && change.frontmatter && change.body !== undefined) {
       const typeFolder = getTypeFolder(change.frontmatter);
       const slug = change.slug || change.note_id;
 
-      // Serialize and write to R2
       const matter = await import('gray-matter');
       const content = matter.default.stringify(change.body, change.frontmatter);
       await storage.writeNote(typeFolder, slug, content);
 
-      // Upsert in D1 index
       await db.upsertNote({
         slug,
         id: String(change.note_id),
@@ -66,7 +63,6 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       }
     }
 
-    // Record in sync changelog
     await db.recordChange(
       change.note_id,
       change.operation,
@@ -78,7 +74,6 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
     accepted++;
   }
 
-  // Update device info
   await db.upsertDevice(payload.device_id, payload.device_id);
   const serverSeq = await db.getLatestSeq();
   await db.updateDeviceSeq(payload.device_id, serverSeq);
@@ -88,7 +83,6 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
 
 export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
   const vaultId = getVaultId(c);
-  const storage = new R2NoteStorage(c.env.VAULT_BUCKET, vaultId);
   const db = new D1IndexDatabase(c.env.DB, vaultId);
 
   const sinceSeq = Number(c.req.query('since_seq') ?? '0');
@@ -96,7 +90,6 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
 
   const changelog = await db.getChangesSince(sinceSeq, deviceId);
 
-  // Build changes with note content
   const changes: SyncChange[] = [];
   for (const entry of changelog) {
     if (entry.operation === 'delete') {
@@ -110,11 +103,9 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
       continue;
     }
 
-    // Fetch note content from D1 index
     const indexed = await db.getNoteById(entry.note_id);
     if (!indexed) continue;
 
-    // Parse frontmatter from stored data
     const frontmatter: Record<string, unknown> = {
       id: indexed.id,
       title: indexed.title,

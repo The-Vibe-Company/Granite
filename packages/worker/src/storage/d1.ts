@@ -61,8 +61,8 @@ export class D1IndexDatabase {
 
   async upsertNote(note: IndexedNote): Promise<void> {
     await this.db.prepare(`
-      INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source, vault_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         id = excluded.id,
         title = excluded.title,
@@ -79,39 +79,44 @@ export class D1IndexDatabase {
       note.slug, note.id, note.title, note.type,
       note.created, note.modified, note.tags, note.aliases,
       note.body, note.filepath, note.status, note.source,
+      this.vaultId,
     ).run();
   }
 
   async deleteNoteBySlug(slug: string): Promise<void> {
     await this.db.batch([
-      this.db.prepare('DELETE FROM links WHERE source_slug = ?').bind(slug),
-      this.db.prepare('DELETE FROM notes WHERE slug = ?').bind(slug),
+      this.db.prepare('DELETE FROM links WHERE source_slug = ? AND vault_id = ?').bind(slug, this.vaultId),
+      this.db.prepare('DELETE FROM notes WHERE slug = ? AND vault_id = ?').bind(slug, this.vaultId),
     ]);
   }
 
   async getNote(slug: string): Promise<IndexedNote | null> {
-    return this.db.prepare('SELECT * FROM notes WHERE slug = ?')
-      .bind(slug)
+    return this.db.prepare('SELECT * FROM notes WHERE slug = ? AND vault_id = ?')
+      .bind(slug, this.vaultId)
       .first<IndexedNote>();
   }
 
   async getNoteById(noteId: string): Promise<IndexedNote | null> {
-    return this.db.prepare('SELECT * FROM notes WHERE id = ?')
-      .bind(noteId)
+    return this.db.prepare('SELECT * FROM notes WHERE id = ? AND vault_id = ?')
+      .bind(noteId, this.vaultId)
       .first<IndexedNote>();
   }
 
   async getAllNotes(): Promise<IndexedNote[]> {
-    const result = await this.db.prepare('SELECT * FROM notes ORDER BY modified DESC').all<IndexedNote>();
+    const result = await this.db.prepare(
+      'SELECT * FROM notes WHERE vault_id = ? ORDER BY modified DESC',
+    ).bind(this.vaultId).all<IndexedNote>();
     return result.results;
   }
 
   async countNotes(): Promise<number> {
-    const row = await this.db.prepare('SELECT COUNT(*) as c FROM notes').first<{ c: number }>();
+    const row = await this.db.prepare(
+      'SELECT COUNT(*) as c FROM notes WHERE vault_id = ?',
+    ).bind(this.vaultId).first<{ c: number }>();
     return row?.c ?? 0;
   }
 
-  // --- Search (same FTS5 query as src/core/search.ts) ---
+  // --- Search ---
 
   async searchNotes(query: string, limit: number): Promise<SearchResult[]> {
     const cappedLimit = Math.max(1, Math.min(limit, 100));
@@ -123,25 +128,25 @@ export class D1IndexDatabase {
         rank as score
       FROM notes_fts
       JOIN notes n ON n.rowid = notes_fts.rowid
-      WHERE notes_fts MATCH ?
+      WHERE notes_fts MATCH ? AND n.vault_id = ?
       ORDER BY rank
       LIMIT ?
-    `).bind(query, cappedLimit).all<SearchResult>();
+    `).bind(query, this.vaultId, cappedLimit).all<SearchResult>();
     return result.results;
   }
 
-  // --- Links (same queries as src/core/backlinks.ts) ---
+  // --- Links ---
 
   async setLinks(sourceSlug: string, links: IndexedLink[]): Promise<void> {
     const stmts: D1PreparedStatement[] = [
-      this.db.prepare('DELETE FROM links WHERE source_slug = ?').bind(sourceSlug),
+      this.db.prepare('DELETE FROM links WHERE source_slug = ? AND vault_id = ?').bind(sourceSlug, this.vaultId),
     ];
 
     for (const link of links) {
       stmts.push(
         this.db.prepare(
-          'INSERT INTO links (source_slug, target_slug, target_raw, context) VALUES (?, ?, ?, ?)'
-        ).bind(sourceSlug, link.target_slug, link.target_raw, link.context),
+          'INSERT INTO links (source_slug, target_slug, target_raw, context, vault_id) VALUES (?, ?, ?, ?, ?)',
+        ).bind(sourceSlug, link.target_slug, link.target_raw, link.context, this.vaultId),
       );
     }
 
@@ -155,32 +160,32 @@ export class D1IndexDatabase {
         n.title as source_title,
         l.context
       FROM links l
-      JOIN notes n ON n.slug = l.source_slug
-      WHERE l.target_slug = ?
+      JOIN notes n ON n.slug = l.source_slug AND n.vault_id = l.vault_id
+      WHERE l.target_slug = ? AND l.vault_id = ?
       ORDER BY n.title
-    `).bind(slug).all<BacklinkEntry>();
+    `).bind(slug, this.vaultId).all<BacklinkEntry>();
     return result.results;
   }
 
   async getOutgoingLinks(slug: string): Promise<Array<{ target_slug: string | null; target_raw: string }>> {
     const result = await this.db.prepare(
-      'SELECT target_slug, target_raw FROM links WHERE source_slug = ?'
-    ).bind(slug).all<{ target_slug: string | null; target_raw: string }>();
+      'SELECT target_slug, target_raw FROM links WHERE source_slug = ? AND vault_id = ?',
+    ).bind(slug, this.vaultId).all<{ target_slug: string | null; target_raw: string }>();
     return result.results;
   }
 
   // --- Meta ---
 
   async getMeta(key: string): Promise<string | null> {
-    const row = await this.db.prepare('SELECT value FROM meta WHERE key = ?')
-      .bind(key)
+    const row = await this.db.prepare('SELECT value FROM meta WHERE key = ? AND vault_id = ?')
+      .bind(key, this.vaultId)
       .first<{ value: string }>();
     return row?.value ?? null;
   }
 
   async setMeta(key: string, value: string): Promise<void> {
-    await this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
-      .bind(key, value)
+    await this.db.prepare('INSERT OR REPLACE INTO meta (key, value, vault_id) VALUES (?, ?, ?)')
+      .bind(key, value, this.vaultId)
       .run();
   }
 
@@ -188,36 +193,36 @@ export class D1IndexDatabase {
 
   async rebuildFromNotes(entries: Array<{ note: IndexedNote; links: IndexedLink[] }>): Promise<void> {
     const stmts: D1PreparedStatement[] = [
-      this.db.prepare('DELETE FROM links'),
-      this.db.prepare('DELETE FROM notes'),
-      this.db.prepare("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')"),
+      this.db.prepare('DELETE FROM links WHERE vault_id = ?').bind(this.vaultId),
+      this.db.prepare('DELETE FROM notes WHERE vault_id = ?').bind(this.vaultId),
     ];
 
     for (const entry of entries) {
       const n = entry.note;
       stmts.push(
         this.db.prepare(`
-          INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source, vault_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           n.slug, n.id, n.title, n.type,
           n.created, n.modified, n.tags, n.aliases,
           n.body, n.filepath, n.status, n.source,
+          this.vaultId,
         ),
       );
 
       for (const link of entry.links) {
         stmts.push(
           this.db.prepare(
-            'INSERT INTO links (source_slug, target_slug, target_raw, context) VALUES (?, ?, ?, ?)'
-          ).bind(n.slug, link.target_slug, link.target_raw, link.context),
+            'INSERT INTO links (source_slug, target_slug, target_raw, context, vault_id) VALUES (?, ?, ?, ?, ?)',
+          ).bind(n.slug, link.target_slug, link.target_raw, link.context, this.vaultId),
         );
       }
     }
 
     stmts.push(
-      this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_rebuild', ?)")
-        .bind(new Date().toISOString()),
+      this.db.prepare("INSERT OR REPLACE INTO meta (key, value, vault_id) VALUES ('last_rebuild', ?, ?)")
+        .bind(new Date().toISOString(), this.vaultId),
     );
 
     await this.db.batch(stmts);
@@ -253,7 +258,7 @@ export class D1IndexDatabase {
 
   async getLatestSeq(): Promise<number> {
     const row = await this.db.prepare(
-      'SELECT MAX(seq) as max_seq FROM sync_changelog WHERE vault_id = ?'
+      'SELECT MAX(seq) as max_seq FROM sync_changelog WHERE vault_id = ?',
     ).bind(this.vaultId).first<{ max_seq: number | null }>();
     return row?.max_seq ?? 0;
   }
@@ -272,14 +277,14 @@ export class D1IndexDatabase {
 
   async getDevices(): Promise<DeviceRow[]> {
     const result = await this.db.prepare(
-      'SELECT * FROM devices WHERE vault_id = ?'
+      'SELECT * FROM devices WHERE vault_id = ?',
     ).bind(this.vaultId).all<DeviceRow>();
     return result.results;
   }
 
   async updateDeviceSeq(deviceId: string, seq: number): Promise<void> {
     await this.db.prepare(
-      'UPDATE devices SET last_seq = ?, last_seen = ? WHERE device_id = ?'
+      'UPDATE devices SET last_seq = ?, last_seen = ? WHERE device_id = ?',
     ).bind(seq, new Date().toISOString(), deviceId).run();
   }
 }

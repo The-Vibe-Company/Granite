@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.4...granite-mem-v0.1.5) (2026-03-31)
+
+
+### Features
+
+* multi-device sync system + Granite Cloud worker ([#15](https://github.com/The-Vibe-Company/Granite/issues/15)) ([e4126fb](https://github.com/The-Vibe-Company/Granite/commit/e4126fb42fd148b69eba1445aedf3f747139f28d))
+* rename installed cli to granite ([#17](https://github.com/The-Vibe-Company/Granite/issues/17)) ([3fdba99](https://github.com/The-Vibe-Company/Granite/commit/3fdba99330478ab9c1b3639193932de724d6cebf))
+
 ## [0.1.4](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.3...granite-mem-v0.1.4) (2026-03-31)
 
 

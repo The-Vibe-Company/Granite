@@ -1,0 +1,180 @@
+import type { Context } from 'hono';
+import type { Env } from '../env.js';
+import { R2NoteStorage } from '../storage/r2.js';
+import { D1IndexDatabase } from '../storage/d1.js';
+
+interface SyncChange {
+  note_id: string;
+  operation: string;
+  timestamp: string;
+  checksum: string;
+  slug: string;
+  frontmatter?: Record<string, unknown>;
+  body?: string;
+}
+
+interface SyncPushPayload {
+  device_id: string;
+  last_server_seq: number;
+  changes: SyncChange[];
+}
+
+function getVaultId(c: Context<{ Bindings: Env }>): string {
+  return c.get('vaultId') as string;
+}
+
+export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
+  const vaultId = getVaultId(c);
+  const storage = new R2NoteStorage(c.env.VAULT_BUCKET, vaultId);
+  const db = new D1IndexDatabase(c.env.DB, vaultId);
+
+  const payload = await c.req.json<SyncPushPayload>();
+  let accepted = 0;
+
+  for (const change of payload.changes) {
+    // Write/delete note in R2
+    if ((change.operation === 'create' || change.operation === 'update') && change.frontmatter && change.body !== undefined) {
+      const typeFolder = getTypeFolder(change.frontmatter);
+      const slug = change.slug || change.note_id;
+
+      // Serialize and write to R2
+      const matter = await import('gray-matter');
+      const content = matter.default.stringify(change.body, change.frontmatter);
+      await storage.writeNote(typeFolder, slug, content);
+
+      // Upsert in D1 index
+      await db.upsertNote({
+        slug,
+        id: String(change.note_id),
+        title: String(change.frontmatter.title ?? ''),
+        type: String(change.frontmatter.type ?? 'fleeting'),
+        created: String(change.frontmatter.created ?? ''),
+        modified: String(change.frontmatter.modified ?? ''),
+        tags: JSON.stringify(change.frontmatter.tags ?? []),
+        aliases: JSON.stringify(change.frontmatter.aliases ?? []),
+        body: change.body,
+        filepath: `${typeFolder}/${slug}.md`,
+        status: String(change.frontmatter.status ?? 'active'),
+        source: String(change.frontmatter.source ?? 'human'),
+      });
+    } else if (change.operation === 'delete') {
+      const indexed = await db.getNoteById(change.note_id);
+      if (indexed) {
+        const typeFolder = `notes/${indexed.type}`;
+        await storage.deleteNote(typeFolder, indexed.slug);
+        await db.deleteNoteBySlug(indexed.slug);
+      }
+    }
+
+    // Record in sync changelog
+    await db.recordChange(
+      change.note_id,
+      change.operation,
+      payload.device_id,
+      change.checksum,
+      change.slug || '',
+    );
+
+    accepted++;
+  }
+
+  // Update device info
+  await db.upsertDevice(payload.device_id, payload.device_id);
+  const serverSeq = await db.getLatestSeq();
+  await db.updateDeviceSeq(payload.device_id, serverSeq);
+
+  return c.json({ server_seq: serverSeq, accepted });
+}
+
+export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
+  const vaultId = getVaultId(c);
+  const storage = new R2NoteStorage(c.env.VAULT_BUCKET, vaultId);
+  const db = new D1IndexDatabase(c.env.DB, vaultId);
+
+  const sinceSeq = Number(c.req.query('since_seq') ?? '0');
+  const deviceId = c.req.query('device_id') ?? '';
+
+  const changelog = await db.getChangesSince(sinceSeq, deviceId);
+
+  // Build changes with note content
+  const changes: SyncChange[] = [];
+  for (const entry of changelog) {
+    if (entry.operation === 'delete') {
+      changes.push({
+        note_id: entry.note_id,
+        operation: entry.operation,
+        timestamp: entry.timestamp,
+        checksum: entry.checksum,
+        slug: entry.slug,
+      });
+      continue;
+    }
+
+    // Fetch note content from D1 index
+    const indexed = await db.getNoteById(entry.note_id);
+    if (!indexed) continue;
+
+    // Parse frontmatter from stored data
+    const frontmatter: Record<string, unknown> = {
+      id: indexed.id,
+      title: indexed.title,
+      type: indexed.type,
+      created: indexed.created,
+      modified: indexed.modified,
+      tags: parseJsonArray(indexed.tags),
+      aliases: parseJsonArray(indexed.aliases),
+      status: indexed.status,
+      source: indexed.source,
+    };
+
+    changes.push({
+      note_id: entry.note_id,
+      operation: entry.operation,
+      timestamp: entry.timestamp,
+      checksum: entry.checksum,
+      slug: indexed.slug,
+      frontmatter,
+      body: indexed.body,
+    });
+  }
+
+  const serverSeq = await db.getLatestSeq();
+
+  return c.json({ changes, server_seq: serverSeq });
+}
+
+export async function handleSyncDevices(c: Context<{ Bindings: Env }>) {
+  const vaultId = getVaultId(c);
+  const db = new D1IndexDatabase(c.env.DB, vaultId);
+  const devices = await db.getDevices();
+
+  return c.json(devices.map(d => ({
+    device_id: d.device_id,
+    device_name: d.device_name,
+    last_seen: d.last_seen,
+  })));
+}
+
+function getTypeFolder(frontmatter: Record<string, unknown>): string {
+  const type = String(frontmatter.type ?? 'fleeting');
+  const folderMap: Record<string, string> = {
+    fleeting: 'notes/fleeting',
+    permanent: 'notes/permanent',
+    reference: 'notes/reference',
+    person: 'notes/people',
+    meeting: 'notes/meetings',
+    project: 'notes/projects',
+    decision: 'notes/decisions',
+  };
+  return folderMap[type] ?? `notes/${type}`;
+}
+
+function parseJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.6...granite-mem-v0.1.7) (2026-03-31)
+
+
+### Features
+
+* rename cli ([#20](https://github.com/The-Vibe-Company/Granite/issues/20)) ([14f194c](https://github.com/The-Vibe-Company/Granite/commit/14f194c6409ab207fa0b6983c2e8a2e50e5c8a41))
+
 ## [0.1.6](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.5...granite-mem-v0.1.6) (2026-03-31)
 
 

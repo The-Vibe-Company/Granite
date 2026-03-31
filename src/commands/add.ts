@@ -4,6 +4,7 @@ import { requireVaultRoot } from '../core/vault.js';
 import { createNote } from '../core/note.js';
 import { jsonSuccess } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
+import { getSyncManager } from '../core/sync/manager.js';
 
 export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const vaultRoot = requireVaultRoot();
@@ -33,6 +34,10 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
 
   const note = createNote(vaultRoot, config, typeName, title, content + '\n');
   const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
+
+  // Transparent sync: track + push in background
+  const sync = getSyncManager(vaultRoot, config);
+  sync?.trackAndPush(note, 'create');
 
   if (options.json) {
     console.log(jsonSuccess({

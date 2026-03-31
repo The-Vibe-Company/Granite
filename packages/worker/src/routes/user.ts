@@ -14,26 +14,22 @@ user.get('/me', async (c) => {
   const tier = c.get('tier');
   const limits = TIER_LIMITS[tier];
 
-  // Get vault count and note count
-  const vaults = await c.env.DB.prepare(
-    'SELECT vault_id, vault_name, created_at FROM vaults WHERE user_id = ?',
-  ).bind(u.id).all<{ vault_id: string; vault_name: string; created_at: string }>();
+  const vaults = await c.env.DB.prepare(`
+    SELECT v.vault_id, v.vault_name, v.created_at, COUNT(n.slug) as note_count
+    FROM vaults v
+    LEFT JOIN notes n ON n.vault_id = v.vault_id
+    WHERE v.user_id = ?
+    GROUP BY v.vault_id
+    ORDER BY v.created_at
+  `).bind(u.id).all<{ vault_id: string; vault_name: string; created_at: string; note_count: number }>();
 
-  let totalNotes = 0;
-  const vaultStats = [];
-  for (const v of vaults.results || []) {
-    const noteCount = await c.env.DB.prepare(
-      'SELECT COUNT(*) as cnt FROM notes WHERE vault_id = ?',
-    ).bind(v.vault_id).first<{ cnt: number }>();
-    const cnt = noteCount?.cnt ?? 0;
-    totalNotes += cnt;
-    vaultStats.push({
-      vault_id: v.vault_id,
-      vault_name: v.vault_name,
-      note_count: cnt,
-      created_at: v.created_at,
-    });
-  }
+  const vaultStats = (vaults.results || []).map(v => ({
+    vault_id: v.vault_id,
+    vault_name: v.vault_name,
+    note_count: v.note_count,
+    created_at: v.created_at,
+  }));
+  const totalNotes = vaultStats.reduce((sum, v) => sum + v.note_count, 0);
 
   return c.json({
     user: {

@@ -102,10 +102,32 @@ export class D1IndexDatabase {
       .first<IndexedNote>();
   }
 
+  async getNotesByIds(noteIds: string[]): Promise<Map<string, IndexedNote>> {
+    const map = new Map<string, IndexedNote>();
+    if (noteIds.length === 0) return map;
+    // D1 doesn't support IN with bind params well, so batch individual queries
+    const stmts = noteIds.map(id =>
+      this.db.prepare('SELECT * FROM notes WHERE id = ? AND vault_id = ?').bind(id, this.vaultId),
+    );
+    const results = await this.db.batch(stmts);
+    for (const result of results) {
+      const rows = (result as D1Result<IndexedNote>).results;
+      if (rows.length > 0) map.set(rows[0].id, rows[0]);
+    }
+    return map;
+  }
+
   async getAllNotes(): Promise<IndexedNote[]> {
     const result = await this.db.prepare(
       'SELECT * FROM notes WHERE vault_id = ? ORDER BY modified DESC',
     ).bind(this.vaultId).all<IndexedNote>();
+    return result.results;
+  }
+
+  async getAllNotesMeta(): Promise<Array<{ slug: string; title: string; type: string; created: string; modified: string; tags: string; aliases: string; status: string; source: string; filepath: string }>> {
+    const result = await this.db.prepare(
+      'SELECT slug, title, type, created, modified, tags, aliases, status, source, filepath FROM notes WHERE vault_id = ? ORDER BY modified DESC',
+    ).bind(this.vaultId).all<{ slug: string; title: string; type: string; created: string; modified: string; tags: string; aliases: string; status: string; source: string; filepath: string }>();
     return result.results;
   }
 

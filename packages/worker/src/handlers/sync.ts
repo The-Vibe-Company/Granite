@@ -1,7 +1,9 @@
 import type { Context } from 'hono';
+import matter from 'gray-matter';
 import type { Env } from '../env.js';
 import { R2NoteStorage } from '../storage/r2.js';
 import { D1IndexDatabase } from '../storage/d1.js';
+import { parseJsonArray } from '../lib/json.js';
 
 interface SyncChange {
   note_id: string;
@@ -36,8 +38,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       const typeFolder = getTypeFolder(change.frontmatter);
       const slug = change.slug || change.note_id;
 
-      const matter = await import('gray-matter');
-      const content = matter.default.stringify(change.body, change.frontmatter);
+      const content = matter.stringify(change.body, change.frontmatter);
       await storage.writeNote(typeFolder, slug, content);
 
       await db.upsertNote({
@@ -90,6 +91,12 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
 
   const changelog = await db.getChangesSince(sinceSeq, deviceId);
 
+  // Batch-fetch all note IDs we need (avoid N+1 queries)
+  const noteIds = [...new Set(
+    changelog.filter(e => e.operation !== 'delete').map(e => e.note_id),
+  )];
+  const notesMap = await db.getNotesByIds(noteIds);
+
   const changes: SyncChange[] = [];
   for (const entry of changelog) {
     if (entry.operation === 'delete') {
@@ -103,20 +110,8 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
       continue;
     }
 
-    const indexed = await db.getNoteById(entry.note_id);
+    const indexed = notesMap.get(entry.note_id);
     if (!indexed) continue;
-
-    const frontmatter: Record<string, unknown> = {
-      id: indexed.id,
-      title: indexed.title,
-      type: indexed.type,
-      created: indexed.created,
-      modified: indexed.modified,
-      tags: parseJsonArray(indexed.tags),
-      aliases: parseJsonArray(indexed.aliases),
-      status: indexed.status,
-      source: indexed.source,
-    };
 
     changes.push({
       note_id: entry.note_id,
@@ -124,7 +119,17 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
       timestamp: entry.timestamp,
       checksum: entry.checksum,
       slug: indexed.slug,
-      frontmatter,
+      frontmatter: {
+        id: indexed.id,
+        title: indexed.title,
+        type: indexed.type,
+        created: indexed.created,
+        modified: indexed.modified,
+        tags: parseJsonArray(indexed.tags),
+        aliases: parseJsonArray(indexed.aliases),
+        status: indexed.status,
+        source: indexed.source,
+      },
       body: indexed.body,
     });
   }
@@ -158,14 +163,4 @@ function getTypeFolder(frontmatter: Record<string, unknown>): string {
     decision: 'notes/decisions',
   };
   return folderMap[type] ?? `notes/${type}`;
-}
-
-function parseJsonArray(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const value = JSON.parse(raw);
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
 }

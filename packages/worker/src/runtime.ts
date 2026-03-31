@@ -1,6 +1,7 @@
 import matter from 'gray-matter';
 import type { R2NoteStorage } from './storage/r2.js';
 import type { D1IndexDatabase } from './storage/d1.js';
+import { parseJsonArray } from './lib/json.js';
 
 // --- Pure function imports (same logic as src/core/) ---
 
@@ -204,7 +205,7 @@ export class CloudMcpRuntime {
     recent_notes: NoteSummary[];
   }> {
     const config = await this.getConfig();
-    const allNotes = await this.db.getAllNotes();
+    const allNotes = await this.db.getAllNotesMeta();
 
     const byType: Record<string, number> = {};
     for (const n of allNotes) {
@@ -254,14 +255,12 @@ export class CloudMcpRuntime {
     const indexed = await this.db.getNote(slug);
     if (!indexed) throw new Error(`Note not found: ${slug}`);
 
-    // Read full content from R2
     const typeConfig = config.note_types[indexed.type];
     const folder = typeConfig?.folder ?? `notes/${indexed.type}`;
     const content = await this.storage.readNote(folder, slug);
     const { frontmatter, body } = parseFrontmatter(content);
 
-    // Resolve outgoing links
-    const allNotes = await this.db.getAllNotes();
+    const allNotes = await this.db.getAllNotesMeta();
     const links = parseWikilinks(body);
     const resolvedLinks = links.map(link => {
       const targetSlug = slugify(link.target);
@@ -293,7 +292,7 @@ export class CloudMcpRuntime {
     if (!indexed) throw new Error(`Note not found: ${slug}`);
 
     const existingLinks = new Set(parseWikilinks(indexed.body).map(l => l.target.toLowerCase()));
-    const allNotes = await this.db.getAllNotes();
+    const allNotes = await this.db.getAllNotesMeta();
     const bodyLower = indexed.body.toLowerCase();
     const suggestions: LinkSuggestion[] = [];
 
@@ -323,7 +322,6 @@ export class CloudMcpRuntime {
     const typeConfig = config.note_types[typeName];
     if (!typeConfig) throw new Error(`Unknown note type: "${typeName}"`);
 
-    // Generate slug
     let finalSlug: string;
     if (typeConfig.slug_format === 'date') {
       const date = new Date().toISOString().slice(0, 10);
@@ -363,10 +361,8 @@ export class CloudMcpRuntime {
 
     const content = serializeFrontmatter(frontmatter, body);
 
-    // Write to R2
     await this.storage.writeNote(typeConfig.folder, finalSlug, content);
 
-    // Index in D1
     const links = parseWikilinks(body);
     await this.db.upsertNote({
       slug: finalSlug,
@@ -383,22 +379,7 @@ export class CloudMcpRuntime {
       source: input.source ?? 'human',
     });
 
-    // Index links
-    const allNotes = await this.db.getAllNotes();
-    const indexedLinks = links.map(link => {
-      const targetSlug = slugify(link.target);
-      const found = allNotes.find(n =>
-        n.slug === targetSlug || n.title.toLowerCase() === link.target.toLowerCase()
-      );
-      const bodyLines = body.split('\n');
-      const contextLine = bodyLines.find(l => l.includes(link.raw)) ?? '';
-      return {
-        target_slug: found?.slug ?? null,
-        target_raw: link.target,
-        context: contextLine.trim(),
-      };
-    });
-    await this.db.setLinks(finalSlug, indexedLinks);
+    await this.indexLinks(finalSlug, body, links);
 
     const note = await this.getNote(finalSlug);
     return { note, recommendations: emptyRecommendations() };
@@ -427,7 +408,6 @@ export class CloudMcpRuntime {
     const typeConfig = config.note_types[indexed.type];
     const folder = typeConfig?.folder ?? `notes/${indexed.type}`;
 
-    // Read current content from R2
     const content = await this.storage.readNote(folder, slug);
     const { frontmatter, body: existingBody } = parseFrontmatter(content);
     let body = existingBody;
@@ -453,7 +433,6 @@ export class CloudMcpRuntime {
     const newContent = serializeFrontmatter(frontmatter, body);
     await this.storage.writeNote(folder, slug, newContent);
 
-    // Re-index
     await this.db.upsertNote({
       slug,
       id: String(frontmatter.id),
@@ -469,19 +448,7 @@ export class CloudMcpRuntime {
       source: String(frontmatter.source),
     });
 
-    // Re-index links
-    const links = parseWikilinks(body);
-    const allNotes = await this.db.getAllNotes();
-    const indexedLinks = links.map(link => {
-      const targetSlug = slugify(link.target);
-      const found = allNotes.find(n =>
-        n.slug === targetSlug || n.title.toLowerCase() === link.target.toLowerCase()
-      );
-      const bodyLines = body.split('\n');
-      const contextLine = bodyLines.find(l => l.includes(link.raw)) ?? '';
-      return { target_slug: found?.slug ?? null, target_raw: link.target, context: contextLine.trim() };
-    });
-    await this.db.setLinks(slug, indexedLinks);
+    await this.indexLinks(slug, body);
 
     const note = await this.getNote(slug);
     return { note, recommendations: emptyRecommendations() };
@@ -500,6 +467,25 @@ export class CloudMcpRuntime {
     return this.storage.readNote(folder, slug);
   }
 
+  private async indexLinks(slug: string, body: string, links?: WikiLink[]): Promise<void> {
+    const wikilinks = links ?? parseWikilinks(body);
+    const allNotes = await this.db.getAllNotesMeta();
+    const bodyLines = body.split('\n');
+    const indexedLinks = wikilinks.map(link => {
+      const targetSlug = slugify(link.target);
+      const found = allNotes.find(n =>
+        n.slug === targetSlug || n.title.toLowerCase() === link.target.toLowerCase(),
+      );
+      const contextLine = bodyLines.find(l => l.includes(link.raw)) ?? '';
+      return {
+        target_slug: found?.slug ?? null,
+        target_raw: link.target,
+        context: contextLine.trim(),
+      };
+    });
+    await this.db.setLinks(slug, indexedLinks);
+  }
+
   private toNoteSummary(n: { slug: string; title: string; type: string; created: string; modified: string; tags: string; aliases: string; status: string; source: string; filepath: string }): NoteSummary {
     return {
       slug: n.slug,
@@ -514,16 +500,6 @@ export class CloudMcpRuntime {
       filepath: n.filepath,
       resource_uri: `granite://notes/${encodeURIComponent(n.slug)}`,
     };
-  }
-}
-
-function parseJsonArray(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const value = JSON.parse(raw);
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
   }
 }
 

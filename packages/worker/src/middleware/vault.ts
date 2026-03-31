@@ -1,11 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import type { Env } from '../env.js';
 
-/**
- * Vault resolution middleware.
- * Resolves the vault_id from query param or the user's default (first) vault.
- * Must run after auth middleware.
- */
+// Must run after auth middleware
 export const vaultMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   const user = c.get('user');
   if (!user) return c.json({ error: 'Authentication required' }, 401);

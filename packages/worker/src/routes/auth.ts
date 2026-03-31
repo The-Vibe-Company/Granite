@@ -87,10 +87,15 @@ auth.get('/auth/callback', async (c) => {
     return c.json({ error: 'Missing authorization code' }, 400);
   }
 
+  const clientSecret = c.env.GITHUB_CLIENT_SECRET;
+  if (!clientSecret) {
+    return c.json({ error: 'GitHub OAuth not configured' }, 503);
+  }
+
   let session = '';
   let redirect = '';
 
-  const verifiedPayload = await verifyState(stateParam, c.env.GITHUB_CLIENT_SECRET);
+  const verifiedPayload = await verifyState(stateParam, clientSecret);
   if (!verifiedPayload) {
     return c.json({ error: 'Invalid or tampered state parameter' }, 400);
   }

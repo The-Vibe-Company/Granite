@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "granite": {
+      "source": "the-vibe-company/granite",
+      "sourceType": "github",
+      "computedHash": "3e5a743bf991d60799be4f64b1e203daf47dfaa626746a15509820c3391540d2"
+    }
+  }
+}

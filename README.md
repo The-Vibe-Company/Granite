@@ -60,6 +60,7 @@ Granite is designed to be easy for agents to read and act on:
 - notes are plain files
 - metadata is explicit
 - commands support `--json`
+- Granite ships with an MCP server
 - vault structure is predictable
 - search, backlinks, and recommendations are available from the CLI
 
@@ -86,6 +87,7 @@ mem new "Local-first sync tradeoffs" --type permanent
 mem list
 mem search "sync"
 mem serve
+mem mcp
 ```
 
 `mem new` does more than create a file. It can immediately suggest related links, tags, and the next note to create, which is the core of Granite's value loop.
@@ -174,6 +176,37 @@ mem recommend sync-constraints --json
 
 That makes Granite a useful substrate for local workflows, scripts, and agent memory.
 
+## MCP Server
+
+Granite ships with an MCP server so LLM clients can control the vault directly through tools, resources, and prompts.
+
+Start it over stdio for local MCP clients:
+
+```bash
+mem mcp --vault /path/to/vault
+```
+
+Start it over Streamable HTTP:
+
+```bash
+mem mcp --transport http --host 127.0.0.1 --port 3321
+```
+
+The server exposes:
+
+- tools for vault overview, list/get/search, create/update, backlinks, link suggestions, recommendations, and doctor
+- resources for `granite.yml`, vault overview, note types, and individual notes via `granite://notes/{slug}`
+- prompts for refining notes and reviewing links/next steps
+
+Example stdio client configuration:
+
+```json
+{
+  "command": "mem",
+  "args": ["mcp", "--vault", "/path/to/vault"]
+}
+```
+
 ## Commands
 
 ```bash
@@ -191,6 +224,7 @@ mem recommend <slug> [--json]
 mem types
 mem doctor
 mem serve [-p <port>]
+mem mcp [--vault <path>] [--transport <stdio|http>]
 ```
 
 ## Development

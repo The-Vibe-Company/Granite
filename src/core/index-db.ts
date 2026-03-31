@@ -198,8 +198,8 @@ function countNoteFiles(vaultRoot: string, config: GraniteConfig): number {
 
 function upsertNoteAndLinks(db: Database.Database, note: Note): void {
   const upsertNote = db.prepare(`
-    INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath)
-    VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath)
+    INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
+    VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath, @status, @source)
     ON CONFLICT(slug) DO UPDATE SET
       id = excluded.id,
       title = excluded.title,
@@ -209,7 +209,9 @@ function upsertNoteAndLinks(db: Database.Database, note: Note): void {
       tags = excluded.tags,
       aliases = excluded.aliases,
       body = excluded.body,
-      filepath = excluded.filepath
+      filepath = excluded.filepath,
+      status = excluded.status,
+      source = excluded.source
   `);
 
   const deleteLinks = db.prepare('DELETE FROM links WHERE source_slug = ?');
@@ -230,6 +232,8 @@ function upsertNoteAndLinks(db: Database.Database, note: Note): void {
       aliases: JSON.stringify(note.frontmatter.aliases),
       body: note.body,
       filepath: note.filepath,
+      status: note.frontmatter.status ?? 'active',
+      source: note.frontmatter.source ?? 'human',
     });
 
     deleteLinks.run(note.slug);

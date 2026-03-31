@@ -13,13 +13,15 @@ import { serveCommand } from './commands/serve.js';
 import { typesCommand } from './commands/types.js';
 import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
+import { mcpCommand } from './commands/mcp.js';
+import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
 
 program
   .name('mem')
   .description('Granite — a local-first markdown memory system')
-  .version('0.1.0');
+  .version(GRANITE_VERSION);
 
 program
   .command('init')
@@ -154,4 +156,28 @@ program
     serveCommand(options);
   });
 
-program.parse();
+program
+  .command('mcp')
+  .description('Start Granite as an MCP server')
+  .option('--vault <path>', 'Vault root. Defaults to the current Granite vault or $GRANITE_VAULT')
+  .option('--transport <transport>', 'Transport to use: stdio or http', 'stdio')
+  .option('--host <host>', 'Host for HTTP transport', '127.0.0.1')
+  .option('--port <port>', 'Port for HTTP transport', '3321')
+  .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
+  .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
+  .action(async (options: {
+    vault?: string;
+    transport?: 'stdio' | 'http';
+    host?: string;
+    port?: string;
+    allowOrigin?: string[];
+    jsonResponse?: boolean;
+  }) => {
+    await mcpCommand(options);
+  });
+
+await program.parseAsync();
+
+function collectValues(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}

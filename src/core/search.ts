@@ -1,7 +1,8 @@
 import type Database from 'better-sqlite3';
 import type { SearchResult } from './types.js';
 
-export function searchNotes(db: Database.Database, query: string): SearchResult[] {
+export function searchNotes(db: Database.Database, query: string, limit = 20): SearchResult[] {
+  const cappedLimit = Math.max(1, Math.min(limit, 100));
   const stmt = db.prepare(`
     SELECT
       n.slug,
@@ -12,10 +13,10 @@ export function searchNotes(db: Database.Database, query: string): SearchResult[
     JOIN notes n ON n.rowid = notes_fts.rowid
     WHERE notes_fts MATCH ?
     ORDER BY rank
-    LIMIT 20
+    LIMIT ?
   `);
 
-  const rows = stmt.all(query) as Array<{
+  const rows = stmt.all(query, cappedLimit) as Array<{
     slug: string;
     title: string;
     snippet: string;

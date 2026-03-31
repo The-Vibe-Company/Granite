@@ -17,7 +17,7 @@ function createRuntime(c: Context<{ Bindings: Env }>): CloudMcpRuntime {
   const tier: Tier = c.get('tier');
   const storage = new R2NoteStorage(c.env.VAULT_BUCKET, vaultId);
   const db = new D1IndexDatabase(c.env.DB, vaultId);
-  return new CloudMcpRuntime(storage, db, TIER_LIMITS[tier].maxNotesPerVault);
+  return new CloudMcpRuntime(storage, db, TIER_LIMITS[tier].maxStorageBytes);
 }
 
 function createMcpServer(runtime: CloudMcpRuntime): McpServer {

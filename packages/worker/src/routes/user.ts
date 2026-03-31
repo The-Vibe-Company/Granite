@@ -15,21 +15,23 @@ user.get('/me', async (c) => {
   const limits = TIER_LIMITS[tier];
 
   const vaults = await c.env.DB.prepare(`
-    SELECT v.vault_id, v.vault_name, v.created_at, COUNT(n.slug) as note_count
+    SELECT v.vault_id, v.vault_name, v.created_at, v.storage_bytes, COUNT(n.slug) as note_count
     FROM vaults v
     LEFT JOIN notes n ON n.vault_id = v.vault_id
     WHERE v.user_id = ?
     GROUP BY v.vault_id
     ORDER BY v.created_at
-  `).bind(u.id).all<{ vault_id: string; vault_name: string; created_at: string; note_count: number }>();
+  `).bind(u.id).all<{ vault_id: string; vault_name: string; created_at: string; storage_bytes: number; note_count: number }>();
 
   const vaultStats = (vaults.results || []).map(v => ({
     vault_id: v.vault_id,
     vault_name: v.vault_name,
     note_count: v.note_count,
+    storage_bytes: v.storage_bytes,
     created_at: v.created_at,
   }));
   const totalNotes = vaultStats.reduce((sum, v) => sum + v.note_count, 0);
+  const totalStorage = vaultStats.reduce((sum, v) => sum + v.storage_bytes, 0);
 
   return c.json({
     user: {
@@ -43,10 +45,12 @@ user.get('/me', async (c) => {
     totals: {
       vaults: vaultStats.length,
       notes: totalNotes,
+      storage_bytes: totalStorage,
     },
     limits: {
       max_vaults: limits.maxVaults,
-      max_notes_per_vault: limits.maxNotesPerVault,
+      max_storage_bytes: limits.maxStorageBytes,
+      sync_enabled: limits.syncEnabled,
       rate_limit_per_hour: limits.rateLimit,
     },
   });

@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import keysRoutes from './routes/keys.js';
 import billingRoutes from './routes/billing.js';
 import userRoutes from './routes/user.js';
+import { requirePaidTier } from './middleware/tier-gate.js';
 import { handleCleanup } from './cron/cleanup.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -47,13 +48,15 @@ app.use('/me', authMiddleware);
 app.use('/vaults', authMiddleware);
 app.route('/', userRoutes);
 
-// MCP endpoint (auth + vault resolution)
+// MCP endpoint (auth + paid tier + vault resolution)
 app.use('/mcp', authMiddleware);
+app.use('/mcp', requirePaidTier);
 app.use('/mcp', vaultMiddleware);
 app.post('/mcp', handleMcp);
 
-// Sync relay endpoints (auth + vault resolution + rate limit)
+// Sync relay endpoints (auth + paid tier + vault resolution + rate limit)
 app.use('/v1/sync/*', authMiddleware);
+app.use('/v1/sync/*', requirePaidTier);
 app.use('/v1/sync/*', vaultMiddleware);
 app.use('/v1/sync/push', rateLimitMiddleware);
 app.post('/v1/sync/push', handleSyncPush);

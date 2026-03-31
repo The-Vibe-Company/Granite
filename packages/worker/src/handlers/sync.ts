@@ -36,20 +36,11 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   const payload = await c.req.json<SyncPushPayload>();
   let accepted = 0;
 
-  // Enforce per-vault note limit (only count creates — deletes are untrusted)
+  // Enforce per-vault storage limit
   const tier: Tier = c.get('tier');
-  const maxNotes = TIER_LIMITS[tier].maxNotesPerVault;
-  const createCount = payload.changes.filter(ch => ch.operation === 'create').length;
-  if (createCount > 0) {
-    const currentCount = await db.countNotes();
-    if (currentCount + createCount > maxNotes) {
-      return c.json({
-        error: `Vault note limit reached (${maxNotes}). Upgrade to pro for more.`,
-        current: currentCount,
-        limit: maxNotes,
-      }, 403);
-    }
-  }
+  const maxStorage = TIER_LIMITS[tier].maxStorageBytes;
+  const currentStorage = await db.getStorageBytes();
+  let storageDelta = 0;
 
   // Track slugs that need wikilink indexing (deferred to avoid N+1)
   const slugsToIndex: Array<{ slug: string; body: string }> = [];
@@ -68,6 +59,25 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       const typeFolder = getTypeFolder(change.frontmatter);
 
       const content = matter.stringify(change.body, change.frontmatter);
+      const contentBytes = new TextEncoder().encode(content).byteLength;
+
+      // Check storage limit before writing
+      const existing = await db.getNote(resolvedSlug);
+      const existingBytes = existing
+        ? new TextEncoder().encode(matter.stringify(existing.body, {})).byteLength
+        : 0;
+      const delta = contentBytes - existingBytes;
+
+      if (delta > 0 && currentStorage + storageDelta + delta > maxStorage) {
+        return c.json({
+          error: 'Vault storage limit reached (1 GB). Manage your notes to free up space.',
+          current_bytes: currentStorage + storageDelta,
+          limit_bytes: maxStorage,
+        }, 403);
+      }
+
+      storageDelta += delta;
+
       await storage.writeNote(typeFolder, resolvedSlug, content);
 
       await db.upsertNote({
@@ -91,6 +101,10 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {
         const typeFolder = getTypeFolder({ type: indexed.type });
+        const oldContent = matter.stringify(indexed.body, {});
+        const oldBytes = new TextEncoder().encode(oldContent).byteLength;
+        storageDelta -= oldBytes;
+
         await storage.deleteNote(typeFolder, indexed.slug);
         await db.deleteNoteBySlug(indexed.slug);
         deletedSlugs.add(indexed.slug);
@@ -115,6 +129,11 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       if (deletedSlugs.has(slug)) continue;
       await indexLinks(db, slug, body, undefined, allNotes);
     }
+  }
+
+  // Update vault storage counter
+  if (storageDelta !== 0) {
+    await db.adjustStorageBytes(storageDelta);
   }
 
   await db.upsertDevice(payload.device_id, payload.device_id);

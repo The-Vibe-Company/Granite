@@ -309,4 +309,19 @@ export class D1IndexDatabase {
       'UPDATE devices SET last_seq = ?, last_seen = ? WHERE device_id = ? AND vault_id = ?',
     ).bind(seq, new Date().toISOString(), deviceId, this.vaultId).run();
   }
+
+  // --- Storage tracking ---
+
+  async getStorageBytes(): Promise<number> {
+    const row = await this.db.prepare(
+      'SELECT storage_bytes FROM vaults WHERE vault_id = ?',
+    ).bind(this.vaultId).first<{ storage_bytes: number }>();
+    return row?.storage_bytes ?? 0;
+  }
+
+  async adjustStorageBytes(delta: number): Promise<void> {
+    await this.db.prepare(
+      'UPDATE vaults SET storage_bytes = MAX(0, storage_bytes + ?) WHERE vault_id = ?',
+    ).bind(delta, this.vaultId).run();
+  }
 }

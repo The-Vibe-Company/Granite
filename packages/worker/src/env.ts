@@ -26,12 +26,16 @@ export interface User {
 export const TIER_LIMITS = {
   free: {
     maxVaults: 1,
-    maxNotesPerVault: 100,
-    rateLimit: 30, // sync pushes per hour
+    maxNotesPerVault: 0, // no sync on free tier
+    maxStorageBytes: 0,
+    rateLimit: 0,
+    syncEnabled: false,
   },
   pro: {
     maxVaults: 10,
-    maxNotesPerVault: 10_000,
+    maxNotesPerVault: 50_000,
+    maxStorageBytes: 1_073_741_824, // 1 GB
     rateLimit: 300,
+    syncEnabled: true,
   },
 } as const;

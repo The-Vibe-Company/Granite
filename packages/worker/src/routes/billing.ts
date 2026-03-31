@@ -78,10 +78,10 @@ billing.get('/billing/success', (c) => {
     <h1>Welcome to Pro!</h1>
     <p>Your Granite Cloud account has been upgraded. You now have:</p>
     <ul style="text-align:left;display:inline-block;">
+      <li>Multi-device sync</li>
+      <li>1 GB of cloud storage</li>
       <li>Up to 10 vaults</li>
-      <li>10,000 notes per vault</li>
-      <li>300 sync operations/hour</li>
-      <li>Priority support</li>
+      <li>Remote MCP access</li>
     </ul>
     <p>You can close this tab and continue using <code>mem</code>.</p>`));
 });

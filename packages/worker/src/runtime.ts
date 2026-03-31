@@ -141,7 +141,7 @@ export class CloudMcpRuntime {
   constructor(
     private storage: R2NoteStorage,
     private db: D1IndexDatabase,
-    private maxNotesPerVault = Infinity,
+    private maxStorageBytes = Infinity,
   ) {}
 
   private async getConfig(): Promise<GraniteConfig> {
@@ -271,14 +271,6 @@ export class CloudMcpRuntime {
   }
 
   async createNote(input: CreateNoteInput): Promise<NoteMutationResult> {
-    // Enforce per-vault note limit
-    if (this.maxNotesPerVault < Infinity) {
-      const count = await this.db.countNotes();
-      if (count >= this.maxNotesPerVault) {
-        throw new Error(`Vault note limit reached (${this.maxNotesPerVault}). Upgrade to pro for more.`);
-      }
-    }
-
     const config = await this.getConfig();
     const typeName = input.type ?? config.defaults.note_type;
     const typeConfig = config.note_types[typeName];
@@ -322,8 +314,18 @@ export class CloudMcpRuntime {
         : typeConfig.template;
 
     const content = serializeFrontmatter(frontmatter, body);
+    const contentBytes = new TextEncoder().encode(content).byteLength;
+
+    // Check storage limit before writing
+    if (this.maxStorageBytes < Infinity) {
+      const used = await this.db.getStorageBytes();
+      if (used + contentBytes > this.maxStorageBytes) {
+        throw new Error('Vault storage limit reached (1 GB). Manage your notes to free up space.');
+      }
+    }
 
     await this.storage.writeNote(typeConfig.folder, finalSlug, content);
+    await this.db.adjustStorageBytes(contentBytes);
 
     const links = parseWikilinks(body);
     await this.db.upsertNote({
@@ -393,7 +395,22 @@ export class CloudMcpRuntime {
     frontmatter.modified = new Date().toISOString();
 
     const newContent = serializeFrontmatter(frontmatter, body);
+    const oldBytes = new TextEncoder().encode(content).byteLength;
+    const newBytes = new TextEncoder().encode(newContent).byteLength;
+    const delta = newBytes - oldBytes;
+
+    // Check storage limit if content grew
+    if (delta > 0 && this.maxStorageBytes < Infinity) {
+      const used = await this.db.getStorageBytes();
+      if (used + delta > this.maxStorageBytes) {
+        throw new Error('Vault storage limit reached (1 GB). Manage your notes to free up space.');
+      }
+    }
+
     await this.storage.writeNote(folder, slug, newContent);
+    if (delta !== 0) {
+      await this.db.adjustStorageBytes(delta);
+    }
 
     await this.db.upsertNote({
       slug,

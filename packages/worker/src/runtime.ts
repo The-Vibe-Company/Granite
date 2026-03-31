@@ -3,19 +3,7 @@ import type { R2NoteStorage } from './storage/r2.js';
 import type { D1IndexDatabase } from './storage/d1.js';
 import { parseJsonArray } from './lib/json.js';
 import { DEFAULT_TYPE_FOLDERS, resolveTypeFolder } from './lib/config.js';
-import { parseWikilinks, resolveWikilinks, indexLinks } from './lib/wikilinks.js';
-
-// --- Pure function imports (same logic as src/core/) ---
-
-function slugify(title: string): string {
-  return title
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    || 'untitled';
-}
+import { slugify, parseWikilinks, resolveWikilinks, indexLinks } from './lib/wikilinks.js';
 
 // WikiLink type re-exported from shared module
 type WikiLink = ReturnType<typeof parseWikilinks>[number];

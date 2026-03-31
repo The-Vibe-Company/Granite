@@ -170,7 +170,7 @@ auth.get('/auth/callback', async (c) => {
     userId = existingUser.id;
     tier = existingUser.tier;
     await c.env.DB.prepare(`
-      UPDATE users SET github_username = ?, email = COALESCE(?, email), updated_at = datetime('now')
+      UPDATE users SET github_username = ?, email = COALESCE(?, email), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       WHERE id = ?
     `).bind(ghUser.login, email, userId).run();
   } else {

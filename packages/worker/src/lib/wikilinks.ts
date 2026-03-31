@@ -13,7 +13,7 @@ interface NoteMeta {
   title: string;
 }
 
-function slugify(title: string): string {
+export function slugify(title: string): string {
   return title
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

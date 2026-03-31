@@ -44,7 +44,7 @@ export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next
 
   // Update last_used_at fire-and-forget
   c.executionCtx.waitUntil(
-    c.env.DB.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE key_hash = ?")
+    c.env.DB.prepare("UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE key_hash = ?")
       .bind(keyHash).run(),
   );
 

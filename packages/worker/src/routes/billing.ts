@@ -137,7 +137,7 @@ billing.post('/webhooks/stripe', async (c) => {
 
       await c.env.DB.prepare(`
         UPDATE users
-        SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = datetime('now')
+        SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE id = ?
       `).bind(customerId, subscriptionId, userId).run();
 
@@ -151,7 +151,7 @@ billing.post('/webhooks/stripe', async (c) => {
 
       await c.env.DB.prepare(`
         UPDATE users
-        SET tier = 'free', stripe_subscription_id = NULL, updated_at = datetime('now')
+        SET tier = 'free', stripe_subscription_id = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE stripe_subscription_id = ?
       `).bind(subscriptionId).run();
 
@@ -166,13 +166,13 @@ billing.post('/webhooks/stripe', async (c) => {
 
       if (['past_due', 'unpaid', 'canceled', 'incomplete_expired'].includes(status)) {
         await c.env.DB.prepare(`
-          UPDATE users SET tier = 'free', updated_at = datetime('now')
+          UPDATE users SET tier = 'free', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
           WHERE stripe_subscription_id = ?
         `).bind(subscriptionId).run();
         console.log(`Subscription ${subscriptionId} status ${status} — downgraded to free`);
       } else if (status === 'active') {
         await c.env.DB.prepare(`
-          UPDATE users SET tier = 'pro', updated_at = datetime('now')
+          UPDATE users SET tier = 'pro', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
           WHERE stripe_subscription_id = ?
         `).bind(subscriptionId).run();
         console.log(`Subscription ${subscriptionId} active — upgraded to pro`);

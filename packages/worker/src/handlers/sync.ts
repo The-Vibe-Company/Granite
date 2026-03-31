@@ -34,7 +34,12 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   let accepted = 0;
 
   for (const change of payload.changes) {
-    if ((change.operation === 'create' || change.operation === 'update') && change.frontmatter && change.body !== undefined) {
+    if (change.operation === 'create' || change.operation === 'update') {
+      if (!change.frontmatter || change.body === undefined) {
+        // Skip unprocessable changes — don't record in changelog
+        continue;
+      }
+
       const typeFolder = getTypeFolder(change.frontmatter);
       const slug = change.slug || change.note_id;
 
@@ -58,7 +63,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
     } else if (change.operation === 'delete') {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {
-        const typeFolder = `notes/${indexed.type}`;
+        const typeFolder = getTypeFolder({ type: indexed.type });
         await storage.deleteNote(typeFolder, indexed.slug);
         await db.deleteNoteBySlug(indexed.slug);
       }

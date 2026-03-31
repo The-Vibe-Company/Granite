@@ -28,7 +28,11 @@ app.get('/health', (c) => c.json({ status: 'ok', service: 'granite-cloud' }));
 // Auth routes (no auth required — these handle OAuth flow)
 app.route('/', authRoutes);
 
-// Stripe webhook (no auth — verified via signature)
+// Billing checkout/portal (auth required — must register before route mount)
+app.use('/billing/checkout', authMiddleware);
+app.use('/billing/portal', authMiddleware);
+
+// Billing routes (webhook has no auth — verified via Stripe signature)
 app.route('/', billingRoutes);
 
 // --- Protected routes (require auth) ---
@@ -42,10 +46,6 @@ app.route('/', keysRoutes);
 app.use('/me', authMiddleware);
 app.use('/vaults', authMiddleware);
 app.route('/', userRoutes);
-
-// Billing checkout/portal (auth + browser key param)
-app.use('/billing/checkout', authMiddleware);
-app.use('/billing/portal', authMiddleware);
 
 // MCP endpoint (auth + vault resolution)
 app.use('/mcp', authMiddleware);

@@ -1,4 +1,5 @@
 name = "granite-cloud"
+account_id = "cbafe72a1e4b0da6382850c7677031e4"
 main = "src/index.ts"
 compatibility_date = "2026-03-31"
 compatibility_flags = ["nodejs_compat"]
@@ -7,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 crons = ["0 * * * *"]
 
 [vars]
-BASE_URL = "https://granite.cloud"
+BASE_URL = "https://granite.thevibecompany.co"
 
 # Secrets (set via `wrangler secret put`):
 # GITHUB_CLIENT_ID

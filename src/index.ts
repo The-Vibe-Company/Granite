@@ -20,7 +20,7 @@ import { GRANITE_VERSION } from './version.js';
 const program = new Command();
 
 program
-  .name('mem')
+  .name('granite')
   .description('Granite — a local-first markdown memory system')
   .version(GRANITE_VERSION);
 

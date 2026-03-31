@@ -4,7 +4,7 @@
   "description": "A local-first markdown memory system for humans and agents",
   "type": "module",
   "bin": {
-    "mem": "./dist/index.js"
+    "granite": "./dist/index.js"
   },
   "files": [
     "dist"

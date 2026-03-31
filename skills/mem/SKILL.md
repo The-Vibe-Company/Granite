@@ -1,12 +1,12 @@
 ---
 name: mem
-description: Manage a local-first markdown memory system using the `mem` CLI. Use when the user asks to capture notes, log meetings, track people, record decisions, or manage any kind of structured memory. Enforces brevity and atomic note-taking.
+description: Manage a local-first markdown memory system using the `granite` CLI. Use when the user asks to capture notes, log meetings, track people, record decisions, or manage any kind of structured memory. Enforces brevity and atomic note-taking.
 user-invocable: true
 argument-hint: [action]
 allowed-tools: Bash
 ---
 
-You are an expert at managing a structured knowledge base using the `mem` CLI — a local-first markdown memory system built on Zettelkasten principles.
+You are an expert at managing a structured knowledge base using the `granite` CLI — a local-first markdown memory system built on Zettelkasten principles.
 
 ## Core Workflow (ECDA Loop)
 
@@ -52,58 +52,58 @@ If a note exceeds its limit, **split it** into multiple linked notes.
 ### Create
 
 ```bash
-mem new "Note title" -t permanent                      # Create typed note
-mem new "Quick thought"                                # Fleeting note (default)
-mem new "Sprint review" -t meeting --source agent --json  # Agent-created, JSON output
-mem add "Quick thought"                                # Quick-capture fleeting note
-echo "Piped content" | mem add --json                  # Stdin + JSON output
+granite new "Note title" -t permanent                      # Create typed note
+granite new "Quick thought"                                # Fleeting note (default)
+granite new "Sprint review" -t meeting --source agent --json  # Agent-created, JSON output
+granite add "Quick thought"                                # Quick-capture fleeting note
+echo "Piped content" | granite add --json                  # Stdin + JSON output
 ```
 
 ### Read
 
 ```bash
-mem show <slug>                          # Display note with header
-mem show <slug> --json                   # Full note as JSON (agent-friendly)
-mem show <slug> --body                   # Raw body only (for piping)
-mem list                                 # All notes, sorted by modified
-mem list -t person                       # Filter by type
-mem list -s active                       # Filter by status
-mem list --source agent                  # Filter by source
-mem list --since 2026-03-01              # Filter by modified date
-mem list --json slug,title,type,status   # Field selection (gh-style)
-mem search "query"                       # Full-text search
-mem search "query" --json                # JSON output
+granite show <slug>                          # Display note with header
+granite show <slug> --json                   # Full note as JSON (agent-friendly)
+granite show <slug> --body                   # Raw body only (for piping)
+granite list                                 # All notes, sorted by modified
+granite list -t person                       # Filter by type
+granite list -s active                       # Filter by status
+granite list --source agent                  # Filter by source
+granite list --since 2026-03-01              # Filter by modified date
+granite list --json slug,title,type,status   # Field selection (gh-style)
+granite search "query"                       # Full-text search
+granite search "query" --json                # JSON output
 ```
 
 ### Update
 
 ```bash
-mem edit <slug> --body $'## Section\n\nContent here.'   # Replace body
-mem edit <slug> --append $'- 2026-03-30: Met at conf'   # Append text
-mem edit <slug> --title "New Title"                      # Update title
-mem edit <slug> --tag "tag1,tag2"                        # Add tags
-mem edit <slug> --alias "short-name,abbreviation"        # Add aliases
-mem edit <slug> --status archived                        # Archive a note
-mem edit <slug> --source agent                           # Mark as agent-edited
-mem edit <slug>                                          # Open in $EDITOR
+granite edit <slug> --body $'## Section\n\nContent here.'   # Replace body
+granite edit <slug> --append $'- 2026-03-30: Met at conf'   # Append text
+granite edit <slug> --title "New Title"                      # Update title
+granite edit <slug> --tag "tag1,tag2"                        # Add tags
+granite edit <slug> --alias "short-name,abbreviation"        # Add aliases
+granite edit <slug> --status archived                        # Archive a note
+granite edit <slug> --source agent                           # Mark as agent-edited
+granite edit <slug>                                          # Open in $EDITOR
 ```
 
 ### Graph
 
 ```bash
-mem backlinks <slug>              # Who links to this note?
-mem backlinks <slug> --json       # JSON output
-mem suggest-links <slug>          # Find unlinked mentions
-mem suggest-links <slug> --json   # JSON output
+granite backlinks <slug>              # Who links to this note?
+granite backlinks <slug> --json       # JSON output
+granite suggest-links <slug>          # Find unlinked mentions
+granite suggest-links <slug> --json   # JSON output
 ```
 
 ### Manage
 
 ```bash
-mem init          # Initialize a new vault
-mem types         # List available note types
-mem doctor        # Validate vault health
-mem serve         # Start web UI at localhost:4321
+granite init          # Initialize a new vault
+granite types         # List available note types
+granite doctor        # Validate vault health
+granite serve         # Start web UI at localhost:4321
 ```
 
 All `--json` commands return `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`.
@@ -114,10 +114,10 @@ All `--json` commands return `{"success": true, "data": ...}` or `{"success": fa
 One sentence. No formatting. Just the raw thought.
 
 ```bash
-mem new "Granite could auto-detect note type from content"
+granite new "Granite could auto-detect note type from content"
 ```
 
-Bad: `mem new "I was thinking about how it would be really cool if Granite could maybe analyze what you write and automatically suggest the type"`
+Bad: `granite new "I was thinking about how it would be really cool if Granite could maybe analyze what you write and automatically suggest the type"`
 
 ### Permanent
 Start with a one-line summary. Use `## Summary`, `## Details`, `## Links` sections.
@@ -163,9 +163,9 @@ This aligns with how [[Granite]] works. See also [[Local-First Software]].
 Lead with role and context. Add timestamped interaction notes with `--append`.
 
 ```bash
-mem new "Jane Smith" -t person --json
-mem edit jane-smith --body $'## Role\n\nCTO at Acme Corp\n\n## Context\n\nMet at ReactConf 2026. Working on similar infra.\n\n## Contact\n\nSlack: @jsmith\n\n## Notes\n\n## Links\n'
-mem edit jane-smith --append $'- 2026-03-30: Discussed [[project-x]] migration timeline'
+granite new "Jane Smith" -t person --json
+granite edit jane-smith --body $'## Role\n\nCTO at Acme Corp\n\n## Context\n\nMet at ReactConf 2026. Working on similar infra.\n\n## Contact\n\nSlack: @jsmith\n\n## Notes\n\n## Links\n'
+granite edit jane-smith --append $'- 2026-03-30: Discussed [[project-x]] migration timeline'
 ```
 
 ### Meeting
@@ -230,8 +230,8 @@ Active
 
 **Aliases**: set when a note has common abbreviations or alternate names.
 ```bash
-mem edit amazon-web-services --alias "AWS,aws"
-mem edit jane-smith --alias "Jane,jsmith"
+granite edit amazon-web-services --alias "AWS,aws"
+granite edit jane-smith --alias "Jane,jsmith"
 ```
 This makes wikilinks resolve correctly: `[[AWS]]` will find the `amazon-web-services` note.
 
@@ -260,7 +260,7 @@ Every note has `status` and `source` fields in frontmatter:
 
 **Agents must always use `--source agent`** when creating notes:
 ```bash
-mem new "Insight from conversation" -t permanent --source agent --json
+granite new "Insight from conversation" -t permanent --source agent --json
 ```
 
 ## Key Patterns
@@ -268,25 +268,25 @@ mem new "Insight from conversation" -t permanent --source agent --json
 ### Capturing a meeting
 
 ```bash
-mem search "sprint review" --json           # Check if note exists
-mem new "Sprint review 2026-03-30" -t meeting --source agent --json
+granite search "sprint review" --json           # Check if note exists
+granite new "Sprint review 2026-03-30" -t meeting --source agent --json
 # For each attendee:
-mem search "Jane Smith" --json              # Check if person note exists
-mem new "Jane Smith" -t person --source agent --json  # Create if missing
+granite search "Jane Smith" --json              # Check if person note exists
+granite new "Jane Smith" -t person --source agent --json  # Create if missing
 # Fill meeting body:
-mem edit sprint-review-2026-03-30 --body $'## Attendees\n\n- [[jane-smith]]\n...'
+granite edit sprint-review-2026-03-30 --body $'## Attendees\n\n- [[jane-smith]]\n...'
 # Update person notes:
-mem edit jane-smith --append $'- 2026-03-30: [[sprint-review-2026-03-30]]'
+granite edit jane-smith --append $'- 2026-03-30: [[sprint-review-2026-03-30]]'
 ```
 
 ### Recording a decision
 
 ```bash
-mem search "database choice" --json
-mem new "Analytics database choice" -t decision --source agent --json
-mem edit analytics-database-choice --body $'## Context\n\n...\n\n## Decision\n\n...\n\n## Status\n\nActive'
-mem edit analytics-database-choice --tag "area/infrastructure"
-mem edit analytics-service --append $'Key decision: [[analytics-database-choice]]'
+granite search "database choice" --json
+granite new "Analytics database choice" -t decision --source agent --json
+granite edit analytics-database-choice --body $'## Context\n\n...\n\n## Decision\n\n...\n\n## Status\n\nActive'
+granite edit analytics-database-choice --tag "area/infrastructure"
+granite edit analytics-service --append $'Key decision: [[analytics-database-choice]]'
 ```
 
 ### Retrieving knowledge
@@ -294,17 +294,17 @@ mem edit analytics-service --append $'Key decision: [[analytics-database-choice]
 When the user asks "what do I know about X?":
 
 ```bash
-mem search "X" --json                    # Find relevant notes
-mem show <slug> --json                   # Read each note's content
-mem backlinks <slug> --json              # Find what links to it
+granite search "X" --json                    # Find relevant notes
+granite show <slug> --json                   # Read each note's content
+granite backlinks <slug> --json              # Find what links to it
 # Synthesize across results and present to user
 ```
 
 ### Maintaining the knowledge graph
 
 ```bash
-mem suggest-links <slug> --json          # Find unlinked mentions → add links
-mem doctor                               # Check vault health
+granite suggest-links <slug> --json          # Find unlinked mentions → add links
+granite doctor                               # Check vault health
 # Build hub notes for major topics (permanent notes that are mostly links)
 ```
 

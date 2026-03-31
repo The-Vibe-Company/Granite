@@ -108,7 +108,7 @@ export function writeDefaultConfig(dir: string): void {
 export function loadConfig(vaultRoot: string): GraniteConfig {
   const configPath = path.join(vaultRoot, CONFIG_FILENAME);
   if (!fs.existsSync(configPath)) {
-    throw new Error(`No ${CONFIG_FILENAME} found in ${vaultRoot}. Run "mem init" first.`);
+    throw new Error(`No ${CONFIG_FILENAME} found in ${vaultRoot}. Run "granite init" first.`);
   }
   const raw = fs.readFileSync(configPath, 'utf-8');
   const parsed = yaml.load(raw) as GraniteConfig;

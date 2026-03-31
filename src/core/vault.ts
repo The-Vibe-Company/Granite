@@ -31,7 +31,7 @@ export function findVaultRoot(from?: string): string | null {
 export function requireVaultRoot(from?: string): string {
   const root = findVaultRoot(from);
   if (!root) {
-    throw new Error(`No Granite vault found. Run "mem init" to create ${getDefaultVaultRoot()}.`);
+    throw new Error(`No Granite vault found. Run "granite init" to create ${getDefaultVaultRoot()}.`);
   }
   return root;
 }

@@ -18,5 +18,5 @@ export function typesCommand(): void {
   }
 
   console.log(`Default type: ${config.defaults.note_type}`);
-  console.log(`\nUsage: mem new <type> <title>`);
+  console.log(`\nUsage: granite new <type> <title>`);
 }

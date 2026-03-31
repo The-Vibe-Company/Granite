@@ -63,9 +63,16 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
 
       // Check storage limit before writing
       const existing = await db.getNote(resolvedSlug);
-      const existingBytes = existing
-        ? new TextEncoder().encode(matter.stringify(existing.body, {})).byteLength
-        : 0;
+      let existingBytes = 0;
+      if (existing) {
+        const existingFolder = getTypeFolder({ type: existing.type });
+        try {
+          const oldContent = await storage.readNote(existingFolder, existing.slug);
+          existingBytes = new TextEncoder().encode(oldContent).byteLength;
+        } catch {
+          // Note missing from R2 — treat as 0 bytes
+        }
+      }
       const delta = contentBytes - existingBytes;
 
       if (delta > 0 && currentStorage + storageDelta + delta > maxStorage) {
@@ -101,8 +108,13 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {
         const typeFolder = getTypeFolder({ type: indexed.type });
-        const oldContent = matter.stringify(indexed.body, {});
-        const oldBytes = new TextEncoder().encode(oldContent).byteLength;
+        let oldBytes = 0;
+        try {
+          const oldContent = await storage.readNote(typeFolder, indexed.slug);
+          oldBytes = new TextEncoder().encode(oldContent).byteLength;
+        } catch {
+          // Note missing from R2 — treat as 0 bytes
+        }
         storageDelta -= oldBytes;
 
         await storage.deleteNote(typeFolder, indexed.slug);

@@ -81,48 +81,48 @@ npm link
 Create the default vault in `~/.granite` and start capturing:
 
 ```bash
-mem init
-mem add "Talked to Alice about local-first sync tradeoffs"
-mem new "Local-first sync tradeoffs" --type permanent
-mem list
-mem search "sync"
+granite init
+granite add "Talked to Alice about local-first sync tradeoffs"
+granite new "Local-first sync tradeoffs" --type permanent
+granite list
+granite search "sync"
 ```
 
 Start one long-running interface when you need it:
 
 ```bash
-mem serve   # local web UI
-mem mcp     # MCP server for agent clients
+granite serve   # local web UI
+granite mcp     # MCP server for agent clients
 ```
 
-`mem new` does more than create a file. It can immediately suggest related links, tags, and the next note to create, which is the core of Granite's value loop.
+`granite new` does more than create a file. It can immediately suggest related links, tags, and the next note to create, which is the core of Granite's value loop.
 
 ## Example Workflow
 
 Capture something quickly:
 
 ```bash
-mem add "Users want fewer note types, but stronger defaults."
+granite add "Users want fewer note types, but stronger defaults."
 ```
 
 Turn it into a durable note:
 
 ```bash
-mem new "Strong defaults beat infinite flexibility" --type permanent
+granite new "Strong defaults beat infinite flexibility" --type permanent
 ```
 
 Find connections:
 
 ```bash
-mem suggest-links strong-defaults-beat-infinite-flexibility
-mem recommend strong-defaults-beat-infinite-flexibility
-mem backlinks strong-defaults-beat-infinite-flexibility
+granite suggest-links strong-defaults-beat-infinite-flexibility
+granite recommend strong-defaults-beat-infinite-flexibility
+granite backlinks strong-defaults-beat-infinite-flexibility
 ```
 
 Open the local UI:
 
 ```bash
-mem serve
+granite serve
 ```
 
 Then browse notes, search the vault, inspect backlinks, and explore the graph locally.
@@ -172,12 +172,12 @@ This keeps the system transparent, portable, and inspectable.
 Many commands support JSON output:
 
 ```bash
-mem new "Sync constraints" --type permanent --json
-mem list --json
-mem show sync-constraints --json
-mem search "constraints" --json
-mem backlinks sync-constraints --json
-mem recommend sync-constraints --json
+granite new "Sync constraints" --type permanent --json
+granite list --json
+granite show sync-constraints --json
+granite search "constraints" --json
+granite backlinks sync-constraints --json
+granite recommend sync-constraints --json
 ```
 
 That makes Granite a useful substrate for local workflows, scripts, and agent memory.
@@ -189,13 +189,13 @@ Granite ships with an MCP server so LLM clients can control the vault directly t
 Start it over stdio for local MCP clients:
 
 ```bash
-mem mcp --vault /path/to/vault
+granite mcp --vault /path/to/vault
 ```
 
 Start it over Streamable HTTP:
 
 ```bash
-mem mcp --transport http --host 127.0.0.1 --port 3321
+granite mcp --transport http --host 127.0.0.1 --port 3321
 ```
 
 The server exposes:
@@ -208,7 +208,7 @@ Example stdio client configuration:
 
 ```json
 {
-  "command": "mem",
+  "command": "granite",
   "args": ["mcp", "--vault", "/path/to/vault"]
 }
 ```
@@ -216,21 +216,21 @@ Example stdio client configuration:
 ## Commands
 
 ```bash
-mem init
-mem new <title> [--type <type>] [--json]
-mem add [text] [--json]
-mem list [--type <type>] [--json]
-mem edit <slug>
-mem open <slug>
-mem show <slug> [--json] [--body]
-mem search <query> [--json]
-mem backlinks <slug> [--json]
-mem suggest-links <slug> [--json]
-mem recommend <slug> [--json]
-mem types
-mem doctor
-mem serve [-p <port>]
-mem mcp [--vault <path>] [--transport <stdio|http>]
+granite init
+granite new <title> [--type <type>] [--json]
+granite add [text] [--json]
+granite list [--type <type>] [--json]
+granite edit <slug>
+granite open <slug>
+granite show <slug> [--json] [--body]
+granite search <query> [--json]
+granite backlinks <slug> [--json]
+granite suggest-links <slug> [--json]
+granite recommend <slug> [--json]
+granite types
+granite doctor
+granite serve [-p <port>]
+granite mcp [--vault <path>] [--transport <stdio|http>]
 ```
 
 ## Development

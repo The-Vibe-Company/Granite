@@ -350,7 +350,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_capture_note', {
     title: 'Capture Granite Note',
-    description: 'Quick-capture a note from free-form text, similar to mem add.',
+    description: 'Quick-capture a note from free-form text, similar to granite add.',
     inputSchema: {
       text: z.string().describe('Raw capture text.'),
       type: z.string().optional().describe('Optional note type override. Defaults to the vault default type.'),

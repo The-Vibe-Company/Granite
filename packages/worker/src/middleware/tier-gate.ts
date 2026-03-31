@@ -11,7 +11,7 @@ export const requirePaidTier = createMiddleware<{ Bindings: Env }>(async (c, nex
 
   if (!TIER_LIMITS[tier].syncEnabled) {
     return c.json({
-      error: 'Sync requires a Pro subscription. Run: mem cloud upgrade',
+      error: 'Sync requires a Pro subscription. Run: granite cloud upgrade',
       tier,
       upgrade_url: `${c.env.BASE_URL}/billing/checkout`,
     }, 403);

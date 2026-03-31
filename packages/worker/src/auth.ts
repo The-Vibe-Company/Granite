@@ -25,7 +25,7 @@ export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next
   const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : (queryKey || '');
 
   if (!apiKey || !apiKey.startsWith('gsk_')) {
-    return c.json({ error: 'Missing or invalid API key. Run: mem cloud login' }, 401);
+    return c.json({ error: 'Missing or invalid API key. Run: granite cloud login' }, 401);
   }
 
   const keyHash = await hashApiKey(apiKey);

@@ -19,7 +19,7 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
     // Read from stdin (pipe)
     content = fs.readFileSync(0, 'utf-8').trim();
   } else {
-    console.error('Usage: mem add "some text" or echo "text" | mem add');
+    console.error('Usage: granite add "some text" or echo "text" | granite add');
     process.exit(1);
   }
 

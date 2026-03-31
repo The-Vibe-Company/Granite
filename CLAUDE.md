@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Granite?
 
-Granite (`mem` CLI) is a local-first markdown memory system for humans and agents. Notes are plain markdown files with YAML frontmatter, organized by configurable note types (fleeting, permanent, reference, person, meeting, project, decision). Configuration lives in `granite.yml` at the vault root. A SQLite index (`.granite/index.db`) provides full-text search and wikilink resolution.
+Granite (`granite` CLI) is a local-first markdown memory system for humans and agents. Notes are plain markdown files with YAML frontmatter, organized by configurable note types (fleeting, permanent, reference, person, meeting, project, decision). Configuration lives in `granite.yml` at the vault root. A SQLite index (`.granite/index.db`) provides full-text search and wikilink resolution.
 
 ## Commands
 
@@ -36,7 +36,7 @@ npx tsx src/index.ts <command>
   - `slugify.ts` — Title-to-slug conversion
   - `search.ts`, `backlinks.ts`, `suggest.ts`, `doctor.ts` — Query/validation logic
 - **`src/commands/`** — Thin CLI wrappers that call into `src/core/`
-- **`src/web/`** — Hono-based local web UI served by `mem serve`
+- **`src/web/`** — Hono-based local web UI served by `granite serve`
 
 ## Key Patterns
 

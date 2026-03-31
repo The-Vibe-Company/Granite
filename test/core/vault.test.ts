@@ -61,7 +61,7 @@ describe('vault', () => {
 
   it('mentions the default vault path when no vault can be found', () => {
     expect(() => requireVaultRoot(path.join(tmpHome, 'nowhere'))).toThrow(
-      `No Granite vault found. Run "mem init" to create ${getDefaultVaultRoot()}.`,
+      `No Granite vault found. Run "granite init" to create ${getDefaultVaultRoot()}.`,
     );
   });
 });

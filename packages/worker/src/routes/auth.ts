@@ -276,7 +276,7 @@ auth.get('/auth/callback', async (c) => {
     <button class="copy-btn" id="copy-btn">Copy to clipboard</button>
     <script>document.getElementById('copy-btn').addEventListener('click',function(){navigator.clipboard.writeText(document.getElementById('key').textContent);this.textContent='Copied!'});</script>
     <p class="warning">This key is shown only once. Save it now.</p>
-    <p>If you used <code>mem cloud login</code>, the CLI has already picked it up. You can close this tab.</p>
+    <p>If you used <code>granite cloud login</code>, the CLI has already picked it up. You can close this tab.</p>
     <p>Add to your <code>granite.yml</code>:</p>
     <pre>sync:
   server: ${safeBaseUrl}

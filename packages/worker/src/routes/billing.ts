@@ -9,7 +9,7 @@ const billing = new Hono<{ Bindings: Env }>();
  */
 billing.get('/billing/checkout', async (c) => {
   const user = c.get('user');
-  if (!user) return c.json({ error: 'Authentication required. Run: mem cloud login' }, 401);
+  if (!user) return c.json({ error: 'Authentication required. Run: granite cloud login' }, 401);
 
   if (user.tier === 'pro') {
     return c.json({ error: 'Already on Pro tier', tier: 'pro' }, 400);
@@ -41,7 +41,7 @@ billing.get('/billing/portal', async (c) => {
   if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   if (!user.stripe_customer_id) {
-    return c.json({ error: 'No billing account found. Upgrade first: mem cloud upgrade' }, 400);
+    return c.json({ error: 'No billing account found. Upgrade first: granite cloud upgrade' }, 400);
   }
 
   if (!c.env.STRIPE_SECRET_KEY) {
@@ -83,13 +83,13 @@ billing.get('/billing/success', (c) => {
       <li>Up to 10 vaults</li>
       <li>Remote MCP access</li>
     </ul>
-    <p>You can close this tab and continue using <code>mem</code>.</p>`));
+    <p>You can close this tab and continue using <code>granite</code>.</p>`));
 });
 
 billing.get('/billing/cancel', (c) => {
   return c.html(billingPage('Checkout cancelled', `
     <h1>Checkout cancelled</h1>
-    <p>No worries! You can upgrade anytime by running <code>mem cloud upgrade</code>.</p>`));
+    <p>No worries! You can upgrade anytime by running <code>granite cloud upgrade</code>.</p>`));
 });
 
 billing.get('/billing/portal-return', (c) => {

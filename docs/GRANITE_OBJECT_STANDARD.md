@@ -165,8 +165,8 @@ are **structured, queryable, and carry semantic meaning**:
 - `attendees` links are of type "person attended meeting"
 - `project` links are of type "meeting about project"
 
-This enables queries like: `mem search --field attendees:jane-smith` or
-`mem list --type meeting --field project:project-granite`.
+This enables queries like: `granite search --field attendees:jane-smith` or
+`granite list --type meeting --field project:project-granite`.
 
 ---
 
@@ -209,23 +209,23 @@ Piped / --json      →  structured JSON with envelope
 ### 3.3 Field selection (gh CLI pattern)
 
 ```bash
-mem list --json slug,title,type,tags
-mem show note-slug --json title,body,backlinks
-mem search "query" --json slug,title,score
+granite list --json slug,title,type,tags
+granite show note-slug --json title,body,backlinks
+granite search "query" --json slug,title,score
 ```
 
 `--json` without field names = list available fields (self-documenting):
 ```
-$ mem list --json
+$ granite list --json
 Available fields: slug, title, type, created, modified, tags, aliases, status, source, filepath
 ```
 
 ### 3.4 Structured filtering
 
 ```bash
-mem list --type meeting --tag project-x --status active --since 2026-03-01
-mem list --field attendees:jane-smith          # Type-specific field query
-mem search "api design" --type decision        # Full-text + type filter
+granite list --type meeting --tag project-x --status active --since 2026-03-01
+granite list --field attendees:jane-smith          # Type-specific field query
+granite search "api design" --type decision        # Full-text + type filter
 ```
 
 ### 3.5 Exit codes
@@ -240,7 +240,7 @@ mem search "api design" --type decision        # Full-text + type filter
 ### 3.6 NDJSON streaming (for large vaults)
 
 ```bash
-mem list --format ndjson
+granite list --format ndjson
 ```
 ```jsonl
 {"slug":"note-1","title":"First","type":"fleeting","status":"inbox"}
@@ -269,8 +269,8 @@ Every agent interaction with the vault follows this pattern:
 
 **Step 2 — Compare:** Search the vault for existing notes about the same entities.
 ```bash
-mem search "Jane Smith" --json slug,title,type
-mem list --type person --json slug,title --field role:CTO
+granite search "Jane Smith" --json slug,title,type
+granite list --type person --json slug,title --field role:CTO
 ```
 
 **Step 3 — Decide:**
@@ -280,8 +280,8 @@ mem list --type person --json slug,title --field role:CTO
 
 **Step 4 — Act:**
 ```bash
-mem new "Jane Smith" -t person --json               # ADD
-mem edit jane-smith --append $'- 2026-03-30: ...'    # UPDATE
+granite new "Jane Smith" -t person --json               # ADD
+granite edit jane-smith --append $'- 2026-03-30: ...'    # UPDATE
 # NOOP = do nothing
 ```
 
@@ -371,7 +371,7 @@ The fleeting note is then archived (not deleted — it's the provenance chain).
 ## 6. Implementation Priorities for Granite
 
 ### Phase 1 (shipped): Agent-readable CLI
-✅ `mem show` command
+✅ `granite show` command
 ✅ `--json` on all commands
 ✅ Consistent JSON envelope
 ✅ `--alias` on edit
@@ -388,13 +388,13 @@ The fleeting note is then archived (not deleted — it's the provenance chain).
 - Auto-detect TTY for format switching
 - NDJSON streaming output
 - Exit code 4 for "not found" (distinct from error)
-- `mem --capabilities` for agent discovery
+- `granite --capabilities` for agent discovery
 - Fuzzy suggestions on "not found" errors
 - MCP server exposing resources + tools
 
 ### Phase 4 (later): Knowledge graph intelligence
 - Typed relationship indexing (frontmatter wikilinks stored with relationship type)
-- `mem graph` command for traversing the link graph
-- `mem promote <slug> --to permanent` for lifecycle transitions
-- `mem orphans` to find unlinked notes
+- `granite graph` command for traversing the link graph
+- `granite promote <slug> --to permanent` for lifecycle transitions
+- `granite orphans` to find unlinked notes
 - Hub note auto-generation from tag clusters

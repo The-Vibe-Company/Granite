@@ -275,12 +275,17 @@ export class GraniteMcpRuntime {
         : undefined;
 
     const created = createNote(this.vaultRoot, this.config, resolvedType, input.title, bodyOverride);
-    this.applyMutations(created.filepath, {
+    const metadataMutations = {
       tags: input.tags,
       aliases: input.aliases,
       status: input.status,
       source: input.source,
-    });
+    };
+
+    if (hasMetadataMutations(metadataMutations)) {
+      this.applyMutations(created.filepath, metadataMutations);
+    }
+
     return this.afterWrite(created.slug, true);
   }
 
@@ -554,4 +559,13 @@ function mergeUnique(existing: string[], incoming: string[]): string[] {
     }
   }
   return [...merged];
+}
+
+function hasMetadataMutations(input: Pick<CreateNoteInput, 'tags' | 'aliases' | 'status' | 'source'>): boolean {
+  return (
+    (input.tags?.length ?? 0) > 0 ||
+    (input.aliases?.length ?? 0) > 0 ||
+    input.status !== undefined ||
+    input.source !== undefined
+  );
 }

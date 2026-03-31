@@ -39,4 +39,16 @@ describe('GraniteMcpRuntime', () => {
     expect(runtime.search('deleted')).toHaveLength(0);
     runtime.close();
   });
+
+  it('preserves created and modified timestamps when no metadata mutations are requested', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const result = runtime.createNote({
+      title: 'Fresh Note',
+      type: 'permanent',
+      body: 'No extra metadata.\n',
+    });
+
+    expect(result.note.frontmatter.created).toBe(result.note.frontmatter.modified);
+    runtime.close();
+  });
 });

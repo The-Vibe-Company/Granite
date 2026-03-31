@@ -8,7 +8,7 @@ import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
-import { createGraniteMcpServer } from '../../src/mcp/server.js';
+import { createGraniteMcpServer, withResponseCleanup } from '../../src/mcp/server.js';
 
 describe('granite MCP server', () => {
   let tmpDir: string;
@@ -98,6 +98,18 @@ describe('granite MCP server', () => {
     };
 
     expect(backlinkData.backlinks.some(link => link.source_slug === 'linked-result')).toBe(true);
+  });
+
+  it('closes cleanup hooks after an HTTP response body is consumed', async () => {
+    let cleanupCount = 0;
+    const response = new Response('granite');
+
+    const wrapped = await withResponseCleanup(response, async () => {
+      cleanupCount += 1;
+    });
+
+    expect(await wrapped.text()).toBe('granite');
+    expect(cleanupCount).toBe(1);
   });
 });
 

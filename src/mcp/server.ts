@@ -179,6 +179,58 @@ export function startGraniteMcpHttpServer(runtime: GraniteMcpRuntime, options: G
   });
 }
 
+export async function withResponseCleanup(
+  response: Response,
+  cleanup: () => Promise<void> | void,
+): Promise<Response> {
+  let cleanedUp = false;
+
+  const cleanupOnce = async () => {
+    if (cleanedUp) {
+      return;
+    }
+    cleanedUp = true;
+    await cleanup();
+  };
+
+  if (!response.body) {
+    await cleanupOnce();
+    return response;
+  }
+
+  const reader = response.body.getReader();
+  const wrappedBody = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          await cleanupOnce();
+          return;
+        }
+
+        controller.enqueue(value);
+      } catch (error) {
+        controller.error(error);
+        await cleanupOnce();
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        await cleanupOnce();
+      }
+    },
+  });
+
+  return new Response(wrappedBody, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerTool('granite_get_vault_overview', {
     title: 'Granite Vault Overview',
@@ -635,14 +687,23 @@ function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcp
 
   app.all('/mcp', async (c) => {
     const origin = c.req.header('origin');
+    const server = createGraniteMcpServer(runtime);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: options.jsonResponse ?? false,
     });
-    const server = createGraniteMcpServer(runtime);
-    await server.connect(transport);
-    const response = await transport.handleRequest(c.req.raw);
-    return withCors(response, origin, allowedOrigins);
+
+    try {
+      await server.connect(transport);
+      const response = await transport.handleRequest(c.req.raw);
+      const managedResponse = await withResponseCleanup(response, async () => {
+        await server.close();
+      });
+      return withCors(managedResponse, origin, allowedOrigins);
+    } catch (error) {
+      await server.close();
+      throw error;
+    }
   });
 
   return app;

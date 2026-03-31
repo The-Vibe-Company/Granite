@@ -1,5 +1,5 @@
 ---
-name: mem
+name: granite
 description: Manage a local-first markdown memory system using the `granite` CLI. Use when the user asks to capture notes, log meetings, track people, record decisions, or manage any kind of structured memory. Enforces brevity and atomic note-taking.
 user-invocable: true
 argument-hint: [action]

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.4](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.3...granite-mem-v0.1.4) (2026-03-31)
+
+
+### Features
+
+* Add Granite MCP server ([#11](https://github.com/The-Vibe-Company/Granite/issues/11)) ([749010e](https://github.com/The-Vibe-Company/Granite/commit/749010e60452c4ee4e9e1ee8bd59a6b0fea5c6a5))
+
+
+### Bug Fixes
+
+* align release workflow with companion ([#13](https://github.com/The-Vibe-Company/Granite/issues/13)) ([717e55e](https://github.com/The-Vibe-Company/Granite/commit/717e55e10ab49caa1034a1b6ef967653a33bc992))
+* harden CI and release-please workflow ([#12](https://github.com/The-Vibe-Company/Granite/issues/12)) ([94182cf](https://github.com/The-Vibe-Company/Granite/commit/94182cff781b8c87fa19653ce6f0b858e7d24658))
+
 ## [0.1.3](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.2...granite-mem-v0.1.3) (2026-03-30)
 
 

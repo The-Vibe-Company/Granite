@@ -23,4 +23,4 @@ bucket_name = "granite-vaults"
 [[d1_databases]]
 binding = "DB"
 database_name = "granite-index"
-database_id = ""
+database_id = "4083aeea-ddc8-4b60-a964-c3134534ea81"

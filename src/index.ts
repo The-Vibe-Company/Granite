@@ -14,6 +14,7 @@ import { typesCommand } from './commands/types.js';
 import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
 import { mcpCommand, parseTransport } from './commands/mcp.js';
+import { syncCommand, syncStatusCommand, syncDevicesCommand, syncConflictsCommand } from './commands/sync.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -174,6 +175,39 @@ program
     jsonResponse?: boolean;
   }) => {
     await mcpCommand(options);
+  });
+
+const syncCmd = program
+  .command('sync')
+  .description('Sync vault across devices')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await syncCommand(options);
+  });
+
+syncCmd
+  .command('status')
+  .description('Show sync status')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await syncStatusCommand(options);
+  });
+
+syncCmd
+  .command('devices')
+  .description('List connected devices')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await syncDevicesCommand(options);
+  });
+
+syncCmd
+  .command('conflicts')
+  .description('List or clear conflict files')
+  .option('--clear', 'Remove all conflict backup files')
+  .option('--json', 'Output as JSON')
+  .action((options: { clear?: boolean; json?: boolean }) => {
+    syncConflictsCommand(options);
   });
 
 await program.parseAsync();

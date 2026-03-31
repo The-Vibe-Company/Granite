@@ -4,6 +4,7 @@ import type { Env } from '../env.js';
 import { R2NoteStorage } from '../storage/r2.js';
 import { D1IndexDatabase } from '../storage/d1.js';
 import { parseJsonArray } from '../lib/json.js';
+import { resolveTypeFolder } from '../lib/config.js';
 
 interface SyncChange {
   note_id: string;
@@ -158,14 +159,5 @@ export async function handleSyncDevices(c: Context<{ Bindings: Env }>) {
 
 function getTypeFolder(frontmatter: Record<string, unknown>): string {
   const type = String(frontmatter.type ?? 'fleeting');
-  const folderMap: Record<string, string> = {
-    fleeting: 'notes/fleeting',
-    permanent: 'notes/permanent',
-    reference: 'notes/reference',
-    person: 'notes/people',
-    meeting: 'notes/meetings',
-    project: 'notes/projects',
-    decision: 'notes/decisions',
-  };
-  return folderMap[type] ?? `notes/${type}`;
+  return resolveTypeFolder(type);
 }

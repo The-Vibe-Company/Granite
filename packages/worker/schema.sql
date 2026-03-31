@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
   tier TEXT NOT NULL DEFAULT 'free',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS api_keys (
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key_prefix TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT 'default',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_used_at TEXT,
   revoked_at TEXT
 );
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   session_id TEXT PRIMARY KEY,
   api_key TEXT,
   username TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   expires_at TEXT NOT NULL
 );
 
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS vaults (
   vault_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   vault_name TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_vaults_user ON vaults(user_id);
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   identifier TEXT NOT NULL,
   action TEXT NOT NULL DEFAULT 'sync',
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_limits_lookup

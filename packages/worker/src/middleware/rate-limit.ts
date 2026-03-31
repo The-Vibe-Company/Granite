@@ -18,7 +18,7 @@ export const rateLimitMiddleware = createMiddleware<{ Bindings: Env }>(async (c,
 
   const result = await c.env.DB.prepare(`
     SELECT COUNT(*) as count FROM rate_limits
-    WHERE identifier = ? AND action = ? AND created_at > datetime('now', '-1 hour')
+    WHERE identifier = ? AND action = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')
   `).bind(identifier, action).first<{ count: number }>();
 
   const count = result?.count ?? 0;

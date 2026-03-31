@@ -2,6 +2,7 @@ import matter from 'gray-matter';
 import type { R2NoteStorage } from './storage/r2.js';
 import type { D1IndexDatabase } from './storage/d1.js';
 import { parseJsonArray } from './lib/json.js';
+import { DEFAULT_TYPE_FOLDERS, resolveTypeFolder } from './lib/config.js';
 
 // --- Pure function imports (same logic as src/core/) ---
 
@@ -256,7 +257,7 @@ export class CloudMcpRuntime {
     if (!indexed) throw new Error(`Note not found: ${slug}`);
 
     const typeConfig = config.note_types[indexed.type];
-    const folder = typeConfig?.folder ?? `notes/${indexed.type}`;
+    const folder = resolveTypeFolder(indexed.type, typeConfig?.folder);
     const content = await this.storage.readNote(folder, slug);
     const { frontmatter, body } = parseFrontmatter(content);
 
@@ -407,7 +408,7 @@ export class CloudMcpRuntime {
     if (!indexed) throw new Error(`Note not found: ${slug}`);
 
     const typeConfig = config.note_types[indexed.type];
-    const folder = typeConfig?.folder ?? `notes/${indexed.type}`;
+    const folder = resolveTypeFolder(indexed.type, typeConfig?.folder);
 
     const content = await this.storage.readNote(folder, slug);
     const { frontmatter, body: existingBody } = parseFrontmatter(content);
@@ -464,7 +465,7 @@ export class CloudMcpRuntime {
     const indexed = await this.db.getNote(slug);
     if (!indexed) throw new Error(`Note not found: ${slug}`);
     const typeConfig = config.note_types[indexed.type];
-    const folder = typeConfig?.folder ?? `notes/${indexed.type}`;
+    const folder = resolveTypeFolder(indexed.type, typeConfig?.folder);
     return this.storage.readNote(folder, slug);
   }
 
@@ -509,14 +510,25 @@ function emptyRecommendations(): NoteRecommendations {
 }
 
 function getDefaultConfig(): GraniteConfig {
+  const defaultType = (folder: string, desc: string, opts: Partial<NoteTypeConfig> = {}): NoteTypeConfig => ({
+    folder, description: desc, template: '', line_limit: 200, warn_only: false, ...opts,
+  });
+
   return {
     vault_name: 'My Vault',
     version: 1,
-    note_types: {
-      fleeting: { folder: 'notes/fleeting', description: 'Quick captures', template: '', line_limit: 50, warn_only: true, slug_format: 'date' },
-      permanent: { folder: 'notes/permanent', description: 'Refined notes', template: '', line_limit: 200, warn_only: false },
-      reference: { folder: 'notes/reference', description: 'External sources', template: '', line_limit: 300, warn_only: true },
-    },
+    note_types: Object.fromEntries(
+      Object.entries(DEFAULT_TYPE_FOLDERS).map(([type, folder]) => {
+        const descriptions: Record<string, string> = {
+          fleeting: 'Quick captures', permanent: 'Refined notes', reference: 'External sources',
+          person: 'People', meeting: 'Meetings', project: 'Projects', decision: 'Decisions',
+        };
+        const extra: Partial<NoteTypeConfig> = {};
+        if (type === 'fleeting') { extra.slug_format = 'date'; extra.line_limit = 50; extra.warn_only = true; }
+        if (type === 'reference') { extra.line_limit = 300; extra.warn_only = true; }
+        return [type, defaultType(folder, descriptions[type] ?? type, extra)];
+      }),
+    ),
     defaults: { note_type: 'fleeting', editor: '$EDITOR' },
     index: { auto_rebuild: true },
   };

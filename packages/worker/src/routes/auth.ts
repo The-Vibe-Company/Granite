@@ -272,7 +272,7 @@ auth.get('/auth/poll', async (c) => {
   }
 
   const result = await c.env.DB.prepare(
-    "SELECT api_key, username FROM auth_sessions WHERE session_id = ? AND expires_at > datetime('now')",
+    "SELECT api_key, username FROM auth_sessions WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
   ).bind(session).first<{ api_key: string; username: string }>();
 
   if (!result || !result.api_key) {

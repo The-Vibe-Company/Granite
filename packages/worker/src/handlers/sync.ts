@@ -36,15 +36,13 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   const payload = await c.req.json<SyncPushPayload>();
   let accepted = 0;
 
-  // Enforce per-vault note limit (net creates = creates - deletes in batch)
+  // Enforce per-vault note limit (only count creates — deletes are untrusted)
   const tier: Tier = c.get('tier');
   const maxNotes = TIER_LIMITS[tier].maxNotesPerVault;
   const createCount = payload.changes.filter(ch => ch.operation === 'create').length;
-  const deleteCount = payload.changes.filter(ch => ch.operation === 'delete').length;
-  const netCreates = Math.max(createCount - deleteCount, 0);
-  if (netCreates > 0) {
+  if (createCount > 0) {
     const currentCount = await db.countNotes();
-    if (currentCount + netCreates > maxNotes) {
+    if (currentCount + createCount > maxNotes) {
       return c.json({
         error: `Vault note limit reached (${maxNotes}). Upgrade to pro for more.`,
         current: currentCount,
@@ -107,9 +105,12 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
     accepted++;
   }
 
-  // Batch index wikilinks after all notes are upserted (single metadata fetch)
-  for (const { slug, body } of slugsToIndex) {
-    await indexLinks(db, slug, body);
+  // Batch index wikilinks — single metadata fetch shared across all notes
+  if (slugsToIndex.length > 0) {
+    const allNotes = await db.getAllNotesMeta();
+    for (const { slug, body } of slugsToIndex) {
+      await indexLinks(db, slug, body, undefined, allNotes);
+    }
   }
 
   await db.upsertDevice(payload.device_id, payload.device_id);

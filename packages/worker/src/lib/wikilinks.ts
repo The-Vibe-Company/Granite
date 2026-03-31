@@ -77,9 +77,10 @@ export async function indexLinks(
   slug: string,
   body: string,
   preParsedLinks?: WikiLink[],
+  preloadedNotes?: NoteMeta[],
 ): Promise<void> {
   const wikilinks = preParsedLinks ?? parseWikilinks(body);
-  const allNotes = await db.getAllNotesMeta();
+  const allNotes = preloadedNotes ?? await db.getAllNotesMeta();
   const bodyLines = body.split('\n');
 
   const indexedLinks = wikilinks.map(link => {

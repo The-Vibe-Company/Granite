@@ -58,47 +58,44 @@ billing.get('/billing/portal', async (c) => {
   return c.redirect(session.url);
 });
 
-billing.get('/billing/success', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html><head><title>Granite Cloud - Upgrade successful</title>
+function billingPage(title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Granite Cloud - ${title}</title>
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; text-align: center; }
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; text-align: center; color: #1a1a1a; }
+  code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    code { background: #2a2a2a; color: #e5e5e5; }
+  }
 </style></head>
-<body>
-  <h1>Welcome to Pro!</h1>
-  <p>Your Granite Cloud account has been upgraded. You now have:</p>
-  <ul style="text-align:left;display:inline-block;">
-    <li>Up to 10 vaults</li>
-    <li>10,000 notes per vault</li>
-    <li>300 sync operations/hour</li>
-    <li>Priority support</li>
-  </ul>
-  <p>You can close this tab and continue using <code>mem</code>.</p>
-</body></html>`);
+<body><main>${body}</main></body></html>`;
+}
+
+billing.get('/billing/success', (c) => {
+  return c.html(billingPage('Upgrade successful', `
+    <h1>Welcome to Pro!</h1>
+    <p>Your Granite Cloud account has been upgraded. You now have:</p>
+    <ul style="text-align:left;display:inline-block;">
+      <li>Up to 10 vaults</li>
+      <li>10,000 notes per vault</li>
+      <li>300 sync operations/hour</li>
+      <li>Priority support</li>
+    </ul>
+    <p>You can close this tab and continue using <code>mem</code>.</p>`));
 });
 
 billing.get('/billing/cancel', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html><head><title>Granite Cloud - Checkout cancelled</title>
-<style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; text-align: center; }
-</style></head>
-<body>
-  <h1>Checkout cancelled</h1>
-  <p>No worries! You can upgrade anytime by running <code>mem cloud upgrade</code>.</p>
-</body></html>`);
+  return c.html(billingPage('Checkout cancelled', `
+    <h1>Checkout cancelled</h1>
+    <p>No worries! You can upgrade anytime by running <code>mem cloud upgrade</code>.</p>`));
 });
 
 billing.get('/billing/portal-return', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html><head><title>Granite Cloud - Billing</title>
-<style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; text-align: center; }
-</style></head>
-<body>
-  <h1>Billing updated</h1>
-  <p>Your billing changes have been saved. You can close this tab.</p>
-</body></html>`);
+  return c.html(billingPage('Billing', `
+    <h1>Billing updated</h1>
+    <p>Your billing changes have been saved. You can close this tab.</p>`));
 });
 
 /**

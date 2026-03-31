@@ -186,24 +186,38 @@ auth.get('/auth/callback', async (c) => {
 
   // Default: show success page with API key
   const html = `<!DOCTYPE html>
-<html><head><title>Granite Cloud - Logged in</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Granite Cloud - Logged in</title>
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; }
-  .key { background: #f0f0f0; padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 14px; word-break: break-all; }
-  .copy-btn { margin-top: 12px; padding: 8px 16px; background: #000; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-  .warning { color: #666; font-size: 13px; margin-top: 8px; }
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; color: #1a1a1a; }
+  .key { background: #f5f5f5; padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 14px; word-break: break-all; }
+  .copy-btn { margin-top: 12px; padding: 8px 16px; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .copy-btn:hover { background: #333; }
+  .copy-btn:focus-visible { outline: 2px solid #005fcc; outline-offset: 2px; }
+  .warning { color: #555; font-size: 13px; margin-top: 8px; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 8px; font-size: 13px; overflow-x: auto; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    .key, pre { background: #2a2a2a; }
+    .copy-btn { background: #e5e5e5; color: #1a1a1a; }
+    .copy-btn:hover { background: #ccc; }
+    .warning { color: #999; }
+    code { color: #e5e5e5; }
+  }
 </style></head>
 <body>
-  <h1>Welcome, @${ghUser.login}!</h1>
-  <p>Your Granite Cloud account is set up (${tier} tier). Here's your API key:</p>
-  <div class="key" id="key">${apiKey}</div>
-  <button class="copy-btn" onclick="navigator.clipboard.writeText('${apiKey}');this.textContent='Copied!'">Copy to clipboard</button>
-  <p class="warning">This key is shown only once. Save it now.</p>
-  <p>If you used <code>mem cloud login</code>, the CLI has already picked it up. You can close this tab.</p>
-  <p>Add to your <code>granite.yml</code>:</p>
-  <pre style="background:#f0f0f0;padding:12px;border-radius:8px;font-size:13px;">sync:
+  <main>
+    <h1>Welcome, @${ghUser.login}!</h1>
+    <p>Your Granite Cloud account is set up (${tier} tier). Here's your API key:</p>
+    <div class="key" id="key" role="status">${apiKey}</div>
+    <button class="copy-btn" onclick="navigator.clipboard.writeText('${apiKey}');this.textContent='Copied!'">Copy to clipboard</button>
+    <p class="warning">This key is shown only once. Save it now.</p>
+    <p>If you used <code>mem cloud login</code>, the CLI has already picked it up. You can close this tab.</p>
+    <p>Add to your <code>granite.yml</code>:</p>
+    <pre>sync:
   server: ${c.env.BASE_URL}
   api_key: ${apiKey}</pre>
+  </main>
 </body></html>`;
 
   return c.html(html);

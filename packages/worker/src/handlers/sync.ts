@@ -53,6 +53,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
 
   // Track slugs that need wikilink indexing (deferred to avoid N+1)
   const slugsToIndex: Array<{ slug: string; body: string }> = [];
+  const deletedSlugs = new Set<string>();
 
   for (const change of payload.changes) {
     // Resolve slug once — used for storage, DB, and changelog
@@ -91,6 +92,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
         const typeFolder = getTypeFolder({ type: indexed.type });
         await storage.deleteNote(typeFolder, indexed.slug);
         await db.deleteNoteBySlug(indexed.slug);
+        deletedSlugs.add(indexed.slug);
       }
     }
 
@@ -109,6 +111,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
   if (slugsToIndex.length > 0) {
     const allNotes = await db.getAllNotesMeta();
     for (const { slug, body } of slugsToIndex) {
+      if (deletedSlugs.has(slug)) continue;
       await indexLinks(db, slug, body, undefined, allNotes);
     }
   }

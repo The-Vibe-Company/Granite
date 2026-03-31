@@ -5,15 +5,15 @@ const CHANGELOG_RETENTION_DAYS = 30;
 
 export async function handleCleanup(env: Env): Promise<void> {
   await env.DB.prepare(`
-    DELETE FROM auth_sessions WHERE expires_at < datetime('now')
+    DELETE FROM auth_sessions WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   `).run();
 
   await env.DB.prepare(`
-    DELETE FROM rate_limits WHERE created_at < datetime('now', '-${RATE_LIMIT_RETENTION_HOURS} hours')
+    DELETE FROM rate_limits WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-${RATE_LIMIT_RETENTION_HOURS} hours')
   `).run();
 
   const result = await env.DB.prepare(`
-    DELETE FROM sync_changelog WHERE timestamp < datetime('now', '-${CHANGELOG_RETENTION_DAYS} days')
+    DELETE FROM sync_changelog WHERE timestamp < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-${CHANGELOG_RETENTION_DAYS} days')
   `).run();
 
   console.log(`Cleanup: ${result.meta.changes} old changelog entries removed`);

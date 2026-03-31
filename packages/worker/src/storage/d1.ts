@@ -291,7 +291,7 @@ export class D1IndexDatabase {
     await this.db.prepare(`
       INSERT INTO devices (device_id, vault_id, device_name, last_seen, last_seq)
       VALUES (?, ?, ?, ?, 0)
-      ON CONFLICT(device_id) DO UPDATE SET
+      ON CONFLICT(vault_id, device_id) DO UPDATE SET
         device_name = excluded.device_name,
         last_seen = excluded.last_seen
     `).bind(deviceId, this.vaultId, deviceName, new Date().toISOString()).run();
@@ -306,7 +306,7 @@ export class D1IndexDatabase {
 
   async updateDeviceSeq(deviceId: string, seq: number): Promise<void> {
     await this.db.prepare(
-      'UPDATE devices SET last_seq = ?, last_seen = ? WHERE device_id = ?',
-    ).bind(seq, new Date().toISOString(), deviceId).run();
+      'UPDATE devices SET last_seq = ?, last_seen = ? WHERE device_id = ? AND vault_id = ?',
+    ).bind(seq, new Date().toISOString(), deviceId, this.vaultId).run();
   }
 }

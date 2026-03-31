@@ -58,8 +58,8 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
       type: String(data.type ?? ''),
       created: data.created instanceof Date ? data.created.toISOString() : String(data.created ?? ''),
       modified: data.modified instanceof Date ? data.modified.toISOString() : String(data.modified ?? ''),
-      tags: data.tags ?? [],
-      aliases: data.aliases ?? [],
+      tags: Array.isArray(data.tags) ? data.tags : data.tags ? [data.tags] : [],
+      aliases: Array.isArray(data.aliases) ? data.aliases : data.aliases ? [data.aliases] : [],
       status: data.status ?? 'active',
       source: data.source ?? 'human',
       ...Object.fromEntries(
@@ -236,7 +236,7 @@ export class CloudMcpRuntime {
   }
 
   async listNotes(input: ListNotesInput = {}): Promise<NoteSummary[]> {
-    let notes = await this.db.getAllNotes();
+    let notes = await this.db.getAllNotesMeta();
 
     if (input.type) notes = notes.filter(n => n.type === input.type);
     if (input.status) notes = notes.filter(n => n.status === input.status);
@@ -299,6 +299,7 @@ export class CloudMcpRuntime {
     for (const other of allNotes) {
       if (other.slug === slug) continue;
       const titleLower = other.title.toLowerCase();
+      if (!titleLower) continue;
       if (existingLinks.has(titleLower) || existingLinks.has(other.slug)) continue;
 
       let mentions = 0;

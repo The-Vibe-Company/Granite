@@ -126,11 +126,12 @@ CREATE TABLE IF NOT EXISTS sync_changelog (
 CREATE INDEX IF NOT EXISTS idx_changelog_vault_seq ON sync_changelog(vault_id, seq);
 
 CREATE TABLE IF NOT EXISTS devices (
-  device_id TEXT PRIMARY KEY,
+  device_id TEXT NOT NULL,
   vault_id TEXT NOT NULL,
   device_name TEXT NOT NULL,
   last_seen TEXT NOT NULL,
-  last_seq INTEGER NOT NULL DEFAULT 0
+  last_seq INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (vault_id, device_id)
 );
 
 -- === RATE LIMITING ===

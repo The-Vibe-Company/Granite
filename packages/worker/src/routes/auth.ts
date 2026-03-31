@@ -24,6 +24,24 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+async function signState(payload: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${payload}.${sigHex}`;
+}
+
+async function verifyState(signed: string, secret: string): Promise<string | null> {
+  const dotIdx = signed.lastIndexOf('.');
+  if (dotIdx < 0) return null;
+  const payload = signed.slice(0, dotIdx);
+  const expected = await signState(payload, secret);
+  if (expected !== signed) return null;
+  return payload;
+}
+
 const auth = new Hono<{ Bindings: Env }>();
 
 /**
@@ -41,7 +59,8 @@ auth.get('/auth/github', async (c) => {
   const session = c.req.query('session') || '';
   const redirect = c.req.query('redirect') || '';
 
-  const state = btoa(JSON.stringify({ session, redirect }));
+  const payload = btoa(JSON.stringify({ session, redirect }));
+  const state = await signState(payload, c.env.GITHUB_CLIENT_SECRET);
 
   const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
   githubAuthUrl.searchParams.set('client_id', clientId);
@@ -66,12 +85,18 @@ auth.get('/auth/callback', async (c) => {
 
   let session = '';
   let redirect = '';
+
+  const verifiedPayload = await verifyState(stateParam, c.env.GITHUB_CLIENT_SECRET);
+  if (!verifiedPayload) {
+    return c.json({ error: 'Invalid or tampered state parameter' }, 400);
+  }
+
   try {
-    const parsed = JSON.parse(atob(stateParam));
+    const parsed = JSON.parse(atob(verifiedPayload));
     session = parsed.session || '';
     redirect = parsed.redirect || '';
   } catch {
-    // Invalid state, continue without session/redirect
+    // Invalid state payload, continue without session/redirect
   }
 
   // Exchange code for access token

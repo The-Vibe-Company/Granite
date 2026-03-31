@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.5...granite-mem-v0.1.6) (2026-03-31)
+
+
+### Features
+
+* rename mem skill to granite ([#18](https://github.com/The-Vibe-Company/Granite/issues/18)) ([9fd55e6](https://github.com/The-Vibe-Company/Granite/commit/9fd55e6cac13a95ee9ffb733d2cd28a05baf4615))
+
 ## [0.1.5](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.4...granite-mem-v0.1.5) (2026-03-31)
 
 

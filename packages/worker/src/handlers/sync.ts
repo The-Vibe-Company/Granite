@@ -125,7 +125,11 @@ export async function handleSyncPull(c: Context<{ Bindings: Env }>) {
   const db = new D1IndexDatabase(c.env.DB, vaultId);
 
   const sinceSeq = Number(c.req.query('since_seq') ?? '0');
-  const deviceId = c.req.query('device_id') ?? '';
+  const deviceId = c.req.query('device_id');
+
+  if (!deviceId) {
+    return c.json({ error: 'Missing device_id parameter' }, 400);
+  }
 
   const changelog = await db.getChangesSince(sinceSeq, deviceId);
 

@@ -202,8 +202,11 @@ auth.get('/auth/callback', async (c) => {
   if (keyCount && keyCount.cnt >= 10) {
     await c.env.DB.prepare(`
       UPDATE api_keys SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      WHERE user_id = ? AND revoked_at IS NULL
-      ORDER BY created_at ASC LIMIT 1
+      WHERE key_hash = (
+        SELECT key_hash FROM api_keys
+        WHERE user_id = ? AND revoked_at IS NULL
+        ORDER BY created_at ASC LIMIT 1
+      )
     `).bind(userId).run();
   }
 

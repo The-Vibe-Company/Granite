@@ -86,6 +86,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
       });
 
       slugsToIndex.push({ slug: resolvedSlug, body: change.body });
+      deletedSlugs.delete(resolvedSlug);
     } else if (change.operation === 'delete') {
       const indexed = await db.getNoteById(change.note_id);
       if (indexed) {

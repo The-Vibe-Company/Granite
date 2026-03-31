@@ -6,7 +6,7 @@ import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
 import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
 import { createDatabase, rebuildIndex } from '../../src/core/index-db.js';
 import { createNote, readNote } from '../../src/core/note.js';
-import { getRecommendations } from '../../src/core/recommendations.js';
+import { formatRecommendations, getRecommendations, recommendNote } from '../../src/core/recommendations.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 
 describe('recommendations', () => {
@@ -167,6 +167,106 @@ describe('recommendations', () => {
         'Link one project, company, or topic in the Links section.',
       ]),
     );
+  });
+
+  it('formats recommendation sections and returns nothing when empty', () => {
+    expect(formatRecommendations({
+      additions: [],
+      links: [],
+      tags: [],
+      next_steps: [],
+    })).toEqual([]);
+
+    expect(formatRecommendations({
+      additions: [{ text: 'Add context.' }],
+      links: [{ slug: 'granite', title: 'Granite', type: 'project', reason: 'mentioned 2 times', source: 'mention' }],
+      tags: [{ tag: 'search', weight: 3, source_slugs: ['granite', 'notes'] }],
+      next_steps: [{ type: 'decision', title_hint: 'Decision from Granite', reason: 'Capture the tradeoff.' }],
+    })).toEqual([
+      '  Add now:',
+      '    Add context.',
+      '  Link now:',
+      '    [[granite]] — mentioned 2 times',
+      '  Tag now:',
+      '    search — seen on 2 nearby notes',
+      '  Next note:',
+      '    decision — Capture the tradeoff. Title hint: Decision from Granite.',
+    ]);
+  });
+
+  it('covers next-step and add-now branches for remaining note types', () => {
+    const fleeting = createNote(tmpDir, config, 'fleeting', 'Quick capture', 'Tiny note.\n');
+    const meeting = createNote(tmpDir, config, 'meeting', 'Weekly sync');
+    const decision = createNote(tmpDir, config, 'decision', 'Choose SQLite');
+    const project = createNote(tmpDir, config, 'project', 'Granite');
+    const permanent = createNote(tmpDir, config, 'permanent', 'Memory Graph');
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const fleetingRecommendations = getRecommendations(db, readNote(fleeting.filepath), config);
+    expect(fleetingRecommendations.additions[0].text).toContain('Add one more sentence');
+    expect(fleetingRecommendations.next_steps[0]).toMatchObject({
+      type: 'permanent',
+      title_hint: 'Quick capture',
+    });
+
+    const meetingRecommendations = getRecommendations(db, readNote(meeting.filepath), config);
+    expect(meetingRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Link the attendees directly in the note.',
+        'Capture one decision or open question.',
+      ]),
+    );
+    expect(meetingRecommendations.next_steps[0].type).toBe('decision');
+
+    const decisionRecommendations = getRecommendations(db, readNote(decision.filepath), config);
+    expect(decisionRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Add the context that forced this decision.',
+        'State the decision in one sentence.',
+        'Link the project, meeting, or note affected by this decision.',
+      ]),
+    );
+    expect(decisionRecommendations.next_steps[0].type).toBe('project');
+
+    const projectRecommendations = getRecommendations(db, readNote(project.filepath), config);
+    expect(projectRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Add a one-line goal so the project has a clear anchor.',
+        'Link the people involved in the project.',
+        'Record one key decision or current status update.',
+      ]),
+    );
+    expect(projectRecommendations.next_steps[0].type).toBe('decision');
+
+    const permanentRecommendations = getRecommendations(db, readNote(permanent.filepath), config);
+    expect(permanentRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Write a one-line summary before expanding the idea.',
+        'Link one project, company, person, or adjacent idea.',
+      ]),
+    );
+    expect(permanentRecommendations.next_steps[0].type).toBe('project');
+
+    db.close();
+  });
+
+  it('supports incremental recommendation refreshes', () => {
+    createNote(tmpDir, config, 'project', 'Granite', 'Local-first system.\n');
+    const note = createNote(
+      tmpDir,
+      config,
+      'reference',
+      'Fresh note',
+      'Granite keeps markdown notes portable.\n',
+    );
+
+    const recommendations = recommendNote(tmpDir, config, readNote(note.filepath), {
+      strategy: 'incremental',
+    });
+
+    expect(recommendations.links.some(link => link.slug === 'granite')).toBe(true);
   });
 });
 

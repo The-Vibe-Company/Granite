@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mem": {
+      "command": "granite",
+      "args": ["mcp"],
+      "env": {
+        "GRANITE_VAULT": "/Users/stan/.granite"
+      }
+    }
+  }
+}

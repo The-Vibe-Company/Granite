@@ -8,7 +8,7 @@ Most PKM tools give you a blank canvas. Granite gives you a working system:
 
 - capture quickly
 - structure ideas without over-designing your workflow
-- link people, meetings, projects, and decisions
+- keep sources, durable notes, syntheses, and outputs connected
 - surface what to connect or write next
 - stay fully local, scriptable, and agent-friendly
 
@@ -39,13 +39,12 @@ Granite is opinionated where it matters and flexible where it should be.
 
 Granite ships with a small working model instead of an empty workspace:
 
-- `fleeting` for quick capture
-- `permanent` for durable ideas
-- `reference` for external sources
-- `person` for people and relationships
-- `meeting` for notes with attendees, decisions, and actions
-- `project` for active work
-- `decision` for durable decision records
+- `note` for durable ideas
+- `source` for imported or observed source material
+- `synthesis` for durable compiled knowledge
+- `output` for audience-specific deliverables
+
+`note -> synthesis -> output`
 
 This is enough structure to make your notes connect naturally, without forcing you into a heavyweight system.
 
@@ -83,7 +82,7 @@ Create the default vault in `~/.granite` and start capturing:
 ```bash
 granite init
 granite add "Talked to Alice about local-first sync tradeoffs"
-granite new "Local-first sync tradeoffs" --type permanent
+granite new "Local-first sync tradeoffs" --type note
 granite list
 granite search "sync"
 ```
@@ -108,7 +107,7 @@ granite add "Users want fewer note types, but stronger defaults."
 Turn it into a durable note:
 
 ```bash
-granite new "Strong defaults beat infinite flexibility" --type permanent
+granite new "Strong defaults beat infinite flexibility" --type note
 ```
 
 Find connections:
@@ -149,10 +148,28 @@ note_types:
     line_limit: 120
     warn_only: true
     slug_format: title
-    instructions: Capture the idea clearly, then link it to a project, person, or permanent note.
+    instructions: Capture the idea clearly, then link it to a source, note, or synthesis.
 ```
 
 The point is not to create 30 note types. The point is to add a type only when it makes your memory system sharper.
+
+## Protocol Fields
+
+Granite keeps the core schema small, but now includes a few shared fields that help both humans and agents work safely in the same vault:
+
+- `status`: `inbox | active | archived`
+- `source`: `human | agent | extraction`
+- `review_state`: `draft | reviewed | locked`
+- `durability`: `canonical | working | ephemeral`
+- `derived_from`: list of note IDs or slugs used as provenance
+
+These fields are intentionally lightweight:
+
+- `review_state` is the editorial state
+- `durability` distinguishes durable knowledge from working material or situational outputs
+- `derived_from` is the minimal provenance hook for syntheses and outputs
+
+Granite does not impose a full agent workflow in the core. Richer conventions such as agent traces or synthesis policies are better handled in templates, skills, and team protocol.
 
 ## Local-First Architecture
 
@@ -172,7 +189,7 @@ This keeps the system transparent, portable, and inspectable.
 Many commands support JSON output:
 
 ```bash
-granite new "Sync constraints" --type permanent --json
+granite new "Sync constraints" --type note --review-state reviewed --durability canonical --json
 granite list --json
 granite show sync-constraints --json
 granite search "constraints" --json
@@ -204,6 +221,8 @@ The server exposes:
 - resources for `granite.yml`, vault overview, note types, and individual notes via `granite://notes/{slug}`
 - prompts for refining notes and reviewing links/next steps
 
+The note payloads exposed through MCP include the shared protocol fields (`status`, `source`, `review_state`, `durability`, `derived_from`) so clients can make safer decisions without Granite embedding any model-specific logic.
+
 Example stdio client configuration:
 
 ```json
@@ -217,10 +236,10 @@ Example stdio client configuration:
 
 ```bash
 granite init
-granite new <title> [--type <type>] [--json]
+granite new <title> [--type <type>] [--source <source>] [--status <status>] [--review-state <state>] [--durability <durability>] [--derived-from <refs>] [--json]
 granite add [text] [--json]
 granite list [--type <type>] [--json]
-granite edit <slug>
+granite edit <slug> [--body <text>] [--append <text>] [--title <title>] [--tag <tags>] [--alias <aliases>] [--status <status>] [--source <source>] [--review-state <state>] [--durability <durability>] [--derived-from <refs>]
 granite open <slug>
 granite show <slug> [--json] [--body]
 granite search <query> [--json]
@@ -265,5 +284,6 @@ Granite is built on a few beliefs:
 - relationships between notes matter more than visual chrome
 - a good PKM should help you decide what to connect or write next
 - tools for humans should also be legible to agents
+- protocol belongs in the core, agent policy belongs outside it
 
 If that sounds right, Granite is the tool.

@@ -151,7 +151,7 @@ describe('sync/conflict', () => {
   });
 
   it('detects a conflict when both local and remote are modified', () => {
-    const note = createNote(tmpDir, config, 'permanent', 'Conflict Test');
+    const note = createNote(tmpDir, config, 'note', 'Conflict Test');
     const remoteChange: SyncChange = {
       note_id: note.frontmatter.id,
       operation: 'update',
@@ -169,7 +169,7 @@ describe('sync/conflict', () => {
   });
 
   it('does not detect conflict for delete operations', () => {
-    const note = createNote(tmpDir, config, 'permanent', 'Delete Test');
+    const note = createNote(tmpDir, config, 'note', 'Delete Test');
     const remoteChange: SyncChange = {
       note_id: note.frontmatter.id,
       operation: 'delete',
@@ -182,7 +182,7 @@ describe('sync/conflict', () => {
   });
 
   it('resolves conflict with LWW and saves backup', () => {
-    const note = createNote(tmpDir, config, 'permanent', 'LWW Test');
+    const note = createNote(tmpDir, config, 'note', 'LWW Test');
     const remoteChange: SyncChange = {
       note_id: note.frontmatter.id,
       operation: 'update',
@@ -269,7 +269,7 @@ describe('sync/manager', () => {
       },
     };
     const manager = getSyncManager(tmpDir, syncConfig)!;
-    const note = createNote(tmpDir, config, 'permanent', 'Sync Track Test');
+    const note = createNote(tmpDir, config, 'note', 'Sync Track Test');
 
     // Should not throw even though server is unreachable
     expect(() => manager.trackAndPush(note, 'create')).not.toThrow();

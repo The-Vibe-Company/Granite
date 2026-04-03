@@ -274,8 +274,7 @@ html, body {
   text-transform: uppercase;
   color: var(--text-2);
 }
-.note-item-type.fleeting { color: #fbbf24; }
-.note-item-type.permanent { color: var(--accent-text); }
+.note-item-type.note { color: var(--accent-text); }
 .note-item-type.reference { color: var(--success); }
 .note-item-type.person { color: #f9a8d4; }
 .note-item-type.meeting { color: #93c5fd; }

@@ -6,7 +6,7 @@ describe('frontmatter', () => {
   const sampleContent = `---
 id: "abc-123"
 title: Test Note
-type: fleeting
+type: note
 created: "2026-03-30T10:00:00.000Z"
 modified: "2026-03-30T10:00:00.000Z"
 tags:
@@ -24,7 +24,7 @@ This is the body.
     const { frontmatter, body } = parseFrontmatter(sampleContent);
     expect(frontmatter.id).toBe('abc-123');
     expect(frontmatter.title).toBe('Test Note');
-    expect(frontmatter.type).toBe('fleeting');
+    expect(frontmatter.type).toBe('note');
     expect(frontmatter.tags).toEqual(['test', 'demo']);
     expect(frontmatter.aliases).toEqual(['my-test']);
     expect(frontmatter.review_state).toBe('draft');
@@ -42,7 +42,7 @@ This is the body.
     const fm: NoteFrontmatter = {
       id: 'xyz-456',
       title: 'Round Trip',
-      type: 'permanent',
+      type: 'note',
       created: '2026-01-01T00:00:00.000Z',
       modified: '2026-01-01T00:00:00.000Z',
       tags: ['a'],

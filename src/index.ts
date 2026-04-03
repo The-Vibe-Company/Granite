@@ -35,7 +35,7 @@ program
   .command('new')
   .description('Create a new note')
   .argument('<title>', 'Note title')
-  .option('-t, --type <type>', 'Note type (e.g. fleeting, permanent, reference)')
+  .option('-t, --type <type>', 'Note type (e.g. note, source, synthesis, output)')
   .option('--source <source>', 'Set source (human, agent, extraction)')
   .option('--status <status>', 'Set status (inbox, active, archived)')
   .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
@@ -48,7 +48,7 @@ program
 
 program
   .command('add')
-  .description('Quick-capture a fleeting note (reads stdin if no text given)')
+  .description('Quick-capture a note using the default note type (reads stdin if no text given)')
   .argument('[text]', 'Note text (or pipe via stdin)')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((text: string | undefined, options: { json?: boolean }) => {

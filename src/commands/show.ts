@@ -17,38 +17,39 @@ export function showCommand(slug: string, options: { json?: boolean; body?: bool
     }
     process.exit(1);
   }
+  const existingNote = note;
 
   if (options.json) {
     console.log(jsonSuccess({
-      slug: note.slug,
-      title: note.frontmatter.title,
-      type: note.frontmatter.type,
-      created: note.frontmatter.created,
-      modified: note.frontmatter.modified,
-      tags: note.frontmatter.tags,
-      aliases: note.frontmatter.aliases,
-      status: note.frontmatter.status,
-      source: note.frontmatter.source,
-      review_state: note.frontmatter.review_state,
-      durability: note.frontmatter.durability,
-      derived_from: note.frontmatter.derived_from,
-      body: note.body,
-      filepath: note.filepath,
+      slug: existingNote.slug,
+      title: existingNote.frontmatter.title,
+      type: existingNote.frontmatter.type,
+      created: existingNote.frontmatter.created,
+      modified: existingNote.frontmatter.modified,
+      tags: existingNote.frontmatter.tags,
+      aliases: existingNote.frontmatter.aliases,
+      status: existingNote.frontmatter.status,
+      source: existingNote.frontmatter.source,
+      review_state: existingNote.frontmatter.review_state,
+      durability: existingNote.frontmatter.durability,
+      derived_from: existingNote.frontmatter.derived_from,
+      body: existingNote.body,
+      filepath: existingNote.filepath,
     }));
     return;
   }
 
   if (options.body) {
-    process.stdout.write(note.body);
+    process.stdout.write(existingNote.body);
     return;
   }
 
   // Default: print full file content
-  console.log(`# ${note.frontmatter.title}  (${note.slug})`);
+  console.log(`# ${existingNote.frontmatter.title}  (${existingNote.slug})`);
   console.log(
-    `# type: ${note.frontmatter.type}  |  modified: ${note.frontmatter.modified.slice(0, 10)}  |  review: ${note.frontmatter.review_state}  |  durability: ${note.frontmatter.durability}`,
+    `# type: ${existingNote.frontmatter.type}  |  modified: ${existingNote.frontmatter.modified.slice(0, 10)}  |  review: ${existingNote.frontmatter.review_state}  |  durability: ${existingNote.frontmatter.durability}`,
   );
   console.log('');
-  const content = fs.readFileSync(note.filepath, 'utf-8');
+  const content = fs.readFileSync(existingNote.filepath, 'utf-8');
   console.log(content);
 }

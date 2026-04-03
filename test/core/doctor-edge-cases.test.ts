@@ -35,7 +35,7 @@ describe('doctor edge cases', () => {
   }
 
   it('reports missing note-type folders', () => {
-    fs.rmSync(path.join(tmpDir, config.note_types.reference.folder), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, config.note_types.source.folder), { recursive: true, force: true });
 
     const db = getDb(false);
     const issues = runDoctor(tmpDir, config, db);
@@ -45,13 +45,13 @@ describe('doctor edge cases', () => {
   });
 
   it('reports missing frontmatter fields, duplicate slugs, and duplicate ids', () => {
-    const first = createNote(tmpDir, config, 'permanent', 'Shared Title', 'Body.\n');
-    const second = createNote(tmpDir, config, 'reference', 'Another Title', 'Body.\n');
+    const first = createNote(tmpDir, config, 'note', 'Shared Title', 'Body.\n');
+    const second = createNote(tmpDir, config, 'source', 'Another Title', 'Body.\n');
 
     const firstContent = fs.readFileSync(first.filepath, 'utf-8');
     const { frontmatter } = parseFrontmatter(firstContent);
 
-    const duplicateSlugPath = path.join(tmpDir, config.note_types.reference.folder, `${first.slug}.md`);
+    const duplicateSlugPath = path.join(tmpDir, config.note_types.source.folder, `${first.slug}.md`);
     fs.writeFileSync(duplicateSlugPath, serializeFrontmatter(frontmatter, 'Duplicate slug.\n'), 'utf-8');
 
     const secondContent = fs.readFileSync(second.filepath, 'utf-8');

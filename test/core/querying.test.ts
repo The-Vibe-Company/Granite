@@ -29,7 +29,7 @@ describe('querying helpers', () => {
   });
 
   it('returns normalized search results with snippet and score', () => {
-    createNote(tmpDir, config, 'permanent', 'Graph Memory', 'A graph memory stores linked ideas.\n');
+    createNote(tmpDir, config, 'note', 'Graph Memory', 'A graph memory stores linked ideas.\n');
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);
@@ -47,9 +47,9 @@ describe('querying helpers', () => {
   });
 
   it('returns backlinks sorted by source title', () => {
-    createNote(tmpDir, config, 'permanent', 'Zulu Source', 'Points to [[Target Note]].\n');
-    createNote(tmpDir, config, 'permanent', 'Alpha Source', 'Also points to [[Target Note]].\n');
-    createNote(tmpDir, config, 'permanent', 'Target Note', 'Referenced note.\n');
+    createNote(tmpDir, config, 'note', 'Zulu Source', 'Points to [[Target Note]].\n');
+    createNote(tmpDir, config, 'note', 'Alpha Source', 'Also points to [[Target Note]].\n');
+    createNote(tmpDir, config, 'note', 'Target Note', 'Referenced note.\n');
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);
@@ -61,10 +61,10 @@ describe('querying helpers', () => {
   });
 
   it('suggests notes mentioned in body and skips existing wikilinks', () => {
-    createNote(tmpDir, config, 'permanent', 'Machine Learning', 'Base concept.\n');
-    createNote(tmpDir, config, 'permanent', 'Large Language Model', 'Alias-heavy concept.\n');
+    createNote(tmpDir, config, 'note', 'Machine Learning', 'Base concept.\n');
+    createNote(tmpDir, config, 'note', 'Large Language Model', 'Alias-heavy concept.\n');
 
-    const llmNotePath = path.join(tmpDir, config.note_types.permanent.folder, 'large-language-model.md');
+    const llmNotePath = path.join(tmpDir, config.note_types.note.folder, 'large-language-model.md');
     const llmContent = fs.readFileSync(llmNotePath, 'utf-8');
     fs.writeFileSync(
       llmNotePath,
@@ -75,7 +75,7 @@ describe('querying helpers', () => {
     const current = createNote(
       tmpDir,
       config,
-      'permanent',
+      'note',
       'Draft Note',
       [
         'Machine learning appears twice.',

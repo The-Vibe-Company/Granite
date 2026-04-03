@@ -33,8 +33,8 @@ describe('doctor', () => {
   }
 
   it('reports no issues for a healthy vault', () => {
-    createNote(tmpDir, config, 'permanent', 'A', 'Links to [[B]].\n');
-    createNote(tmpDir, config, 'permanent', 'B', 'Links to [[A]].\n');
+    createNote(tmpDir, config, 'note', 'A', 'Links to [[B]].\n');
+    createNote(tmpDir, config, 'note', 'B', 'Links to [[A]].\n');
     const db = getDb();
     const issues = runDoctor(tmpDir, config, db);
     db.close();
@@ -45,7 +45,7 @@ describe('doctor', () => {
   });
 
   it('detects broken wikilinks', () => {
-    createNote(tmpDir, config, 'permanent', 'Broken Links', 'See [[Ghost Note]] and [[Another Ghost]].\n');
+    createNote(tmpDir, config, 'note', 'Broken Links', 'See [[Ghost Note]] and [[Another Ghost]].\n');
     const db = getDb();
     const issues = runDoctor(tmpDir, config, db);
     db.close();
@@ -54,7 +54,7 @@ describe('doctor', () => {
   });
 
   it('detects orphan notes', () => {
-    createNote(tmpDir, config, 'fleeting', 'Lonely', 'No links here.\n');
+    createNote(tmpDir, config, 'note', 'Lonely', 'No links here.\n');
     const db = getDb();
     const issues = runDoctor(tmpDir, config, db);
     db.close();
@@ -63,16 +63,14 @@ describe('doctor', () => {
   });
 
   it('detects line limit violations', () => {
-    // Fleeting has line_limit: 50
-    const longBody = Array(60).fill('This is a line of text.').join('\n') + '\n';
-    createNote(tmpDir, config, 'fleeting', 'Too Long', longBody);
+    const longBody = Array(220).fill('This is a line of text.').join('\n') + '\n';
+    createNote(tmpDir, config, 'note', 'Too Long', longBody);
     const db = getDb();
     const issues = runDoctor(tmpDir, config, db);
     db.close();
     const limitIssues = issues.filter(i => i.message.includes('exceeds limit'));
     expect(limitIssues).toHaveLength(1);
-    // fleeting is warn_only, so it should be a warning
-    expect(limitIssues[0].level).toBe('warning');
+    expect(limitIssues[0].level).toBe('error');
   });
 
   it('warns when a synthesis has no provenance', () => {

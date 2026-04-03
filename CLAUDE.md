@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Granite?
 
-Granite (`granite` CLI) is a local-first markdown memory system for humans and agents. Notes are plain markdown files with YAML frontmatter, organized by configurable note types (fleeting, permanent, reference, person, meeting, project, decision). Configuration lives in `granite.yml` at the vault root. A SQLite index (`.granite/index.db`) provides full-text search and wikilink resolution.
+Granite (`granite` CLI) is a local-first markdown memory system for humans and agents. Notes are plain markdown files with YAML frontmatter, organized by configurable note types. The default model is knowledge-first: `note`, `source`, `synthesis`, and `output`. Configuration lives in `granite.yml` at the vault root. A SQLite index (`.granite/index.db`) provides full-text search and wikilink resolution.
 
 ## Commands
 
@@ -42,7 +42,7 @@ npx tsx src/index.ts <command>
 
 - **Vault detection**: `findVaultRoot()` walks up from CWD looking for `granite.yml`. Most commands call `requireVaultRoot()` which throws if not found.
 - **Index rebuild**: `ensureIndex()` rebuilds the entire SQLite index on every command when `config.index.auto_rebuild` is true. The index is derived state — the markdown files are the source of truth.
-- **Slug formats**: Fleeting notes use date-based slugs (`2026-03-30-a1b2`), all other types use title-based slugs with collision counters.
+- **Slug formats**: Granite uses title-based slugs with collision counters by default. Custom note types may still opt into alternate slug formats in `granite.yml`.
 - **Note files**: Each note is `<folder>/<slug>.md` with YAML frontmatter (id, title, type, created, modified, tags, aliases).
 
 ## Testing

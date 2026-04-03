@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { serve } from '@hono/node-server';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { GraniteConfig } from '../core/types.js';
 import { ensureIndex } from '../core/index-db.js';
 import { createNote, findNoteBySlug, listNotes, readNote } from '../core/note.js';
@@ -128,7 +129,7 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
 
   // Static files — serve from the web/public directory
   // We need to resolve the path relative to where the source files are
-  const publicDir = path.join(import.meta.dirname, 'public');
+  const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 
   app.get('/*', (c) => {
     const reqPath = c.req.path === '/' ? '/index.html' : c.req.path;

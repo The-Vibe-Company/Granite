@@ -30,7 +30,7 @@ export function newNote(
   const resolvedType = options.type || config.defaults.note_type;
   const typeConfig = config.note_types[resolvedType];
 
-  // For date-slug types (like fleeting), the title IS the content
+  // For date-slug types, the title doubles as the initial body content.
   const bodyOverride = typeConfig?.slug_format === 'date' ? title + '\n' : undefined;
   const note = createNote(vaultRoot, config, resolvedType, title, bodyOverride);
 

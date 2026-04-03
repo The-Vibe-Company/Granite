@@ -25,10 +25,10 @@ describe('note', () => {
   });
 
   it('creates a note with correct frontmatter', () => {
-    const note = createNote(tmpDir, config, 'permanent', 'My Test Note');
+    const note = createNote(tmpDir, config, 'note', 'My Test Note');
     expect(note.slug).toBe('my-test-note');
     expect(note.frontmatter.title).toBe('My Test Note');
-    expect(note.frontmatter.type).toBe('permanent');
+    expect(note.frontmatter.type).toBe('note');
     expect(note.frontmatter.id).toBeTruthy();
     expect(note.frontmatter.review_state).toBe('draft');
     expect(note.frontmatter.durability).toBe('canonical');
@@ -36,22 +36,22 @@ describe('note', () => {
     expect(fs.existsSync(note.filepath)).toBe(true);
   });
 
-  it('creates a fleeting note with date-based slug', () => {
-    const note = createNote(tmpDir, config, 'fleeting', 'Quick thought');
-    expect(note.slug).toMatch(/^\d{4}-\d{2}-\d{2}-[a-z0-9]{4}$/);
+  it('creates a default note with title-based slug', () => {
+    const note = createNote(tmpDir, config, 'note', 'Quick thought');
+    expect(note.slug).toBe('quick-thought');
     expect(note.frontmatter.title).toBe('Quick thought');
-    expect(note.frontmatter.type).toBe('fleeting');
-    expect(note.frontmatter.durability).toBe('working');
+    expect(note.frontmatter.type).toBe('note');
+    expect(note.frontmatter.durability).toBe('canonical');
   });
 
   it('creates a note with custom body', () => {
-    const note = createNote(tmpDir, config, 'permanent', 'Quick', 'Custom body text\n');
+    const note = createNote(tmpDir, config, 'note', 'Quick', 'Custom body text\n');
     expect(note.body).toBe('Custom body text\n');
   });
 
   it('handles slug collision', () => {
-    const note1 = createNote(tmpDir, config, 'permanent', 'Duplicate');
-    const note2 = createNote(tmpDir, config, 'permanent', 'Duplicate');
+    const note1 = createNote(tmpDir, config, 'note', 'Duplicate');
+    const note2 = createNote(tmpDir, config, 'note', 'Duplicate');
     expect(note1.slug).toBe('duplicate');
     expect(note2.slug).toBe('duplicate-2');
   });
@@ -61,23 +61,23 @@ describe('note', () => {
   });
 
   it('reads a note back correctly', () => {
-    const created = createNote(tmpDir, config, 'permanent', 'Readable');
+    const created = createNote(tmpDir, config, 'note', 'Readable');
     const read = readNote(created.filepath);
     expect(read.slug).toBe('readable');
     expect(read.frontmatter.title).toBe('Readable');
-    expect(read.frontmatter.type).toBe('permanent');
+    expect(read.frontmatter.type).toBe('note');
   });
 
   it('lists all notes across types', () => {
-    createNote(tmpDir, config, 'fleeting', 'Note A');
-    createNote(tmpDir, config, 'permanent', 'Note B');
-    createNote(tmpDir, config, 'reference', 'Note C');
+    createNote(tmpDir, config, 'note', 'Note A');
+    createNote(tmpDir, config, 'note', 'Note B');
+    createNote(tmpDir, config, 'source', 'Note C');
     const notes = listNotes(tmpDir, config);
     expect(notes).toHaveLength(3);
   });
 
   it('finds a note by slug', () => {
-    createNote(tmpDir, config, 'permanent', 'Findable Note');
+    createNote(tmpDir, config, 'note', 'Findable Note');
     const found = findNoteBySlug(tmpDir, config, 'findable-note');
     expect(found).not.toBeNull();
     expect(found!.frontmatter.title).toBe('Findable Note');

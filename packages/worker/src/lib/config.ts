@@ -3,13 +3,10 @@
  * These match the defaults in the main Granite CLI config (src/core/config.ts).
  */
 export const DEFAULT_TYPE_FOLDERS: Record<string, string> = {
-  fleeting: 'notes/fleeting',
-  permanent: 'notes/permanent',
-  reference: 'notes/reference',
-  person: 'notes/people',
-  meeting: 'notes/meetings',
-  project: 'notes/projects',
-  decision: 'notes/decisions',
+  note: 'notes/notes',
+  source: 'notes/sources',
+  synthesis: 'notes/syntheses',
+  output: 'notes/outputs',
 };
 
 /**

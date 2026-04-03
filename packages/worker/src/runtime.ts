@@ -478,16 +478,17 @@ function getDefaultConfig(): GraniteConfig {
     note_types: Object.fromEntries(
       Object.entries(DEFAULT_TYPE_FOLDERS).map(([type, folder]) => {
         const descriptions: Record<string, string> = {
-          fleeting: 'Quick captures', permanent: 'Refined notes', reference: 'External sources',
-          person: 'People', meeting: 'Meetings', project: 'Projects', decision: 'Decisions',
+          note: 'Durable knowledge note',
+          source: 'Imported or observed source material',
+          synthesis: 'Compiled knowledge across notes or sources',
+          output: 'Situational deliverable derived from durable knowledge',
         };
         const extra: Partial<NoteTypeConfig> = {};
-        if (type === 'fleeting') { extra.slug_format = 'date'; extra.line_limit = 50; extra.warn_only = true; }
-        if (type === 'reference') { extra.line_limit = 300; extra.warn_only = true; }
+        if (type === 'source') { extra.line_limit = 300; extra.warn_only = true; }
         return [type, defaultType(folder, descriptions[type] ?? type, extra)];
       }),
     ),
-    defaults: { note_type: 'fleeting', editor: '$EDITOR' },
+    defaults: { note_type: 'note', editor: '$EDITOR' },
     index: { auto_rebuild: true },
   };
 }

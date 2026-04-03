@@ -550,7 +550,7 @@ function registerResources(server: McpServer, runtime: GraniteMcpRuntime): void 
 function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerPrompt('granite_refine_note', {
     title: 'Refine Granite Note',
-    description: 'Create a prompt for turning a note into a cleaner permanent note draft.',
+    description: 'Create a prompt for turning a note into a cleaner durable note draft.',
     argsSchema: {
       slug: z.string().describe('Slug of the note to refine.'),
     },
@@ -565,7 +565,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
           content: {
             type: 'text',
             text: [
-              'Refine the attached Granite note into a durable, well-structured permanent note.',
+              'Refine the attached Granite note into a durable, well-structured note.',
               'Keep the meaning intact, avoid inventing facts, preserve useful wikilinks, and use Granite-style headings when appropriate.',
             ].join(' '),
           },

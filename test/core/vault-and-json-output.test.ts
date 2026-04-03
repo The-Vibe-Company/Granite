@@ -51,7 +51,7 @@ describe('vault helpers', () => {
   it('builds vault-relative file paths', () => {
     expect(getIndexDbPath('/vault')).toBe(path.join('/vault', '.granite', 'index.db'));
     expect(getIndexDbPath(path.join('/vault', '.granite'))).toBe(path.join('/vault', '.granite', 'index.db'));
-    expect(resolveNotePath('/vault', 'permanent', 'my-note')).toBe(path.join('/vault', 'permanent', 'my-note.md'));
+    expect(resolveNotePath('/vault', 'note', 'my-note')).toBe(path.join('/vault', 'note', 'my-note.md'));
   });
 });
 

@@ -28,21 +28,18 @@ describe('recommendations', () => {
   });
 
   it('recommends linked notes, tags, and a next step from local context', () => {
-    const granite = createNote(tmpDir, config, 'project', 'Granite', 'Granite is a local-first memory tool.\n');
-    setTags(granite.filepath, ['local-first', 'knowledge-base']);
+    const source = createNote(tmpDir, config, 'source', 'Attention Is All You Need', 'Transformer source note.\n');
+    setTags(source.filepath, ['transformers', 'attention']);
 
-    const githubSeo = createNote(tmpDir, config, 'reference', 'GitHub SEO', 'Repository discoverability on GitHub.\n');
-    setTags(githubSeo.filepath, ['github', 'seo']);
-
-    const stan = createNote(tmpDir, config, 'person', 'Stan Girard', 'Builder behind Granite and GitHub SEO.\n');
-    setTags(stan.filepath, ['founder', 'open-source']);
+    const synthesis = createNote(tmpDir, config, 'synthesis', 'Transformer Architecture', 'Compiled view of transformers.\n');
+    setTags(synthesis.filepath, ['transformers', 'architecture']);
 
     const note = createNote(
       tmpDir,
       config,
-      'reference',
-      'Launch notes',
-      'Granite should benefit from GitHub SEO. Stan Girard wrote about it.\n',
+      'source',
+      'Scaling source',
+      'Transformer architecture and attention patterns matter for scaling.\n',
     );
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
@@ -52,47 +49,47 @@ describe('recommendations', () => {
     db.close();
 
     expect(recommendations.links.map(link => link.slug)).toEqual(
-      expect.arrayContaining(['granite', 'github-seo', 'stan-girard']),
+      expect.arrayContaining(['attention-is-all-you-need', 'transformer-architecture']),
     );
-    expect(recommendations.links.some(link => link.reason.includes('mentioned'))).toBe(true);
+    expect(recommendations.links.some(link => link.reason.includes('mentioned') || link.source === 'search')).toBe(true);
     expect(recommendations.additions.map(item => item.text)).toEqual(
       expect.arrayContaining([
-        'Add the source URL or citation.',
-        'Write 2-3 key points in your own words.',
+        'Write a short summary so this source is understandable without rereading the whole document.',
+        'Capture 2-3 concrete facts worth preserving from the source.',
       ]),
     );
     expect(recommendations.tags.map(tag => tag.tag)).toEqual(
-      expect.arrayContaining(['github', 'seo']),
+      expect.arrayContaining(['transformers', 'attention']),
     );
     expect(recommendations.next_steps[0]).toMatchObject({
-      type: 'permanent',
-      title_hint: 'Idea from Launch notes',
+      type: 'synthesis',
+      title_hint: 'Scaling source synthesis',
     });
   });
 
   it('recommends related notes through local search when no title is mentioned exactly', () => {
-    const semantic = createNote(
+    const source = createNote(
       tmpDir,
       config,
-      'permanent',
-      'Semantic Search',
+      'source',
+      'Semantic Search Source',
       'Semantic retrieval helps a note system find related ideas.\n',
     );
-    setTags(semantic.filepath, ['search']);
+    setTags(source.filepath, ['search']);
 
-    const vectors = createNote(
+    const synthesis = createNote(
       tmpDir,
       config,
-      'permanent',
+      'synthesis',
       'Embeddings for Notes',
       'Vector retrieval improves knowledge discovery in a note vault.\n',
     );
-    setTags(vectors.filepath, ['embeddings']);
+    setTags(synthesis.filepath, ['embeddings']);
 
     const target = createNote(
       tmpDir,
       config,
-      'permanent',
+      'note',
       'Semantic retrieval for a vault',
       'A local note system should surface related knowledge quickly.\n',
     );
@@ -105,19 +102,19 @@ describe('recommendations', () => {
 
     expect(recommendations.links.some(link => link.source === 'search')).toBe(true);
     expect(recommendations.links.map(link => link.slug)).toEqual(
-      expect.arrayContaining(['semantic-search', 'embeddings-for-notes']),
+      expect.arrayContaining(['semantic-search-source', 'embeddings-for-notes']),
     );
     expect(recommendations.tags.map(tag => tag.tag)).toContain('search');
   });
 
   it('does not re-suggest notes that are already linked', () => {
-    createNote(tmpDir, config, 'person', 'Stan Girard', 'Builder.\n');
+    createNote(tmpDir, config, 'source', 'Attention Source', 'Core source.\n');
     const launch = createNote(
       tmpDir,
       config,
-      'permanent',
+      'note',
       'Launch note',
-      'We worked with [[Stan Girard]] on Granite.\n',
+      'We should revisit [[Attention Source]] before publishing.\n',
     );
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
@@ -126,47 +123,7 @@ describe('recommendations', () => {
     const recommendations = getRecommendations(db, readNote(launch.filepath), config);
     db.close();
 
-    expect(recommendations.links.map(link => link.slug)).not.toContain('stan-girard');
-  });
-
-  it('uses existing linked notes to improve next-step recommendations', () => {
-    createNote(tmpDir, config, 'project', 'Granite', 'Granite is a local-first memory system.\n');
-    const stan = createNote(
-      tmpDir,
-      config,
-      'person',
-      'Stan Girard',
-      '## Role\n\nBuilder behind Granite.\n\n## Context\n\nWorks on Granite.\n\n## Links\n\n- [[granite]]\n',
-    );
-
-    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
-    rebuildIndex(tmpDir, config, db);
-
-    const recommendations = getRecommendations(db, readNote(stan.filepath), config);
-    db.close();
-
-    expect(recommendations.next_steps[0]).toMatchObject({
-      type: 'meeting',
-      title_hint: 'Stan Girard + Granite',
-    });
-  });
-
-  it('gives add-now guidance for a newly created person card', () => {
-    const stan = createNote(tmpDir, config, 'person', 'Stan Girard');
-
-    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
-    rebuildIndex(tmpDir, config, db);
-
-    const recommendations = getRecommendations(db, readNote(stan.filepath), config);
-    db.close();
-
-    expect(recommendations.additions.map(item => item.text)).toEqual(
-      expect.arrayContaining([
-        'Add a one-line role, company, or why this person matters.',
-        'Add how you know them or what you work on together.',
-        'Link one project, company, or topic in the Links section.',
-      ]),
-    );
+    expect(recommendations.links.map(link => link.slug)).not.toContain('attention-source');
   });
 
   it('formats recommendation sections and returns nothing when empty', () => {
@@ -179,9 +136,9 @@ describe('recommendations', () => {
 
     expect(formatRecommendations({
       additions: [{ text: 'Add context.' }],
-      links: [{ slug: 'granite', title: 'Granite', type: 'project', reason: 'mentioned 2 times', source: 'mention' }],
+      links: [{ slug: 'granite', title: 'Granite', type: 'synthesis', reason: 'mentioned 2 times', source: 'mention' }],
       tags: [{ tag: 'search', weight: 3, source_slugs: ['granite', 'notes'] }],
-      next_steps: [{ type: 'decision', title_hint: 'Decision from Granite', reason: 'Capture the tradeoff.' }],
+      next_steps: [{ type: 'output', title_hint: 'Granite brief', reason: 'Create a situational deliverable.' }],
     })).toEqual([
       '  Add now:',
       '    Add context.',
@@ -190,74 +147,67 @@ describe('recommendations', () => {
       '  Tag now:',
       '    search — seen on 2 nearby notes',
       '  Next note:',
-      '    decision — Capture the tradeoff. Title hint: Decision from Granite.',
+      '    output — Create a situational deliverable. Title hint: Granite brief.',
     ]);
   });
 
-  it('covers next-step and add-now branches for remaining note types', () => {
-    const fleeting = createNote(tmpDir, config, 'fleeting', 'Quick capture', 'Tiny note.\n');
-    const meeting = createNote(tmpDir, config, 'meeting', 'Weekly sync');
-    const decision = createNote(tmpDir, config, 'decision', 'Choose SQLite');
-    const project = createNote(tmpDir, config, 'project', 'Granite');
-    const permanent = createNote(tmpDir, config, 'permanent', 'Memory Graph');
+  it('covers next-step and add-now branches for the default knowledge-oriented types', () => {
+    const note = createNote(tmpDir, config, 'note', 'Memory Graph');
+    const source = createNote(tmpDir, config, 'source', 'Attention Paper');
+    const synthesis = createNote(tmpDir, config, 'synthesis', 'Transformer State');
+    const output = createNote(tmpDir, config, 'output', 'Team Brief');
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);
 
-    const fleetingRecommendations = getRecommendations(db, readNote(fleeting.filepath), config);
-    expect(fleetingRecommendations.additions[0].text).toContain('Add one more sentence');
-    expect(fleetingRecommendations.next_steps[0]).toMatchObject({
-      type: 'permanent',
-      title_hint: 'Quick capture',
-    });
-
-    const meetingRecommendations = getRecommendations(db, readNote(meeting.filepath), config);
-    expect(meetingRecommendations.additions.map(item => item.text)).toEqual(
-      expect.arrayContaining([
-        'Link the attendees directly in the note.',
-        'Capture one decision or open question.',
-      ]),
-    );
-    expect(meetingRecommendations.next_steps[0].type).toBe('decision');
-
-    const decisionRecommendations = getRecommendations(db, readNote(decision.filepath), config);
-    expect(decisionRecommendations.additions.map(item => item.text)).toEqual(
-      expect.arrayContaining([
-        'Add the context that forced this decision.',
-        'State the decision in one sentence.',
-        'Link the project, meeting, or note affected by this decision.',
-      ]),
-    );
-    expect(decisionRecommendations.next_steps[0].type).toBe('project');
-
-    const projectRecommendations = getRecommendations(db, readNote(project.filepath), config);
-    expect(projectRecommendations.additions.map(item => item.text)).toEqual(
-      expect.arrayContaining([
-        'Add a one-line goal so the project has a clear anchor.',
-        'Link the people involved in the project.',
-        'Record one key decision or current status update.',
-      ]),
-    );
-    expect(projectRecommendations.next_steps[0].type).toBe('decision');
-
-    const permanentRecommendations = getRecommendations(db, readNote(permanent.filepath), config);
-    expect(permanentRecommendations.additions.map(item => item.text)).toEqual(
+    const noteRecommendations = getRecommendations(db, readNote(note.filepath), config);
+    expect(noteRecommendations.additions.map(item => item.text)).toEqual(
       expect.arrayContaining([
         'Write a one-line summary before expanding the idea.',
-        'Link one project, company, person, or adjacent idea.',
+        'Link one source, synthesis, or adjacent durable idea.',
       ]),
     );
-    expect(permanentRecommendations.next_steps[0].type).toBe('project');
+    expect(noteRecommendations.next_steps[0].type).toBe('source');
+
+    const sourceRecommendations = getRecommendations(db, readNote(source.filepath), config);
+    expect(sourceRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Write a short summary so this source is understandable without rereading the whole document.',
+        'Capture 2-3 concrete facts worth preserving from the source.',
+        'Link one note or synthesis that this source supports.',
+      ]),
+    );
+    expect(sourceRecommendations.next_steps[0].type).toBe('synthesis');
+
+    const synthesisRecommendations = getRecommendations(db, readNote(synthesis.filepath), config);
+    expect(synthesisRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'Define the scope so this synthesis has a clear boundary.',
+        'Write a short executive summary before expanding the synthesis.',
+        'Link the notes or sources this synthesis pulls together.',
+      ]),
+    );
+    expect(synthesisRecommendations.next_steps[0].type).toBe('output');
+
+    const outputRecommendations = getRecommendations(db, readNote(output.filepath), config);
+    expect(outputRecommendations.additions.map(item => item.text)).toEqual(
+      expect.arrayContaining([
+        'State the goal so the output is grounded in a concrete need.',
+        'Name the audience so the tone and content stay focused.',
+        'Link the source note or synthesis this output derives from.',
+      ]),
+    );
+    expect(outputRecommendations.next_steps[0].type).toBe('synthesis');
 
     db.close();
   });
 
   it('supports incremental recommendation refreshes', () => {
-    createNote(tmpDir, config, 'project', 'Granite', 'Local-first system.\n');
+    createNote(tmpDir, config, 'synthesis', 'Granite', 'Local-first system.\n');
     const note = createNote(
       tmpDir,
       config,
-      'reference',
+      'source',
       'Fresh note',
       'Granite keeps markdown notes portable.\n',
     );

@@ -38,8 +38,8 @@ describe('index-db', () => {
   });
 
   it('indexes notes and makes them searchable', () => {
-    createNote(tmpDir, config, 'permanent', 'Machine Learning', 'ML is about training models on data.\n');
-    createNote(tmpDir, config, 'permanent', 'Neural Networks', 'Neural nets are a type of [[Machine Learning]] model.\n');
+    createNote(tmpDir, config, 'note', 'Machine Learning', 'ML is about training models on data.\n');
+    createNote(tmpDir, config, 'note', 'Neural Networks', 'Neural nets are a type of [[Machine Learning]] model.\n');
 
     const dbPath = path.join(tmpDir, '.granite', 'index.db');
     const db = createDatabase(dbPath);
@@ -58,8 +58,8 @@ describe('index-db', () => {
   });
 
   it('indexes links between notes', () => {
-    createNote(tmpDir, config, 'permanent', 'Note A', 'Links to [[Note B]] here.\n');
-    createNote(tmpDir, config, 'permanent', 'Note B', 'This is note B.\n');
+    createNote(tmpDir, config, 'note', 'Note A', 'Links to [[Note B]] here.\n');
+    createNote(tmpDir, config, 'note', 'Note B', 'This is note B.\n');
 
     const dbPath = path.join(tmpDir, '.granite', 'index.db');
     const db = createDatabase(dbPath);
@@ -75,8 +75,8 @@ describe('index-db', () => {
   });
 
   it('backlinks query returns correct results', () => {
-    createNote(tmpDir, config, 'permanent', 'Source', 'See [[Target]] for details.\n');
-    createNote(tmpDir, config, 'permanent', 'Target', 'I am the target.\n');
+    createNote(tmpDir, config, 'note', 'Source', 'See [[Target]] for details.\n');
+    createNote(tmpDir, config, 'note', 'Target', 'I am the target.\n');
 
     const dbPath = path.join(tmpDir, '.granite', 'index.db');
     const db = createDatabase(dbPath);
@@ -91,7 +91,7 @@ describe('index-db', () => {
   });
 
   it('handles broken links gracefully', () => {
-    createNote(tmpDir, config, 'permanent', 'Broken', 'Links to [[Nonexistent]] page.\n');
+    createNote(tmpDir, config, 'note', 'Broken', 'Links to [[Nonexistent]] page.\n');
 
     const dbPath = path.join(tmpDir, '.granite', 'index.db');
     const db = createDatabase(dbPath);

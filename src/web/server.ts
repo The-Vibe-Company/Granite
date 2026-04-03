@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { serve } from '@hono/node-server';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { GraniteConfig } from '../core/types.js';
 import { ensureIndex } from '../core/index-db.js';
 import { createNote, findNoteBySlug, listNotes, readNote } from '../core/note.js';
@@ -54,6 +55,11 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
       modified: note.frontmatter.modified,
       tags: note.frontmatter.tags,
       aliases: note.frontmatter.aliases,
+      status: note.frontmatter.status,
+      source: note.frontmatter.source,
+      review_state: note.frontmatter.review_state,
+      durability: note.frontmatter.durability,
+      derived_from: note.frontmatter.derived_from,
       body: note.body,
       outgoing_links: resolvedLinks,
       backlinks,
@@ -104,6 +110,9 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
         title: note.frontmatter.title,
         type: note.frontmatter.type,
         created: note.frontmatter.created,
+        review_state: note.frontmatter.review_state,
+        durability: note.frontmatter.durability,
+        derived_from: note.frontmatter.derived_from,
       });
     } catch (err: any) {
       return c.json({ error: err.message }, 400);
@@ -121,7 +130,7 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
 
   // Static files — serve from the web/public directory
   // We need to resolve the path relative to where the source files are
-  const publicDir = path.join(import.meta.dirname, 'public');
+  const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 
   app.get('/*', (c) => {
     const reqPath = c.req.path === '/' ? '/index.html' : c.req.path;

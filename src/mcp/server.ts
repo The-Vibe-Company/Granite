@@ -51,6 +51,9 @@ const noteSummarySchema = z.object({
   aliases: z.array(z.string()),
   status: z.enum(['inbox', 'active', 'archived']),
   source: z.enum(['human', 'agent', 'extraction']),
+  review_state: z.enum(['draft', 'reviewed', 'locked']),
+  durability: z.enum(['canonical', 'working', 'ephemeral']),
+  derived_from: z.array(z.string()),
   filepath: z.string(),
   resource_uri: z.string(),
 });
@@ -337,6 +340,9 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately.'),
       status: z.enum(['inbox', 'active', 'archived']).optional().describe('Initial note status.'),
       source: z.enum(['human', 'agent', 'extraction']).optional().describe('Initial note source.'),
+      review_state: z.enum(['draft', 'reviewed', 'locked']).optional().describe('Initial review state.'),
+      durability: z.enum(['canonical', 'working', 'ephemeral']).optional().describe('Initial durability.'),
+      derived_from: z.array(z.string()).optional().describe('Source note IDs or slugs this note derives from.'),
     },
     outputSchema: z.object({
       note: noteDetailsSchema,
@@ -358,6 +364,9 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately.'),
       status: z.enum(['inbox', 'active', 'archived']).optional().describe('Initial note status.'),
       source: z.enum(['human', 'agent', 'extraction']).optional().describe('Initial note source.'),
+      review_state: z.enum(['draft', 'reviewed', 'locked']).optional().describe('Initial review state.'),
+      durability: z.enum(['canonical', 'working', 'ephemeral']).optional().describe('Initial durability.'),
+      derived_from: z.array(z.string()).optional().describe('Source note IDs or slugs this note derives from.'),
     },
     outputSchema: z.object({
       note: noteDetailsSchema,
@@ -381,6 +390,9 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       aliases: z.array(z.string()).optional().describe('Aliases to add.'),
       status: z.enum(['inbox', 'active', 'archived']).optional().describe('New note status.'),
       source: z.enum(['human', 'agent', 'extraction']).optional().describe('New note source.'),
+      review_state: z.enum(['draft', 'reviewed', 'locked']).optional().describe('New review state.'),
+      durability: z.enum(['canonical', 'working', 'ephemeral']).optional().describe('New durability.'),
+      derived_from: z.array(z.string()).optional().describe('Source note IDs or slugs this note derives from.'),
     },
     outputSchema: z.object({
       note: noteDetailsSchema,
@@ -538,7 +550,7 @@ function registerResources(server: McpServer, runtime: GraniteMcpRuntime): void 
 function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerPrompt('granite_refine_note', {
     title: 'Refine Granite Note',
-    description: 'Create a prompt for turning a note into a cleaner permanent note draft.',
+    description: 'Create a prompt for turning a note into a cleaner durable note draft.',
     argsSchema: {
       slug: z.string().describe('Slug of the note to refine.'),
     },
@@ -553,7 +565,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
           content: {
             type: 'text',
             text: [
-              'Refine the attached Granite note into a durable, well-structured permanent note.',
+              'Refine the attached Granite note into a durable, well-structured note.',
               'Keep the meaning intact, avoid inventing facts, preserve useful wikilinks, and use Granite-style headings when appropriate.',
             ].join(' '),
           },

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 import type { GraniteConfig, DoctorIssue } from './types.js';
 import { listNotes } from './note.js';
+import { validateDurability, validateReviewState } from './json-output.js';
 import { parseWikilinks, resolveWikilinks } from './wikilinks.js';
 
 export function runDoctor(vaultRoot: string, config: GraniteConfig, db: Database.Database): DoctorIssue[] {
@@ -35,6 +36,26 @@ export function runDoctor(vaultRoot: string, config: GraniteConfig, db: Database
     }
     if (!fm.created) {
       issues.push({ level: 'warning', file: note.filepath, message: 'Missing frontmatter field: created' });
+    }
+    try {
+      validateReviewState(fm.review_state);
+    } catch (error) {
+      issues.push({ level: 'warning', file: note.filepath, message: (error as Error).message });
+    }
+    try {
+      validateDurability(fm.durability);
+    } catch (error) {
+      issues.push({ level: 'warning', file: note.filepath, message: (error as Error).message });
+    }
+    if (!Array.isArray(fm.derived_from)) {
+      issues.push({ level: 'warning', file: note.filepath, message: 'Invalid derived_from: expected a list of note IDs or slugs' });
+    }
+    if ((fm.type === 'synthesis' || fm.type === 'output') && (!Array.isArray(fm.derived_from) || fm.derived_from.length === 0)) {
+      issues.push({
+        level: 'warning',
+        file: note.filepath,
+        message: `Type "${fm.type}" should declare derived_from to preserve provenance`,
+      });
     }
   }
 

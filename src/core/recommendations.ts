@@ -16,7 +16,7 @@ const STOP_WORDS = new Set([
   'write', 'notes', 'note', 'links', 'link', 'summary', 'details', 'source', 'date', 'role', 'context',
   'contact', 'attendees', 'agenda', 'decisions', 'actions', 'goal', 'status', 'people', 'rationale',
   'decision', 'options', 'considered', 'active', 'points', 'take', 'idea', 'ideas', 'project', 'meeting',
-  'person', 'reference', 'permanent', 'fleeting', 'how', 'know', 'work', 'works', 'what', 'prompted',
+  'person', 'reference', 'note', 'how', 'know', 'work', 'works', 'what', 'prompted',
   'them', 'what', 'plus', 'latest', 'recent', 'capture', 'record', 'refine', 'later', 'local', 'first',
   'short', 'clear', 'split', 'related', 'relevant', 'title', 'titles',
 ]);
@@ -283,57 +283,36 @@ function getTagRecommendations(note: Note, nearbyNotes: NearbyNote[]): TagRecomm
 }
 
 function getNextSteps(note: Note, nearbyNotes: NearbyNote[]): NextNoteRecommendation[] {
-  const projectLink = nearbyNotes.find(link => link.type === 'project');
-  const personLink = nearbyNotes.find(link => link.type === 'person');
+  const canonicalLink = nearbyNotes.find(link => link.type === 'note' || link.type === 'synthesis');
 
   switch (note.frontmatter.type) {
-    case 'fleeting':
+    case 'source':
       return [{
-        type: 'permanent',
-        title_hint: note.frontmatter.title,
-        reason: 'Promote this into a durable note if it keeps mattering.',
+        type: 'synthesis',
+        title_hint: `${note.frontmatter.title} synthesis`,
+        reason: 'Compile the main ideas from this source into a durable synthesis.',
       }];
-    case 'reference':
+    case 'note':
       return [{
-        type: 'permanent',
-        title_hint: `Idea from ${note.frontmatter.title}`,
-        reason: 'Distill one durable idea from this source.',
+        type: canonicalLink ? 'synthesis' : 'source',
+        title_hint: canonicalLink ? `${note.frontmatter.title} synthesis` : `${note.frontmatter.title} source`,
+        reason: canonicalLink
+          ? 'Compile this durable idea with adjacent notes into a reusable synthesis.'
+          : 'Attach this durable idea to an explicit source or source note.',
       }];
-    case 'person':
+    case 'synthesis':
       return [{
-        type: projectLink ? 'meeting' : 'project',
-        title_hint: projectLink ? `${note.frontmatter.title} + ${projectLink.title}` : `${note.frontmatter.title} collaboration`,
-        reason: projectLink
-          ? 'Capture the latest interaction connected to this person.'
-          : 'Anchor this person to a company, project, or collaboration note.',
+        type: 'output',
+        title_hint: `${note.frontmatter.title} brief`,
+        reason: 'Turn this durable synthesis into a situational output for a specific audience.',
       }];
-    case 'meeting':
+    case 'output':
       return [{
-        type: 'decision',
-        title_hint: `Decision from ${note.frontmatter.title}`,
-        reason: 'Extract the main decision so it can be linked independently.',
-      }];
-    case 'project':
-      return [{
-        type: personLink ? 'meeting' : 'decision',
-        title_hint: personLink ? `${note.frontmatter.title} sync` : `${note.frontmatter.title} decision`,
-        reason: personLink
-          ? 'Capture the next concrete conversation for this project.'
-          : 'Record the decision that drives this project forward.',
-      }];
-    case 'decision':
-      return [{
-        type: 'project',
-        title_hint: `${note.frontmatter.title} rollout`,
-        reason: 'Attach this decision to the project where it applies.',
-      }];
-    case 'permanent':
-      return [{
-        type: projectLink ? 'decision' : 'project',
-        title_hint: projectLink ? `Decision from ${note.frontmatter.title}` : `${note.frontmatter.title} in practice`,
-        reason: projectLink
-          ? 'Capture the concrete decision this idea supports.'
-          : 'Anchor this idea in a project, company, or active thread.',
+        type: canonicalLink ? canonicalLink.type : 'synthesis',
+        title_hint: canonicalLink ? canonicalLink.title : `${note.frontmatter.title} synthesis`,
+        reason: canonicalLink
+          ? 'Link this output back to the durable knowledge it should depend on.'
+          : 'Promote durable insights from this output into a reusable synthesis.',
       }];
     default:
       return [];
@@ -347,72 +326,45 @@ function getAdditionRecommendations(note: Note, config?: GraniteConfig): Additio
   const templateBody = config?.note_types[note.frontmatter.type]?.template ?? '';
 
   switch (note.frontmatter.type) {
-    case 'person':
-      if (isSectionSparse(body, 'Role', templateBody)) {
-        recommendations.push({ text: 'Add a one-line role, company, or why this person matters.' });
+    case 'source':
+      if (isSectionSparse(body, 'Summary', templateBody)) {
+        recommendations.push({ text: 'Write a short summary so this source is understandable without rereading the whole document.' });
       }
-      if (isSectionSparse(body, 'Context', templateBody)) {
-        recommendations.push({ text: 'Add how you know them or what you work on together.' });
-      }
-      if (existingLinks.length === 0) {
-        recommendations.push({ text: 'Link one project, company, or topic in the Links section.' });
-      }
-      break;
-    case 'reference':
-      if (!hasUrl(body) || body.includes('URL or citation here.')) {
-        recommendations.push({ text: 'Add the source URL or citation.' });
-      }
-      if (!hasMeaningfulBullets(body, 'Key Points')) {
-        recommendations.push({ text: 'Write 2-3 key points in your own words.' });
+      if (!hasMeaningfulBullets(body, 'Key Facts')) {
+        recommendations.push({ text: 'Capture 2-3 concrete facts worth preserving from the source.' });
       }
       if (existingLinks.length === 0) {
-        recommendations.push({ text: 'Link one permanent note, project, or topic this source relates to.' });
+        recommendations.push({ text: 'Link one note or synthesis that this source supports.' });
       }
       break;
-    case 'project':
-      if (isSectionSparse(body, 'Goal', templateBody)) {
-        recommendations.push({ text: 'Add a one-line goal so the project has a clear anchor.' });
-      }
-      if (isSectionSparse(body, 'People', templateBody)) {
-        recommendations.push({ text: 'Link the people involved in the project.' });
-      }
-      if (!hasMeaningfulBullets(body, 'Key Decisions')) {
-        recommendations.push({ text: 'Record one key decision or current status update.' });
-      }
-      break;
-    case 'meeting':
-      if (!hasAnyWikilinks(body)) {
-        recommendations.push({ text: 'Link the attendees directly in the note.' });
-      }
-      if (!hasMeaningfulBullets(body, 'Actions')) {
-        recommendations.push({ text: 'Capture at least one next action.' });
-      }
-      if (!hasMeaningfulBullets(body, 'Decisions')) {
-        recommendations.push({ text: 'Capture one decision or open question.' });
-      }
-      break;
-    case 'permanent':
+    case 'note':
       if (isSectionSparse(body, 'Summary', templateBody)) {
         recommendations.push({ text: 'Write a one-line summary before expanding the idea.' });
       }
       if (existingLinks.length === 0) {
-        recommendations.push({ text: 'Link one project, company, person, or adjacent idea.' });
+        recommendations.push({ text: 'Link one source, synthesis, or adjacent durable idea.' });
       }
       break;
-    case 'decision':
-      if (isSectionSparse(body, 'Context', templateBody)) {
-        recommendations.push({ text: 'Add the context that forced this decision.' });
+    case 'synthesis':
+      if (isSectionSparse(body, 'Scope', templateBody)) {
+        recommendations.push({ text: 'Define the scope so this synthesis has a clear boundary.' });
       }
-      if (isSectionSparse(body, 'Decision', templateBody)) {
-        recommendations.push({ text: 'State the decision in one sentence.' });
+      if (isSectionSparse(body, 'Executive Summary', templateBody)) {
+        recommendations.push({ text: 'Write a short executive summary before expanding the synthesis.' });
       }
       if (existingLinks.length === 0) {
-        recommendations.push({ text: 'Link the project, meeting, or note affected by this decision.' });
+        recommendations.push({ text: 'Link the notes or sources this synthesis pulls together.' });
       }
       break;
-    case 'fleeting':
-      if (tokenize(body).length < 8) {
-        recommendations.push({ text: 'Add one more sentence if this capture is worth keeping.' });
+    case 'output':
+      if (isSectionSparse(body, 'Goal', templateBody)) {
+        recommendations.push({ text: 'State the goal so the output is grounded in a concrete need.' });
+      }
+      if (isSectionSparse(body, 'Audience', templateBody)) {
+        recommendations.push({ text: 'Name the audience so the tone and content stay focused.' });
+      }
+      if (existingLinks.length === 0) {
+        recommendations.push({ text: 'Link the source note or synthesis this output derives from.' });
       }
       break;
     default:

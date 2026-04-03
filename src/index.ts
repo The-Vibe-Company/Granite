@@ -35,17 +35,20 @@ program
   .command('new')
   .description('Create a new note')
   .argument('<title>', 'Note title')
-  .option('-t, --type <type>', 'Note type (e.g. fleeting, permanent, reference)')
+  .option('-t, --type <type>', 'Note type (e.g. note, source, synthesis, output)')
   .option('--source <source>', 'Set source (human, agent, extraction)')
   .option('--status <status>', 'Set status (inbox, active, archived)')
+  .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
+  .option('--durability <durability>', 'Set durability (canonical, working, ephemeral)')
+  .option('--derived-from <refs>', 'Set derived_from references (comma-separated note IDs or slugs)')
   .option('--json', 'Output as JSON (agent-friendly)')
-  .action((title: string, options: { type?: string; source?: string; status?: string; json?: boolean }) => {
+  .action((title: string, options: { type?: string; source?: string; status?: string; reviewState?: string; durability?: string; derivedFrom?: string; json?: boolean }) => {
     newNote(title, options);
   });
 
 program
   .command('add')
-  .description('Quick-capture a fleeting note (reads stdin if no text given)')
+  .description('Quick-capture a note using the default note type (reads stdin if no text given)')
   .argument('[text]', 'Note text (or pipe via stdin)')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((text: string | undefined, options: { json?: boolean }) => {
@@ -76,7 +79,10 @@ program
   .option('--alias <aliases>', 'Add aliases (comma-separated)')
   .option('--status <status>', 'Set status (inbox, active, archived)')
   .option('--source <source>', 'Set source (human, agent, extraction)')
-  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string }) => {
+  .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
+  .option('--durability <durability>', 'Set durability (canonical, working, ephemeral)')
+  .option('--derived-from <refs>', 'Set derived_from references (comma-separated note IDs or slugs)')
+  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string; reviewState?: string; durability?: string; derivedFrom?: string }) => {
     editCommand(slug, options);
   });
 

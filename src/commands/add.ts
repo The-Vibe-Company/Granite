@@ -11,7 +11,7 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const config = loadConfig(vaultRoot);
   const typeName = config.defaults.note_type;
 
-  let content: string;
+  let content = '';
 
   if (text) {
     content = text;

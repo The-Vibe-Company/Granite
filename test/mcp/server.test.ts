@@ -26,7 +26,7 @@ describe('granite MCP server', () => {
       fs.mkdirSync(path.join(tmpDir, typeConfig.folder), { recursive: true });
     }
 
-    createNote(tmpDir, config, 'permanent', 'MCP Note', 'Granite MCP test note.\n');
+    createNote(tmpDir, config, 'note', 'MCP Note', 'Granite MCP test note.\n');
 
     runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
     server = createGraniteMcpServer(runtime);
@@ -75,7 +75,7 @@ describe('granite MCP server', () => {
       name: 'granite_create_note',
       arguments: {
         title: 'Linked Result',
-        type: 'permanent',
+        type: 'note',
         body: 'This note points to [[MCP Note]].\n',
         source: 'agent',
       },

@@ -3,28 +3,58 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { createNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
-import { jsonSuccess, validateStatus, validateSource } from '../core/json-output.js';
+import {
+  jsonSuccess,
+  validateDurability,
+  validateReviewState,
+  validateStatus,
+  validateSource,
+} from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 import { getSyncManager } from '../core/sync/manager.js';
 
-export function newNote(title: string, options: { type?: string; source?: string; status?: string; json?: boolean }): void {
+export function newNote(
+  title: string,
+  options: {
+    type?: string;
+    source?: string;
+    status?: string;
+    reviewState?: string;
+    durability?: string;
+    derivedFrom?: string;
+    json?: boolean;
+  },
+): void {
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
   const resolvedType = options.type || config.defaults.note_type;
   const typeConfig = config.note_types[resolvedType];
 
-  // For date-slug types (like fleeting), the title IS the content
+  // For date-slug types, the title doubles as the initial body content.
   const bodyOverride = typeConfig?.slug_format === 'date' ? title + '\n' : undefined;
   const note = createNote(vaultRoot, config, resolvedType, title, bodyOverride);
 
-  // Apply source/status overrides
-  if (options.source || options.status) {
-    if (options.source) validateSource(options.source);
-    if (options.status) validateStatus(options.status);
+  // Apply frontmatter overrides
+  if (
+    options.source !== undefined ||
+    options.status !== undefined ||
+    options.reviewState !== undefined ||
+    options.durability !== undefined ||
+    options.derivedFrom !== undefined
+  ) {
+    if (options.source !== undefined) validateSource(options.source);
+    if (options.status !== undefined) validateStatus(options.status);
+    if (options.reviewState !== undefined) validateReviewState(options.reviewState);
+    if (options.durability !== undefined) validateDurability(options.durability);
     const raw = fs.readFileSync(note.filepath, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
-    if (options.source) frontmatter.source = options.source as typeof frontmatter.source;
-    if (options.status) frontmatter.status = options.status as typeof frontmatter.status;
+    if (options.source !== undefined) frontmatter.source = options.source as typeof frontmatter.source;
+    if (options.status !== undefined) frontmatter.status = options.status as typeof frontmatter.status;
+    if (options.reviewState !== undefined) frontmatter.review_state = options.reviewState as typeof frontmatter.review_state;
+    if (options.durability !== undefined) frontmatter.durability = options.durability as typeof frontmatter.durability;
+    if (options.derivedFrom !== undefined) {
+      frontmatter.derived_from = options.derivedFrom.split(',').map(value => value.trim()).filter(Boolean);
+    }
     fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
     note.frontmatter = frontmatter;
   }
@@ -46,6 +76,9 @@ export function newNote(title: string, options: { type?: string; source?: string
       type: resolvedType,
       status: note.frontmatter.status,
       source: note.frontmatter.source,
+      review_state: note.frontmatter.review_state,
+      durability: note.frontmatter.durability,
+      derived_from: note.frontmatter.derived_from,
       filepath: note.filepath,
       suggestions: recommendations.links.map(link => ({
         slug: link.slug,

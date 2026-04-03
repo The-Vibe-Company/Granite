@@ -12,10 +12,11 @@ export function openNote(slug: string): void {
     console.error(`Note not found: "${slug}"`);
     process.exit(1);
   }
+  const existingNote = note;
 
   const editor = config.defaults.editor === '$EDITOR'
     ? process.env.EDITOR || 'vi'
     : config.defaults.editor;
 
-  execSync(`${editor} "${note.filepath}"`, { stdio: 'inherit' });
+  execSync(`${editor} "${existingNote.filepath}"`, { stdio: 'inherit' });
 }

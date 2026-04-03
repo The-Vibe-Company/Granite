@@ -26,10 +26,8 @@ describe('config', () => {
     const config = loadConfig(tmpDir);
     expect(config.vault_name).toBe('My Vault');
     expect(config.version).toBe(1);
-    expect(config.note_types).toHaveProperty('fleeting');
-    expect(config.note_types).toHaveProperty('permanent');
-    expect(config.note_types).toHaveProperty('reference');
-    expect(config.defaults.note_type).toBe('fleeting');
+    expect(Object.keys(config.note_types)).toEqual(['note', 'source', 'synthesis', 'output']);
+    expect(config.defaults.note_type).toBe('note');
   });
 
   it('throws when no config exists', () => {

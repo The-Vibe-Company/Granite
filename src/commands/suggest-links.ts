@@ -18,9 +18,10 @@ export function suggestLinksCommand(slug: string, options: { json?: boolean }): 
     }
     process.exit(1);
   }
+  const existingNote = note;
 
   const db = ensureIndex(vaultRoot, config);
-  const suggestions = suggestLinks(db, note);
+  const suggestions = suggestLinks(db, existingNote);
   db.close();
 
   if (options.json) {
@@ -33,7 +34,7 @@ export function suggestLinksCommand(slug: string, options: { json?: boolean }): 
     return;
   }
 
-  console.log(`Suggested links for "${note.frontmatter.title}":`);
+  console.log(`Suggested links for "${existingNote.frontmatter.title}":`);
   console.log('');
   for (const s of suggestions) {
     console.log(`  → [[${s.target_title}]] — ${s.mentions} mention${s.mentions > 1 ? 's' : ''}`);

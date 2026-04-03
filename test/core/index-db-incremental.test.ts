@@ -38,9 +38,9 @@ describe('index-db incremental flows', () => {
   });
 
   it('syncs a single note incrementally and resolves alias links', () => {
-    createNote(tmpDir, config, 'permanent', 'Target Note', 'Target.\n');
+    createNote(tmpDir, config, 'note', 'Target Note', 'Target.\n');
 
-    const targetPath = path.join(tmpDir, config.note_types.permanent.folder, 'target-note.md');
+    const targetPath = path.join(tmpDir, config.note_types.note.folder, 'target-note.md');
     const targetContent = fs.readFileSync(targetPath, 'utf-8');
     fs.writeFileSync(
       targetPath,
@@ -48,7 +48,7 @@ describe('index-db incremental flows', () => {
       'utf-8',
     );
 
-    const draft = createNote(tmpDir, config, 'permanent', 'Draft', 'Start.\n');
+    const draft = createNote(tmpDir, config, 'note', 'Draft', 'Start.\n');
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);
@@ -73,8 +73,8 @@ describe('index-db incremental flows', () => {
   });
 
   it('rebuilds the whole index when note counts drift from disk', () => {
-    const keep = createNote(tmpDir, config, 'permanent', 'Keep', 'Still here.\n');
-    const remove = createNote(tmpDir, config, 'permanent', 'Remove', 'Will be deleted.\n');
+    const keep = createNote(tmpDir, config, 'note', 'Keep', 'Still here.\n');
+    const remove = createNote(tmpDir, config, 'note', 'Remove', 'Will be deleted.\n');
 
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);
@@ -93,9 +93,9 @@ describe('index-db incremental flows', () => {
   });
 
   it('keeps malformed alias JSON from crashing link resolution', () => {
-    createNote(tmpDir, config, 'permanent', 'Target Note', 'Target.\n');
+    createNote(tmpDir, config, 'note', 'Target Note', 'Target.\n');
 
-    const targetPath = path.join(tmpDir, config.note_types.permanent.folder, 'target-note.md');
+    const targetPath = path.join(tmpDir, config.note_types.note.folder, 'target-note.md');
     const targetContent = fs.readFileSync(targetPath, 'utf-8');
     const parsed = parseFrontmatter(targetContent);
     parsed.frontmatter.aliases = [] as string[];
@@ -109,7 +109,7 @@ describe('index-db incremental flows', () => {
     rebuildIndex(tmpDir, config, db);
     db.prepare('UPDATE notes SET aliases = ? WHERE slug = ?').run('not-json', 'target-note');
 
-    const note = createNote(tmpDir, config, 'permanent', 'Draft', 'Link to [[Target Note]].\n');
+    const note = createNote(tmpDir, config, 'note', 'Draft', 'Link to [[Target Note]].\n');
     syncNoteInIndex(tmpDir, config, db, readNote(note.filepath));
 
     const link = db.prepare('SELECT target_slug FROM links WHERE source_slug = ?').get('draft') as { target_slug: string };

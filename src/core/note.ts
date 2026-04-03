@@ -3,6 +3,13 @@ import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { slugify } from './slugify.js';
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js';
+import {
+  normalizeDurability,
+  normalizeReviewState,
+  normalizeSource,
+  normalizeStatus,
+  normalizeStringArray,
+} from './json-output.js';
 import type { GraniteConfig, Note, NoteFrontmatter } from './types.js';
 
 export function createNote(
@@ -42,6 +49,7 @@ export function createNote(
   }
 
   const now = new Date().toISOString();
+  const defaults = typeConfig.frontmatter_defaults ?? {};
   const frontmatter: NoteFrontmatter = {
     id: uuidv4(),
     title,
@@ -50,8 +58,11 @@ export function createNote(
     modified: now,
     tags: [],
     aliases: [],
-    status: 'active',
-    source: 'human',
+    status: normalizeStatus(defaults.status),
+    source: normalizeSource(defaults.source),
+    review_state: normalizeReviewState(defaults.review_state),
+    durability: normalizeDurability(defaults.durability),
+    derived_from: normalizeStringArray(defaults.derived_from),
   };
 
   const body = bodyOverride ?? typeConfig.template;

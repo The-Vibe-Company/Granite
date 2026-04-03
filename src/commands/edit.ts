@@ -4,7 +4,12 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { findNoteBySlug, readNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
-import { validateStatus, validateSource } from '../core/json-output.js';
+import {
+  validateDurability,
+  validateReviewState,
+  validateStatus,
+  validateSource,
+} from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 import { getSyncManager } from '../core/sync/manager.js';
 
@@ -16,6 +21,9 @@ interface EditOptions {
   alias?: string;
   status?: string;
   source?: string;
+  reviewState?: string;
+  durability?: string;
+  derivedFrom?: string;
 }
 
 export function editCommand(slug: string, options: EditOptions): void {
@@ -27,12 +35,22 @@ export function editCommand(slug: string, options: EditOptions): void {
     console.error(`Note not found: ${slug}`);
     process.exit(1);
   }
+  const existingNote = note;
 
-  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined || options.status !== undefined || options.source !== undefined;
+  const hasFlags = options.body !== undefined
+    || options.append !== undefined
+    || options.title !== undefined
+    || options.tag !== undefined
+    || options.alias !== undefined
+    || options.status !== undefined
+    || options.source !== undefined
+    || options.reviewState !== undefined
+    || options.durability !== undefined
+    || options.derivedFrom !== undefined;
 
   if (hasFlags) {
     // Programmatic edit (agent mode)
-    let { frontmatter, body } = parseFrontmatter(fs.readFileSync(note.filepath, 'utf-8'));
+    let { frontmatter, body } = parseFrontmatter(fs.readFileSync(existingNote.filepath, 'utf-8'));
 
     if (options.title) {
       frontmatter.title = options.title;
@@ -52,14 +70,28 @@ export function editCommand(slug: string, options: EditOptions): void {
       frontmatter.aliases = [...existing];
     }
 
-    if (options.status) {
+    if (options.status !== undefined) {
       validateStatus(options.status);
       frontmatter.status = options.status;
     }
 
-    if (options.source) {
+    if (options.source !== undefined) {
       validateSource(options.source);
       frontmatter.source = options.source;
+    }
+
+    if (options.reviewState !== undefined) {
+      validateReviewState(options.reviewState);
+      frontmatter.review_state = options.reviewState;
+    }
+
+    if (options.durability !== undefined) {
+      validateDurability(options.durability);
+      frontmatter.durability = options.durability;
+    }
+
+    if (options.derivedFrom !== undefined) {
+      frontmatter.derived_from = options.derivedFrom.split(',').map(value => value.trim()).filter(Boolean);
     }
 
     if (options.body !== undefined) {
@@ -71,42 +103,42 @@ export function editCommand(slug: string, options: EditOptions): void {
     }
 
     frontmatter.modified = new Date().toISOString();
-    fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+    fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
     // Transparent sync: track + push in background
     const sync = getSyncManager(vaultRoot, config);
-    const updatedForSync = readNote(note.filepath);
+    const updatedForSync = readNote(existingNote.filepath);
     sync?.trackAndPush(updatedForSync, 'update');
 
-    console.log(note.filepath);
+    console.log(existingNote.filepath);
     const recommendationStrategy = options.title !== undefined || options.alias !== undefined ? 'rebuild' : 'incremental';
-    printRecommendations(vaultRoot, config, note.filepath, recommendationStrategy);
+    printRecommendations(vaultRoot, config, existingNote.filepath, recommendationStrategy);
   } else {
     // Interactive edit (human mode) — open in $EDITOR
     const editor = process.env.EDITOR || 'vi';
-    const statBefore = fs.statSync(note.filepath).mtimeMs;
+    const statBefore = fs.statSync(existingNote.filepath).mtimeMs;
 
     try {
-      execSync(`${editor} "${note.filepath}"`, { stdio: 'inherit' });
+      execSync(`${editor} "${existingNote.filepath}"`, { stdio: 'inherit' });
     } catch {
       console.error(`Failed to open editor: ${editor}`);
       process.exit(1);
     }
 
     // If file was modified, update the modified timestamp in frontmatter
-    const statAfter = fs.statSync(note.filepath).mtimeMs;
+    const statAfter = fs.statSync(existingNote.filepath).mtimeMs;
     if (statAfter !== statBefore) {
-      const { frontmatter, body } = parseFrontmatter(fs.readFileSync(note.filepath, 'utf-8'));
+      const { frontmatter, body } = parseFrontmatter(fs.readFileSync(existingNote.filepath, 'utf-8'));
       frontmatter.modified = new Date().toISOString();
-      fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+      fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
       // Transparent sync: track + push in background
       const sync = getSyncManager(vaultRoot, config);
-      const updatedForSync = readNote(note.filepath);
+      const updatedForSync = readNote(existingNote.filepath);
       sync?.trackAndPush(updatedForSync, 'update');
 
-      console.log(`Updated: ${note.filepath}`);
-      printRecommendations(vaultRoot, config, note.filepath, 'rebuild');
+      console.log(`Updated: ${existingNote.filepath}`);
+      printRecommendations(vaultRoot, config, existingNote.filepath, 'rebuild');
     }
   }
 }

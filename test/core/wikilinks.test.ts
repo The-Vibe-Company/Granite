@@ -52,7 +52,7 @@ describe('resolveWikilinks', () => {
     frontmatter: {
       id: slug,
       title,
-      type: 'permanent',
+      type: 'note',
       created: '',
       modified: '',
       tags: [],

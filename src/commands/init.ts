@@ -35,5 +35,5 @@ export function initVault(dir = getDefaultVaultRoot()): void {
     console.log(`  ${typeConfig.folder}/  (${name})`);
   }
   console.log('');
-  console.log('Next: granite new "My first note" --type fleeting');
+  console.log('Next: granite new "My first note" --type note');
 }

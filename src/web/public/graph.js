@@ -10,8 +10,7 @@ const GraphEngine = (() => {
 
   // ── Type colors ──
   const TYPE_COLORS = {
-    fleeting:   { fill: '#fbbf24', glow: 'rgba(251, 191, 36, 0.3)' },
-    permanent:  { fill: '#a5b4fc', glow: 'rgba(165, 180, 252, 0.3)' },
+    note:       { fill: '#a5b4fc', glow: 'rgba(165, 180, 252, 0.3)' },
     reference:  { fill: '#34d399', glow: 'rgba(52, 211, 153, 0.3)' },
     person:     { fill: '#f9a8d4', glow: 'rgba(249, 168, 212, 0.3)' },
     meeting:    { fill: '#93c5fd', glow: 'rgba(147, 197, 253, 0.3)' },

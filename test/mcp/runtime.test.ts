@@ -26,8 +26,8 @@ describe('GraniteMcpRuntime', () => {
   });
 
   it('rebuilds a stale index on first refresh after a note deletion', () => {
-    createNote(tmpDir, config, 'permanent', 'Stable Note', 'Persistent note.\n');
-    const deleted = createNote(tmpDir, config, 'permanent', 'Deleted Note', 'Unique deleted content.\n');
+    createNote(tmpDir, config, 'note', 'Stable Note', 'Persistent note.\n');
+    const deleted = createNote(tmpDir, config, 'note', 'Deleted Note', 'Unique deleted content.\n');
 
     let runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
     expect(runtime.search('deleted')).toHaveLength(1);
@@ -44,7 +44,7 @@ describe('GraniteMcpRuntime', () => {
     const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
     const result = runtime.createNote({
       title: 'Fresh Note',
-      type: 'permanent',
+      type: 'note',
       body: 'No extra metadata.\n',
     });
 

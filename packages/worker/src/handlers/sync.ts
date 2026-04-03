@@ -91,7 +91,7 @@ export async function handleSyncPush(c: Context<{ Bindings: Env }>) {
         slug: resolvedSlug,
         id: String(change.note_id),
         title: String(change.frontmatter.title ?? ''),
-        type: String(change.frontmatter.type ?? 'fleeting'),
+        type: String(change.frontmatter.type ?? 'note'),
         created: String(change.frontmatter.created ?? ''),
         modified: String(change.frontmatter.modified ?? ''),
         tags: JSON.stringify(change.frontmatter.tags ?? []),
@@ -229,6 +229,6 @@ export async function handleSyncDevices(c: Context<{ Bindings: Env }>) {
 }
 
 function getTypeFolder(frontmatter: Record<string, unknown>): string {
-  const type = String(frontmatter.type ?? 'fleeting');
+  const type = String(frontmatter.type ?? 'note');
   return resolveTypeFolder(type);
 }

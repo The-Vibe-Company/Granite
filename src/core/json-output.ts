@@ -6,10 +6,10 @@ export function jsonError(error: string): string {
   return JSON.stringify({ success: false, error }, null, 2);
 }
 
-const VALID_STATUSES = ['inbox', 'active', 'archived'] as const;
-const VALID_SOURCES = ['human', 'agent', 'extraction'] as const;
-const VALID_REVIEW_STATES = ['draft', 'reviewed', 'locked'] as const;
-const VALID_DURABILITY = ['canonical', 'working', 'ephemeral'] as const;
+export const VALID_STATUSES = ['inbox', 'active', 'archived'] as const;
+export const VALID_SOURCES = ['human', 'agent', 'extraction'] as const;
+export const VALID_REVIEW_STATES = ['draft', 'reviewed', 'locked'] as const;
+export const VALID_DURABILITY = ['canonical', 'working', 'ephemeral'] as const;
 
 export function validateStatus(value: string): asserts value is 'inbox' | 'active' | 'archived' {
   if (!(VALID_STATUSES as readonly string[]).includes(value)) {
@@ -33,4 +33,24 @@ export function validateDurability(value: string): asserts value is 'canonical' 
   if (!(VALID_DURABILITY as readonly string[]).includes(value)) {
     throw new Error(`Invalid durability: "${value}". Expected one of: ${VALID_DURABILITY.join(', ')}`);
   }
+}
+
+export function normalizeStatus(value: unknown, fallback: 'inbox' | 'active' | 'archived' = 'active'): 'inbox' | 'active' | 'archived' {
+  return typeof value === 'string' && (VALID_STATUSES as readonly string[]).includes(value) ? value as 'inbox' | 'active' | 'archived' : fallback;
+}
+
+export function normalizeSource(value: unknown, fallback: 'human' | 'agent' | 'extraction' = 'human'): 'human' | 'agent' | 'extraction' {
+  return typeof value === 'string' && (VALID_SOURCES as readonly string[]).includes(value) ? value as 'human' | 'agent' | 'extraction' : fallback;
+}
+
+export function normalizeReviewState(value: unknown, fallback: 'draft' | 'reviewed' | 'locked' = 'draft'): 'draft' | 'reviewed' | 'locked' {
+  return typeof value === 'string' && (VALID_REVIEW_STATES as readonly string[]).includes(value) ? value as 'draft' | 'reviewed' | 'locked' : fallback;
+}
+
+export function normalizeDurability(value: unknown, fallback: 'canonical' | 'working' | 'ephemeral' = 'working'): 'canonical' | 'working' | 'ephemeral' {
+  return typeof value === 'string' && (VALID_DURABILITY as readonly string[]).includes(value) ? value as 'canonical' | 'working' | 'ephemeral' : fallback;
+}
+
+export function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(item => String(item)) : [];
 }

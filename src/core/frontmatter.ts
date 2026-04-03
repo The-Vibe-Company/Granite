@@ -1,5 +1,12 @@
 import matter from 'gray-matter';
 import type { NoteFrontmatter } from './types.js';
+import {
+  normalizeDurability,
+  normalizeReviewState,
+  normalizeSource,
+  normalizeStatus,
+  normalizeStringArray,
+} from './json-output.js';
 
 export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatter; body: string } {
   const { data, content: body } = matter(content);
@@ -9,13 +16,13 @@ export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatte
     type: toFrontmatterString(data.type),
     created: toFrontmatterString(data.created),
     modified: toFrontmatterString(data.modified),
-    tags: data.tags ?? [],
-    aliases: data.aliases ?? [],
-    status: data.status ?? 'active',
-    source: data.source ?? 'human',
-    review_state: data.review_state ?? 'draft',
-    durability: data.durability ?? 'working',
-    derived_from: data.derived_from ?? [],
+    tags: normalizeStringArray(data.tags),
+    aliases: normalizeStringArray(data.aliases),
+    status: normalizeStatus(data.status),
+    source: normalizeSource(data.source),
+    review_state: normalizeReviewState(data.review_state),
+    durability: normalizeDurability(data.durability),
+    derived_from: normalizeStringArray(data.derived_from),
   };
   // Preserve any extra type-specific fields
   for (const [key, value] of Object.entries(data)) {

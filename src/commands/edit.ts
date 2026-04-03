@@ -70,22 +70,22 @@ export function editCommand(slug: string, options: EditOptions): void {
       frontmatter.aliases = [...existing];
     }
 
-    if (options.status) {
+    if (options.status !== undefined) {
       validateStatus(options.status);
       frontmatter.status = options.status;
     }
 
-    if (options.source) {
+    if (options.source !== undefined) {
       validateSource(options.source);
       frontmatter.source = options.source;
     }
 
-    if (options.reviewState) {
+    if (options.reviewState !== undefined) {
       validateReviewState(options.reviewState);
       frontmatter.review_state = options.reviewState;
     }
 
-    if (options.durability) {
+    if (options.durability !== undefined) {
       validateDurability(options.durability);
       frontmatter.durability = options.durability;
     }

@@ -112,6 +112,7 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
         created: note.frontmatter.created,
         review_state: note.frontmatter.review_state,
         durability: note.frontmatter.durability,
+        derived_from: note.frontmatter.derived_from,
       });
     } catch (err: any) {
       return c.json({ error: err.message }, 400);

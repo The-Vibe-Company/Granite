@@ -79,6 +79,8 @@ describe('doctor', () => {
     const issues = runDoctor(tmpDir, config, db);
     db.close();
 
-    expect(issues.some(issue => issue.message.includes('should declare derived_from'))).toBe(true);
+    const provenanceIssues = issues.filter(issue => issue.message.includes('should declare derived_from'));
+    expect(provenanceIssues).toHaveLength(1);
+    expect(provenanceIssues[0].level).toBe('warning');
   });
 });

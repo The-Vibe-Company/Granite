@@ -35,18 +35,24 @@ export function newNote(
   const note = createNote(vaultRoot, config, resolvedType, title, bodyOverride);
 
   // Apply frontmatter overrides
-  if (options.source || options.status || options.reviewState || options.durability || options.derivedFrom) {
-    if (options.source) validateSource(options.source);
-    if (options.status) validateStatus(options.status);
-    if (options.reviewState) validateReviewState(options.reviewState);
-    if (options.durability) validateDurability(options.durability);
+  if (
+    options.source !== undefined ||
+    options.status !== undefined ||
+    options.reviewState !== undefined ||
+    options.durability !== undefined ||
+    options.derivedFrom !== undefined
+  ) {
+    if (options.source !== undefined) validateSource(options.source);
+    if (options.status !== undefined) validateStatus(options.status);
+    if (options.reviewState !== undefined) validateReviewState(options.reviewState);
+    if (options.durability !== undefined) validateDurability(options.durability);
     const raw = fs.readFileSync(note.filepath, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
-    if (options.source) frontmatter.source = options.source as typeof frontmatter.source;
-    if (options.status) frontmatter.status = options.status as typeof frontmatter.status;
-    if (options.reviewState) frontmatter.review_state = options.reviewState as typeof frontmatter.review_state;
-    if (options.durability) frontmatter.durability = options.durability as typeof frontmatter.durability;
-    if (options.derivedFrom) {
+    if (options.source !== undefined) frontmatter.source = options.source as typeof frontmatter.source;
+    if (options.status !== undefined) frontmatter.status = options.status as typeof frontmatter.status;
+    if (options.reviewState !== undefined) frontmatter.review_state = options.reviewState as typeof frontmatter.review_state;
+    if (options.durability !== undefined) frontmatter.durability = options.durability as typeof frontmatter.durability;
+    if (options.derivedFrom !== undefined) {
       frontmatter.derived_from = options.derivedFrom.split(',').map(value => value.trim()).filter(Boolean);
     }
     fs.writeFileSync(note.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');

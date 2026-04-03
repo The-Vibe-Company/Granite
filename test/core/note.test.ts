@@ -49,6 +49,23 @@ describe('note', () => {
     expect(note.body).toBe('Custom body text\n');
   });
 
+  it('normalizes invalid frontmatter defaults from config', () => {
+    config.note_types.note.frontmatter_defaults = {
+      status: 'bad-status' as any,
+      source: 'bad-source' as any,
+      review_state: 'bad-review' as any,
+      durability: 'bad-durability' as any,
+      derived_from: 'bad-derived' as any,
+    };
+
+    const note = createNote(tmpDir, config, 'note', 'Normalized Defaults');
+    expect(note.frontmatter.status).toBe('active');
+    expect(note.frontmatter.source).toBe('human');
+    expect(note.frontmatter.review_state).toBe('draft');
+    expect(note.frontmatter.durability).toBe('working');
+    expect(note.frontmatter.derived_from).toEqual([]);
+  });
+
   it('handles slug collision', () => {
     const note1 = createNote(tmpDir, config, 'note', 'Duplicate');
     const note2 = createNote(tmpDir, config, 'note', 'Duplicate');

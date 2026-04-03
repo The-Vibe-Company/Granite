@@ -1,50 +1,54 @@
 /**
  * Granite — App Controller
- *
- * Sidebar, HTML note rendering, wikilink previews,
- * note creation, graph toggle, keyboard navigation.
  */
-
 (function () {
   // ── State ──
   let allNotes = [];
   let currentNote = null;
   let currentType = '';
-  let searchTimeout = null;
-  let isSearchMode = false;
-  let currentView = 'note'; // 'note' | 'graph'
-  let isCreateOpen = false;
+  let currentView = 'note';
   let graphData = null;
   let previewCache = {};
   let previewTimeout = null;
-  let keyboardIndex = -1;
+  let commandIndex = -1;
+  let commandResults = [];
+  let releaseTrap = null;
 
   // ── DOM ──
-  const sidebar = document.getElementById('sidebar');
-  const searchBox = document.getElementById('search-box');
-  const typeFilters = document.getElementById('type-filters');
   const noteList = document.getElementById('note-list');
-  const noteHeader = document.getElementById('note-header');
+  const typeFilters = document.getElementById('type-filters');
+  const noteView = document.getElementById('note-view');
+  const noteScroll = document.getElementById('note-scroll');
+  const noteTypeLine = document.getElementById('note-type-line');
   const noteTitle = document.getElementById('note-title');
-  const noteBreadcrumb = document.getElementById('note-breadcrumb');
-  const noteTypeBadge = document.getElementById('note-type-badge');
   const noteDate = document.getElementById('note-date');
   const noteTags = document.getElementById('note-tags');
   const noteBody = document.getElementById('note-body');
-  const backlinksPanel = document.getElementById('backlinks-panel');
+  const backlinks = document.getElementById('backlinks');
   const backlinksList = document.getElementById('backlinks-list');
   const backlinksCount = document.getElementById('backlinks-count');
   const emptyState = document.getElementById('empty-state');
-  const contentWrapper = document.getElementById('content-wrapper');
   const graphView = document.getElementById('graph-view');
   const graphCanvas = document.getElementById('graph-canvas');
-  const createPanel = document.getElementById('create-panel');
   const previewEl = document.getElementById('wikilink-preview');
+
+  // Command bar
+  const commandOverlay = document.getElementById('command-bar-overlay');
+  const commandInput = document.getElementById('command-input');
+  const commandResultsEl = document.getElementById('command-results');
+
+  // Create
+  const createOverlay = document.getElementById('create-overlay');
 
   // ── API ──
   async function api(url, opts) {
-    const res = await fetch(url, opts);
-    return res.json();
+    try {
+      const res = await fetch(url, opts);
+      if (!res.ok) return { error: `HTTP ${res.status}` };
+      return res.json();
+    } catch (err) {
+      return { error: err.message };
+    }
   }
 
   // ── Init ──
@@ -52,176 +56,207 @@
     const { types } = await api('/api/types');
     for (const name of Object.keys(types)) {
       const btn = document.createElement('button');
-      btn.className = 'type-chip';
+      btn.className = 'type-pill';
       btn.dataset.type = name;
       btn.textContent = name;
       btn.addEventListener('click', () => filterByType(name));
       typeFilters.appendChild(btn);
     }
+    typeFilters.querySelector('[data-type=""]').addEventListener('click', () => filterByType(''));
 
-    // Populate create panel type selector
-    const createTypeSelect = document.getElementById('create-type');
+    const createType = document.getElementById('create-type');
     for (const name of Object.keys(types)) {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
-      createTypeSelect.appendChild(opt);
+      createType.appendChild(opt);
     }
 
-    typeFilters.querySelector('[data-type=""]').addEventListener('click', () => filterByType(''));
-
     await loadNotes();
-    setupSearch();
     setupKeyboard();
-    setupSidebar();
+    setupNav();
     setupCreate();
+    setupCommand();
     setupWikilinkPreviews();
+    initGrain();
   }
 
-  // ═══════════════════════════════════
-  // SEARCH
-  // ═══════════════════════════════════
+  // ═══ GRAIN TEXTURE (static, rendered once) ═══
+  function initGrain() {
+    const c = document.getElementById('grain');
+    const ctx = c.getContext('2d');
+    // Render a small 256x256 noise tile, CSS will repeat it
+    const size = 256;
+    c.width = size;
+    c.height = size;
+    c.style.width = '100%';
+    c.style.height = '100%';
+    c.style.imageRendering = 'auto';
+    const imageData = ctx.createImageData(size, size);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const v = Math.random() * 255;
+      data[i] = v; data[i + 1] = v; data[i + 2] = v; data[i + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
 
-  function setupSearch() {
-    searchBox.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        const q = searchBox.value.trim();
-        if (q.length > 0) {
-          searchNotes(q);
-          isSearchMode = true;
-        } else {
-          isSearchMode = false;
-          renderNoteList(allNotes);
+  // ═══ COMMAND BAR ═══
+  function setupCommand() {
+    let debounce = null;
+    commandInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(async () => {
+        const q = commandInput.value.trim();
+        if (q.length === 0) {
+          // Show all notes
+          renderCommandResults(allNotes.map(n => ({
+            slug: n.slug, title: n.title, type: n.type, modified: n.modified,
+          })));
+          return;
         }
-        keyboardIndex = -1;
-      }, 180);
+        const data = await api(`/api/search?q=${encodeURIComponent(q)}`);
+        renderCommandResults(data.results.map(r => ({
+          slug: r.slug, title: r.title, snippet: r.snippet,
+        })));
+      }, 120);
     });
 
-    searchBox.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        searchBox.value = '';
-        searchBox.blur();
-        isSearchMode = false;
-        renderNoteList(allNotes);
-        keyboardIndex = -1;
-      }
+    commandInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeCommand(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); navigateCommand(1); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); navigateCommand(-1); }
       if (e.key === 'Enter') {
-        const items = noteList.querySelectorAll('.note-item');
-        const target = keyboardIndex >= 0 ? items[keyboardIndex] : items[0];
-        if (target) target.click();
-      }
-      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        navigateList(1);
+        const item = commandResults[commandIndex >= 0 ? commandIndex : 0];
+        if (item) { closeCommand(); loadNote(item.slug); }
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateList(-1);
-      }
+    });
+
+    commandOverlay.addEventListener('click', (e) => {
+      if (e.target === commandOverlay) closeCommand();
     });
   }
 
-  // ═══════════════════════════════════
-  // KEYBOARD NAVIGATION
-  // ═══════════════════════════════════
-
-  function navigateList(delta) {
-    const items = noteList.querySelectorAll('.note-item');
-    if (items.length === 0) return;
-
-    // Clear old focus
-    items.forEach(el => el.classList.remove('keyboard-focus'));
-
-    keyboardIndex += delta;
-    if (keyboardIndex < 0) keyboardIndex = items.length - 1;
-    if (keyboardIndex >= items.length) keyboardIndex = 0;
-
-    items[keyboardIndex].classList.add('keyboard-focus');
-    items[keyboardIndex].scrollIntoView({ block: 'nearest' });
+  function openCommand() {
+    commandOverlay.classList.remove('hidden');
+    commandInput.value = '';
+    commandInput.focus();
+    commandInput.setAttribute('aria-expanded', 'true');
+    releaseTrap = trapFocus(document.getElementById('command-bar'));
+    commandIndex = -1;
+    // Show all notes initially
+    renderCommandResults(allNotes.map(n => ({
+      slug: n.slug, title: n.title, type: n.type, modified: n.modified,
+    })));
   }
 
+  function closeCommand() {
+    if (releaseTrap) { releaseTrap(); releaseTrap = null; }
+    commandOverlay.classList.add('hidden');
+    commandInput.setAttribute('aria-expanded', 'false');
+    commandInput.removeAttribute('aria-activedescendant');
+    commandResultsEl.innerHTML = '';
+    commandResults = [];
+  }
+
+  function renderCommandResults(results) {
+    commandResults = results;
+    commandIndex = -1;
+    commandResultsEl.innerHTML = '';
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const el = document.createElement('div');
+      el.className = 'command-result';
+      el.setAttribute('role', 'option');
+      el.id = `cmd-result-${i}`;
+      let html = `<div class="command-result-title">${esc(r.title)}</div>`;
+      if (r.type || r.modified) {
+        const parts = [];
+        if (r.type) parts.push(r.type);
+        if (r.modified) parts.push(formatDate(r.modified));
+        html += `<div class="command-result-meta">${parts.join(' · ')}</div>`;
+      }
+      if (r.snippet) {
+        html += `<div class="command-result-snippet">${r.snippet.replace(/>>>/g, '<mark>').replace(/<<</g, '</mark>')}</div>`;
+      }
+      el.innerHTML = html;
+      el.addEventListener('click', () => { closeCommand(); loadNote(r.slug); });
+      commandResultsEl.appendChild(el);
+    }
+  }
+
+  function navigateCommand(delta) {
+    const items = commandResultsEl.querySelectorAll('.command-result');
+    if (!items.length) return;
+    items.forEach(el => el.classList.remove('focused'));
+    commandIndex += delta;
+    if (commandIndex < 0) commandIndex = items.length - 1;
+    if (commandIndex >= items.length) commandIndex = 0;
+    items[commandIndex].classList.add('focused');
+    items[commandIndex].scrollIntoView({ block: 'nearest' });
+    commandInput.setAttribute('aria-activedescendant', items[commandIndex].id);
+  }
+
+  // ═══ KEYBOARD ═══
   function setupKeyboard() {
     document.addEventListener('keydown', (e) => {
-      // ⌘K — focus search
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        if (sidebar.classList.contains('collapsed')) toggleSidebar();
-        closeCreate();
-        searchBox.focus();
-        searchBox.select();
+        openCommand();
       }
-
-      // ⌘N — new note
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        toggleCreate();
+        openCreate();
       }
-
-      // ⌘G — toggle graph
       if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
         e.preventDefault();
         toggleGraph();
       }
-
-      // Escape — close panels / deselect
-      if (e.key === 'Escape' && document.activeElement !== searchBox) {
-        if (isCreateOpen) {
-          closeCreate();
-        } else if (currentView === 'graph') {
-          setView('note');
-        } else if (currentNote) {
-          currentNote = null;
-          showEmptyState();
-        }
-      }
-
-      // ↑/↓ in note list (when not focused on inputs)
-      if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
-        if (e.key === 'ArrowDown') { e.preventDefault(); navigateList(1); }
-        if (e.key === 'ArrowUp') { e.preventDefault(); navigateList(-1); }
-        if (e.key === 'Enter' && keyboardIndex >= 0) {
-          const items = noteList.querySelectorAll('.note-item');
-          if (items[keyboardIndex]) items[keyboardIndex].click();
-        }
+      if (e.key === 'Escape') {
+        if (!commandOverlay.classList.contains('hidden')) { closeCommand(); return; }
+        if (!createOverlay.classList.contains('hidden')) { closeCreate(); return; }
+        if (currentView === 'graph') { setView('note'); return; }
       }
     });
   }
 
-  // ═══════════════════════════════════
-  // SIDEBAR
-  // ═══════════════════════════════════
+  // ═══ NAV ═══
+  const nav = document.getElementById('nav');
+  const navBackdrop = document.getElementById('nav-backdrop');
 
-  function setupSidebar() {
-    document.getElementById('rail-toggle').addEventListener('click', toggleSidebar);
-    document.getElementById('rail-search').addEventListener('click', () => {
-      if (sidebar.classList.contains('collapsed')) toggleSidebar();
-      closeCreate();
-      setTimeout(() => { searchBox.focus(); searchBox.select(); }, 200);
-    });
-    document.getElementById('rail-graph').addEventListener('click', toggleGraph);
-    document.getElementById('rail-new').addEventListener('click', toggleCreate);
-    document.getElementById('brand-mark').addEventListener('click', () => {
-      currentNote = null;
-      setView('note');
-      showEmptyState();
-    });
+  function setupNav() {
+    document.getElementById('nav-search').addEventListener('click', openCommand);
+    document.getElementById('nav-new').addEventListener('click', openCreate);
+    document.getElementById('nav-graph').addEventListener('click', toggleGraph);
+
+    // Mobile
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileSearch = document.getElementById('mobile-search');
+    if (mobileMenu) mobileMenu.addEventListener('click', openMobileNav);
+    if (mobileSearch) mobileSearch.addEventListener('click', openCommand);
+    if (navBackdrop) navBackdrop.addEventListener('click', closeMobileNav);
   }
 
-  function toggleSidebar() {
-    sidebar.classList.toggle('expanded');
-    sidebar.classList.toggle('collapsed');
+  function openMobileNav() {
+    nav.classList.add('open');
+    navBackdrop.classList.remove('hidden');
+    requestAnimationFrame(() => navBackdrop.classList.add('visible'));
   }
 
-  // ═══════════════════════════════════
-  // NOTE CREATION
-  // ═══════════════════════════════════
+  function closeMobileNav() {
+    nav.classList.remove('open');
+    navBackdrop.classList.remove('visible');
+    setTimeout(() => navBackdrop.classList.add('hidden'), 200);
+  }
 
+  // ═══ CREATE ═══
   function setupCreate() {
-    document.getElementById('create-panel-close').addEventListener('click', closeCreate);
+    document.getElementById('create-close').addEventListener('click', closeCreate);
     document.getElementById('create-submit').addEventListener('click', submitCreate);
-
-    // Enter in title field submits if body is empty
+    createOverlay.addEventListener('click', (e) => {
+      if (e.target === createOverlay) closeCreate();
+    });
     document.getElementById('create-title').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -230,51 +265,39 @@
     });
   }
 
-  function toggleCreate() {
-    if (isCreateOpen) {
-      closeCreate();
-    } else {
-      openCreate();
-    }
-  }
-
+  let releaseCreateTrap = null;
   function openCreate() {
-    if (sidebar.classList.contains('collapsed')) toggleSidebar();
-    isCreateOpen = true;
-    noteList.style.display = 'none';
-    document.getElementById('type-filters').style.display = 'none';
-    createPanel.style.display = 'flex';
-    document.getElementById('rail-new').classList.add('active');
-    setTimeout(() => document.getElementById('create-title').focus(), 100);
+    createOverlay.classList.remove('hidden');
+    releaseCreateTrap = trapFocus(document.getElementById('create-dialog'));
+    setTimeout(() => document.getElementById('create-title').focus(), 50);
   }
-
   function closeCreate() {
-    isCreateOpen = false;
-    createPanel.style.display = 'none';
-    noteList.style.display = '';
-    document.getElementById('type-filters').style.display = '';
-    document.getElementById('rail-new').classList.remove('active');
-    // Reset form
+    if (releaseCreateTrap) { releaseCreateTrap(); releaseCreateTrap = null; }
+    createOverlay.classList.add('hidden');
     document.getElementById('create-title').value = '';
     document.getElementById('create-body').value = '';
   }
 
+  let isSubmitting = false;
   async function submitCreate() {
+    if (isSubmitting) return;
     const type = document.getElementById('create-type').value;
     const title = document.getElementById('create-title').value.trim();
     const body = document.getElementById('create-body').value;
-
-    if (!title) {
-      document.getElementById('create-title').focus();
-      return;
-    }
-
+    if (!title) { document.getElementById('create-title').focus(); return; }
+    const btn = document.getElementById('create-submit');
+    isSubmitting = true;
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
     const result = await api('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, title, body }),
     });
-
+    isSubmitting = false;
+    btn.disabled = false;
+    btn.textContent = 'Create';
+    if (result.error) return;
     if (result.slug) {
       closeCreate();
       await loadNotes();
@@ -282,79 +305,57 @@
     }
   }
 
-  // ═══════════════════════════════════
-  // GRAPH
-  // ═══════════════════════════════════
-
+  // ═══ GRAPH ═══
   function toggleGraph() {
-    if (currentView === 'graph') {
-      setView('note');
-    } else {
-      setView('graph');
-    }
+    setView(currentView === 'graph' ? 'note' : 'graph');
   }
 
   function setView(view) {
     currentView = view;
-    const graphBtn = document.getElementById('rail-graph');
-
+    const graphBtn = document.getElementById('nav-graph');
     if (view === 'graph') {
       graphBtn.classList.add('active');
-      contentWrapper.style.display = 'none';
+      noteView.style.display = 'none';
       emptyState.style.display = 'none';
-      graphView.style.display = 'flex';
+      graphView.classList.remove('hidden');
       loadGraph();
     } else {
       graphBtn.classList.remove('active');
-      graphView.style.display = 'none';
+      graphView.classList.add('hidden');
       GraphEngine.stop();
       if (currentNote) {
-        contentWrapper.style.display = 'flex';
+        noteView.style.display = 'flex';
         emptyState.style.display = 'none';
       } else {
-        contentWrapper.style.display = 'none';
+        noteView.style.display = 'none';
         emptyState.style.display = 'flex';
       }
     }
   }
 
   async function loadGraph() {
-    if (!graphData) {
-      graphData = await api('/api/graph');
-    }
+    if (!graphData) graphData = await api('/api/graph');
     GraphEngine.init(graphCanvas, graphData, {
       activeSlug: currentNote?.slug || null,
-      onNavigate: (slug) => {
-        loadNote(slug);
-        setView('note');
-      },
+      onNavigate: (slug) => { loadNote(slug); setView('note'); },
     });
   }
 
-  // ═══════════════════════════════════
-  // WIKILINK PREVIEWS
-  // ═══════════════════════════════════
-
+  // ═══ WIKILINK PREVIEWS ═══
   function setupWikilinkPreviews() {
     document.addEventListener('mouseover', (e) => {
       const link = e.target.closest('.wikilink');
       if (!link) return;
-
       clearTimeout(previewTimeout);
       previewTimeout = setTimeout(() => showPreview(link), 300);
     });
-
     document.addEventListener('mouseout', (e) => {
       const link = e.target.closest('.wikilink');
-      if (link || e.relatedTarget?.closest?.('.wikilink-preview')) return;
-
+      if (link || e.relatedTarget?.closest?.('#wikilink-preview')) return;
       clearTimeout(previewTimeout);
       hidePreview();
     });
-
     previewEl.addEventListener('mouseleave', hidePreview);
-
-    // Click navigation
     document.addEventListener('click', (e) => {
       const link = e.target.closest('.wikilink');
       if (!link) return;
@@ -368,41 +369,29 @@
   async function showPreview(linkEl) {
     const slug = linkEl.dataset.slug;
     if (!slug) return;
-
     let data = previewCache[slug];
     if (!data) {
       data = await api(`/api/notes/${slug}`);
       if (data.error) return;
       previewCache[slug] = data;
     }
-
-    // Position
     const rect = linkEl.getBoundingClientRect();
-    const previewWidth = 280;
     let left = rect.left;
     let top = rect.bottom + 8;
-
-    // Keep on screen
-    if (left + previewWidth > window.innerWidth - 16) {
-      left = window.innerWidth - previewWidth - 16;
-    }
+    if (left + 280 > window.innerWidth - 16) left = window.innerWidth - 296;
     if (top + 160 > window.innerHeight) {
       top = rect.top - 8;
       previewEl.style.transform = 'translateY(-100%)';
     } else {
       previewEl.style.transform = '';
     }
-
     previewEl.style.left = left + 'px';
     previewEl.style.top = top + 'px';
-
-    // Content
     previewEl.querySelector('.preview-type').textContent = data.type || '';
     previewEl.querySelector('.preview-title').textContent = data.title || '';
     previewEl.querySelector('.preview-snippet').textContent = (data.body || '').slice(0, 150).replace(/[#*_`>\[\]]/g, '');
     const tagsEl = previewEl.querySelector('.preview-tags');
     tagsEl.innerHTML = (data.tags || []).map(t => `<span class="preview-tag">${esc(t)}</span>`).join('');
-
     previewEl.classList.add('visible');
   }
 
@@ -411,166 +400,130 @@
     previewEl.classList.remove('visible');
   }
 
-  // ═══════════════════════════════════
-  // DATA LOADING
-  // ═══════════════════════════════════
-
+  // ═══ DATA ═══
   async function loadNotes() {
     const url = currentType ? `/api/notes?type=${currentType}` : '/api/notes';
     const data = await api(url);
     allNotes = data.notes;
-    graphData = null; // Invalidate graph cache
+    graphData = null;
     renderNoteList(allNotes);
   }
 
   function filterByType(type) {
     currentType = type;
-    typeFilters.querySelectorAll('.type-chip').forEach(btn => {
+    typeFilters.querySelectorAll('.type-pill').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === type);
     });
-    keyboardIndex = -1;
     loadNotes();
   }
 
-  async function searchNotes(query) {
-    const data = await api(`/api/search?q=${encodeURIComponent(query)}`);
-    renderNoteList(data.results.map(r => ({
-      slug: r.slug,
-      title: r.title,
-      type: '',
-      snippet: r.snippet,
-    })));
-  }
-
-  // ═══════════════════════════════════
-  // RENDER NOTE LIST
-  // ═══════════════════════════════════
-
+  // ═══ RENDER ═══
   function renderNoteList(notes) {
     noteList.innerHTML = '';
-    keyboardIndex = -1;
-
     if (notes.length === 0) {
-      noteList.innerHTML = '<div style="padding: 16px 12px; color: var(--text-3); font-size: 12px;">No notes found</div>';
+      noteList.innerHTML = '<div style="padding:16px 12px;color:var(--text-3);font-size:12px;">No notes</div>';
       return;
     }
-
     for (const note of notes) {
       const item = document.createElement('div');
       item.className = 'note-item' + (currentNote?.slug === note.slug ? ' active' : '');
-
+      item.setAttribute('role', 'listitem');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-label', `${note.title}${note.type ? ', type ' + note.type : ''}`);
       let meta = '';
-      if (note.type) {
-        meta += `<span class="note-item-type ${note.type}">${note.type}</span>`;
-      }
+      if (note.type) meta += `<span class="note-item-type ${note.type}">${note.type}</span>`;
       if (note.modified) {
         if (note.type) meta += '<span class="note-item-dot"></span>';
         meta += `<span>${formatDate(note.modified)}</span>`;
       }
-
-      let snippet = '';
-      if (note.snippet) {
-        snippet = `<div class="note-item-snippet">${note.snippet.replace(/>>>/g, '<mark>').replace(/<<</g, '</mark>')}</div>`;
-      }
-
       item.innerHTML = `
         <div class="note-item-title">${esc(note.title)}</div>
         <div class="note-item-meta">${meta}</div>
-        ${snippet}
       `;
-      item.addEventListener('click', () => loadNote(note.slug));
+      item.addEventListener('click', () => { closeMobileNav(); loadNote(note.slug); });
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeMobileNav(); loadNote(note.slug); }
+      });
       noteList.appendChild(item);
     }
   }
 
-  // ═══════════════════════════════════
-  // LOAD + RENDER NOTE
-  // ═══════════════════════════════════
-
   async function loadNote(slug) {
     const note = await api(`/api/notes/${slug}`);
     if (note.error) return;
-
     currentNote = note;
 
-    // Switch to note view if in graph
-    if (currentView === 'graph') {
-      setView('note');
-    }
+    if (currentView === 'graph') setView('note');
 
-    // Show content, hide empty state
     emptyState.style.display = 'none';
-    contentWrapper.style.display = 'flex';
-    noteHeader.style.display = 'block';
-    noteBody.style.display = 'block';
+    noteView.style.display = 'flex';
 
-    // Animate header
-    noteHeader.style.animation = 'none';
-    noteHeader.offsetHeight;
-    noteHeader.style.animation = 'fadeSlideIn 0.35s var(--ease-out)';
+    // Re-trigger animation via class toggle
+    const article = document.getElementById('note-article');
+    article.classList.remove('animate');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => article.classList.add('animate'));
+    });
 
-    // Header content
-    noteBreadcrumb.textContent = note.type;
+    noteTypeLine.textContent = note.type;
     noteTitle.textContent = note.title;
-    noteTypeBadge.textContent = note.type;
-    noteTypeBadge.className = 'meta-badge';
     noteDate.textContent = formatDate(note.created);
     noteTags.innerHTML = (note.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
 
-    // Render markdown body as HTML
-    noteBody.style.animation = 'none';
-    noteBody.offsetHeight;
-    noteBody.style.animation = 'fadeSlideIn 0.45s var(--ease-out) 0.05s both';
     noteBody.innerHTML = MarkdownRenderer.render(note.body, note.outgoing_links);
 
-    // Backlinks
     if (note.backlinks && note.backlinks.length > 0) {
-      backlinksPanel.style.display = 'block';
+      backlinks.style.display = 'block';
       backlinksCount.textContent = note.backlinks.length;
       backlinksList.innerHTML = '';
       for (const bl of note.backlinks) {
         const item = document.createElement('div');
         item.className = 'backlink-item';
+        item.setAttribute('role', 'link');
+        item.setAttribute('tabindex', '0');
         item.innerHTML = `
-          <div class="backlink-title">
-            <span class="backlink-arrow">←</span>
-            ${esc(bl.source_title)}
-          </div>
+          <div class="backlink-title"><span class="backlink-arrow">\u2190</span>${esc(bl.source_title)}</div>
           ${bl.context ? `<div class="backlink-context">${esc(bl.context)}</div>` : ''}
         `;
         item.addEventListener('click', () => loadNote(bl.source_slug));
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadNote(bl.source_slug); }
+        });
         backlinksList.appendChild(item);
       }
     } else {
-      backlinksPanel.style.display = 'none';
+      backlinks.style.display = 'none';
     }
 
-    // Update active state in list
     noteList.querySelectorAll('.note-item').forEach((el, idx) => {
-      const noteData = isSearchMode ? null : allNotes[idx];
-      el.classList.toggle('active', noteData?.slug === slug);
+      el.classList.toggle('active', allNotes[idx]?.slug === slug);
     });
 
-    // Update graph if it was loaded
-    if (graphData) {
-      GraphEngine.setActiveSlug(slug);
+    if (graphData) GraphEngine.setActiveSlug(slug);
+    noteScroll.scrollTop = 0;
+  }
+
+  // ═══ FOCUS TRAP ═══
+  function trapFocus(container) {
+    const focusable = container.querySelectorAll(
+      'input, select, textarea, button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable.length) return null;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    function handler(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
-
-    contentWrapper.scrollTop = 0;
+    container.addEventListener('keydown', handler);
+    return () => container.removeEventListener('keydown', handler);
   }
 
-  function showEmptyState() {
-    noteHeader.style.display = 'none';
-    noteBody.style.display = 'none';
-    backlinksPanel.style.display = 'none';
-    contentWrapper.style.display = 'none';
-    emptyState.style.display = 'flex';
-  }
-
-  // ═══════════════════════════════════
-  // HELPERS
-  // ═══════════════════════════════════
-
+  // ═══ HELPERS ═══
   function esc(str) {
     const d = document.createElement('div');
     d.textContent = str;
@@ -583,6 +536,5 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // ── Boot ──
   init();
 })();

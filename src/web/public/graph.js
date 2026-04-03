@@ -10,22 +10,20 @@ const GraphEngine = (() => {
 
   // ── Type colors ──
   const TYPE_COLORS = {
-    note:       { fill: '#a5b4fc', glow: 'rgba(165, 180, 252, 0.3)' },
-    reference:  { fill: '#34d399', glow: 'rgba(52, 211, 153, 0.3)' },
-    person:     { fill: '#f9a8d4', glow: 'rgba(249, 168, 212, 0.3)' },
-    meeting:    { fill: '#93c5fd', glow: 'rgba(147, 197, 253, 0.3)' },
-    project:    { fill: '#c4b5fd', glow: 'rgba(196, 181, 253, 0.3)' },
-    decision:   { fill: '#fca5a5', glow: 'rgba(252, 165, 165, 0.3)' },
-    _default:   { fill: '#6e6e7a', glow: 'rgba(110, 110, 122, 0.3)' },
+    note:       { fill: '#a8aaff', glow: 'rgba(168, 170, 255, 0.25)' },
+    source:     { fill: '#5cd9a8', glow: 'rgba(92, 217, 168, 0.25)' },
+    synthesis:  { fill: '#e0a0ff', glow: 'rgba(224, 160, 255, 0.25)' },
+    output:     { fill: '#ffb86c', glow: 'rgba(255, 184, 108, 0.25)' },
+    _default:   { fill: '#6b6b7a', glow: 'rgba(107, 107, 122, 0.25)' },
   };
 
-  const BG_COLOR = '#08080a';
-  const EDGE_COLOR = 'rgba(70, 70, 85, 0.35)';
-  const EDGE_HIGHLIGHT = 'rgba(165, 180, 252, 0.6)';
-  const LABEL_COLOR = '#b0b0b8';
-  const LABEL_DIM = 'rgba(110, 110, 122, 0.3)';
+  const BG_COLOR = '#050507';
+  const EDGE_COLOR = 'rgba(60, 60, 75, 0.3)';
+  const EDGE_HIGHLIGHT = 'rgba(168, 170, 255, 0.5)';
+  const LABEL_COLOR = '#a8a8b4';
+  const LABEL_DIM = 'rgba(107, 107, 122, 0.25)';
   const LABEL_FONT = '11px "Instrument Sans", sans-serif';
-  const NODE_ACTIVE_RING = '#6366f1';
+  const NODE_ACTIVE_RING = '#7c7fff';
 
   // ── State ──
   let canvas, ctx;

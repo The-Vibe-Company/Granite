@@ -54,6 +54,11 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
       modified: note.frontmatter.modified,
       tags: note.frontmatter.tags,
       aliases: note.frontmatter.aliases,
+      status: note.frontmatter.status,
+      source: note.frontmatter.source,
+      review_state: note.frontmatter.review_state,
+      durability: note.frontmatter.durability,
+      derived_from: note.frontmatter.derived_from,
       body: note.body,
       outgoing_links: resolvedLinks,
       backlinks,
@@ -104,6 +109,8 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
         title: note.frontmatter.title,
         type: note.frontmatter.type,
         created: note.frontmatter.created,
+        review_state: note.frontmatter.review_state,
+        durability: note.frontmatter.durability,
       });
     } catch (err: any) {
       return c.json({ error: err.message }, 400);

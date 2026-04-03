@@ -12,18 +12,24 @@ import { suggestLinks } from '../core/suggest.js';
 import type {
   BacklinkEntry,
   DoctorIssue,
+  Durability,
   GraniteConfig,
   Note,
   NoteFrontmatter,
+  NoteSource,
+  NoteStatus,
+  ReviewState,
   SearchResult,
   WikiLink,
 } from '../core/types.js';
 import { parseWikilinks, resolveWikilinks } from '../core/wikilinks.js';
 import { getBacklinks } from '../core/backlinks.js';
-import { validateSource, validateStatus } from '../core/json-output.js';
-
-type NoteStatus = 'inbox' | 'active' | 'archived';
-type NoteSource = 'human' | 'agent' | 'extraction';
+import {
+  validateDurability,
+  validateReviewState,
+  validateSource,
+  validateStatus,
+} from '../core/json-output.js';
 
 interface VaultSignature {
   noteCount: number;
@@ -45,6 +51,9 @@ export interface NoteSummary {
   aliases: string[];
   status: NoteStatus;
   source: NoteSource;
+  review_state: ReviewState;
+  durability: Durability;
+  derived_from: string[];
   filepath: string;
   resource_uri: string;
 }
@@ -92,6 +101,9 @@ export interface CreateNoteInput {
   aliases?: string[];
   status?: NoteStatus;
   source?: NoteSource;
+  review_state?: ReviewState;
+  durability?: Durability;
+  derived_from?: string[];
 }
 
 export interface CaptureNoteInput {
@@ -101,6 +113,9 @@ export interface CaptureNoteInput {
   aliases?: string[];
   status?: NoteStatus;
   source?: NoteSource;
+  review_state?: ReviewState;
+  durability?: Durability;
+  derived_from?: string[];
 }
 
 export interface UpdateNoteInput {
@@ -111,6 +126,9 @@ export interface UpdateNoteInput {
   aliases?: string[];
   status?: NoteStatus;
   source?: NoteSource;
+  review_state?: ReviewState;
+  durability?: Durability;
+  derived_from?: string[];
 }
 
 export interface ListNotesInput {
@@ -280,6 +298,9 @@ export class GraniteMcpRuntime {
       aliases: input.aliases,
       status: input.status,
       source: input.source,
+      review_state: input.review_state,
+      durability: input.durability,
+      derived_from: input.derived_from,
     };
 
     if (hasMetadataMutations(metadataMutations)) {
@@ -306,6 +327,9 @@ export class GraniteMcpRuntime {
       aliases: input.aliases,
       status: input.status,
       source: input.source,
+      review_state: input.review_state,
+      durability: input.durability,
+      derived_from: input.derived_from,
     });
   }
 
@@ -424,6 +448,9 @@ export class GraniteMcpRuntime {
       aliases: note.frontmatter.aliases,
       status: note.frontmatter.status,
       source: note.frontmatter.source,
+      review_state: note.frontmatter.review_state,
+      durability: note.frontmatter.durability,
+      derived_from: note.frontmatter.derived_from,
       filepath: note.filepath,
       resource_uri: this.noteResourceUri(note.slug),
     };
@@ -454,6 +481,20 @@ export class GraniteMcpRuntime {
     if (input.source !== undefined) {
       validateSource(input.source);
       frontmatter.source = input.source;
+    }
+
+    if (input.review_state !== undefined) {
+      validateReviewState(input.review_state);
+      frontmatter.review_state = input.review_state;
+    }
+
+    if (input.durability !== undefined) {
+      validateDurability(input.durability);
+      frontmatter.durability = input.durability;
+    }
+
+    if (input.derived_from !== undefined) {
+      frontmatter.derived_from = [...input.derived_from];
     }
 
     if (input.body !== undefined) {
@@ -561,11 +602,16 @@ function mergeUnique(existing: string[], incoming: string[]): string[] {
   return [...merged];
 }
 
-function hasMetadataMutations(input: Pick<CreateNoteInput, 'tags' | 'aliases' | 'status' | 'source'>): boolean {
+function hasMetadataMutations(
+  input: Pick<CreateNoteInput, 'tags' | 'aliases' | 'status' | 'source' | 'review_state' | 'durability' | 'derived_from'>,
+): boolean {
   return (
     (input.tags?.length ?? 0) > 0 ||
     (input.aliases?.length ?? 0) > 0 ||
     input.status !== undefined ||
-    input.source !== undefined
+    input.source !== undefined ||
+    input.review_state !== undefined ||
+    input.durability !== undefined ||
+    (input.derived_from?.length ?? 0) > 0
   );
 }

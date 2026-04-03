@@ -1,3 +1,16 @@
+export type NoteStatus = 'inbox' | 'active' | 'archived';
+export type NoteSource = 'human' | 'agent' | 'extraction';
+export type ReviewState = 'draft' | 'reviewed' | 'locked';
+export type Durability = 'canonical' | 'working' | 'ephemeral';
+
+export interface NoteFrontmatterDefaults {
+  status?: NoteStatus;
+  source?: NoteSource;
+  review_state?: ReviewState;
+  durability?: Durability;
+  derived_from?: string[];
+}
+
 export interface NoteTypeConfig {
   folder: string;
   description: string;
@@ -7,6 +20,7 @@ export interface NoteTypeConfig {
   instructions?: string;
   slug_format?: 'title' | 'date';
   fields?: Record<string, FieldDefinition>;
+  frontmatter_defaults?: NoteFrontmatterDefaults;
 }
 
 export interface FieldDefinition {
@@ -49,8 +63,11 @@ export interface NoteFrontmatter {
   modified: string;
   tags: string[];
   aliases: string[];
-  status: 'inbox' | 'active' | 'archived';
-  source: 'human' | 'agent' | 'extraction';
+  status: NoteStatus;
+  source: NoteSource;
+  review_state: ReviewState;
+  durability: Durability;
+  derived_from: string[];
   [key: string]: unknown;
 }
 

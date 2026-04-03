@@ -29,6 +29,9 @@ export function showCommand(slug: string, options: { json?: boolean; body?: bool
       aliases: note.frontmatter.aliases,
       status: note.frontmatter.status,
       source: note.frontmatter.source,
+      review_state: note.frontmatter.review_state,
+      durability: note.frontmatter.durability,
+      derived_from: note.frontmatter.derived_from,
       body: note.body,
       filepath: note.filepath,
     }));
@@ -42,7 +45,9 @@ export function showCommand(slug: string, options: { json?: boolean; body?: bool
 
   // Default: print full file content
   console.log(`# ${note.frontmatter.title}  (${note.slug})`);
-  console.log(`# type: ${note.frontmatter.type}  |  modified: ${note.frontmatter.modified.slice(0, 10)}`);
+  console.log(
+    `# type: ${note.frontmatter.type}  |  modified: ${note.frontmatter.modified.slice(0, 10)}  |  review: ${note.frontmatter.review_state}  |  durability: ${note.frontmatter.durability}`,
+  );
   console.log('');
   const content = fs.readFileSync(note.filepath, 'utf-8');
   console.log(content);

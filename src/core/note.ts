@@ -42,6 +42,7 @@ export function createNote(
   }
 
   const now = new Date().toISOString();
+  const defaults = typeConfig.frontmatter_defaults ?? {};
   const frontmatter: NoteFrontmatter = {
     id: uuidv4(),
     title,
@@ -50,8 +51,11 @@ export function createNote(
     modified: now,
     tags: [],
     aliases: [],
-    status: 'active',
-    source: 'human',
+    status: defaults.status ?? 'active',
+    source: defaults.source ?? 'human',
+    review_state: defaults.review_state ?? 'draft',
+    durability: defaults.durability ?? 'working',
+    derived_from: defaults.derived_from ?? [],
   };
 
   const body = bodyOverride ?? typeConfig.template;

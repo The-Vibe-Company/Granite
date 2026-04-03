@@ -30,6 +30,9 @@ describe('note', () => {
     expect(note.frontmatter.title).toBe('My Test Note');
     expect(note.frontmatter.type).toBe('permanent');
     expect(note.frontmatter.id).toBeTruthy();
+    expect(note.frontmatter.review_state).toBe('draft');
+    expect(note.frontmatter.durability).toBe('canonical');
+    expect(note.frontmatter.derived_from).toEqual([]);
     expect(fs.existsSync(note.filepath)).toBe(true);
   });
 
@@ -38,6 +41,7 @@ describe('note', () => {
     expect(note.slug).toMatch(/^\d{4}-\d{2}-\d{2}-[a-z0-9]{4}$/);
     expect(note.frontmatter.title).toBe('Quick thought');
     expect(note.frontmatter.type).toBe('fleeting');
+    expect(note.frontmatter.durability).toBe('working');
   });
 
   it('creates a note with custom body', () => {

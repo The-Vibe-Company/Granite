@@ -4,7 +4,7 @@ import { listNotes } from '../core/note.js';
 import { jsonSuccess } from '../core/json-output.js';
 import type { Note } from '../core/types.js';
 
-const AVAILABLE_FIELDS = ['slug', 'title', 'type', 'created', 'modified', 'tags', 'aliases', 'status', 'source', 'filepath'];
+const AVAILABLE_FIELDS = ['slug', 'title', 'type', 'created', 'modified', 'tags', 'aliases', 'status', 'source', 'review_state', 'durability', 'derived_from', 'filepath'];
 
 interface ListOptions {
   type?: string;
@@ -27,6 +27,9 @@ function pickFields(note: Note, fields: string[]): Record<string, unknown> {
       case 'aliases': out.aliases = note.frontmatter.aliases; break;
       case 'status': out.status = note.frontmatter.status; break;
       case 'source': out.source = note.frontmatter.source; break;
+      case 'review_state': out.review_state = note.frontmatter.review_state; break;
+      case 'durability': out.durability = note.frontmatter.durability; break;
+      case 'derived_from': out.derived_from = note.frontmatter.derived_from; break;
       case 'filepath': out.filepath = note.filepath; break;
     }
   }

@@ -13,6 +13,9 @@ export function parseFrontmatter(content: string): { frontmatter: NoteFrontmatte
     aliases: data.aliases ?? [],
     status: data.status ?? 'active',
     source: data.source ?? 'human',
+    review_state: data.review_state ?? 'draft',
+    durability: data.durability ?? 'working',
+    derived_from: data.derived_from ?? [],
   };
   // Preserve any extra type-specific fields
   for (const [key, value] of Object.entries(data)) {

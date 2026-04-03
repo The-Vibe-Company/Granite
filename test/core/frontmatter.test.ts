@@ -27,6 +27,9 @@ This is the body.
     expect(frontmatter.type).toBe('fleeting');
     expect(frontmatter.tags).toEqual(['test', 'demo']);
     expect(frontmatter.aliases).toEqual(['my-test']);
+    expect(frontmatter.review_state).toBe('draft');
+    expect(frontmatter.durability).toBe('working');
+    expect(frontmatter.derived_from).toEqual([]);
   });
 
   it('extracts body without frontmatter', () => {
@@ -44,6 +47,11 @@ This is the body.
       modified: '2026-01-01T00:00:00.000Z',
       tags: ['a'],
       aliases: [],
+      status: 'active',
+      source: 'human',
+      review_state: 'reviewed',
+      durability: 'canonical',
+      derived_from: ['src-1'],
     };
     const body = 'Some content here.\n';
     const serialized = serializeFrontmatter(fm, body);
@@ -53,6 +61,9 @@ This is the body.
     expect(parsed.title).toBe(fm.title);
     expect(parsed.type).toBe(fm.type);
     expect(parsed.tags).toEqual(fm.tags);
+    expect(parsed.review_state).toBe('reviewed');
+    expect(parsed.durability).toBe('canonical');
+    expect(parsed.derived_from).toEqual(['src-1']);
     expect(parsedBody).toContain('Some content here.');
   });
 
@@ -69,5 +80,8 @@ Body.
     expect(frontmatter.tags).toEqual([]);
     expect(frontmatter.aliases).toEqual([]);
     expect(frontmatter.type).toBe('');
+    expect(frontmatter.review_state).toBe('draft');
+    expect(frontmatter.durability).toBe('working');
+    expect(frontmatter.derived_from).toEqual([]);
   });
 });

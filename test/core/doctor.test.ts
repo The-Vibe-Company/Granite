@@ -74,4 +74,13 @@ describe('doctor', () => {
     // fleeting is warn_only, so it should be a warning
     expect(limitIssues[0].level).toBe('warning');
   });
+
+  it('warns when a synthesis has no provenance', () => {
+    createNote(tmpDir, config, 'synthesis', 'Synthesis Without Sources', '## Scope\n\nBody.\n');
+    const db = getDb();
+    const issues = runDoctor(tmpDir, config, db);
+    db.close();
+
+    expect(issues.some(issue => issue.message.includes('should declare derived_from'))).toBe(true);
+  });
 });

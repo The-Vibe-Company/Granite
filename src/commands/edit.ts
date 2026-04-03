@@ -4,7 +4,12 @@ import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
 import { findNoteBySlug, readNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
-import { validateStatus, validateSource } from '../core/json-output.js';
+import {
+  validateDurability,
+  validateReviewState,
+  validateStatus,
+  validateSource,
+} from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
 import { getSyncManager } from '../core/sync/manager.js';
 
@@ -16,6 +21,9 @@ interface EditOptions {
   alias?: string;
   status?: string;
   source?: string;
+  reviewState?: string;
+  durability?: string;
+  derivedFrom?: string;
 }
 
 export function editCommand(slug: string, options: EditOptions): void {
@@ -28,7 +36,16 @@ export function editCommand(slug: string, options: EditOptions): void {
     process.exit(1);
   }
 
-  const hasFlags = options.body !== undefined || options.append !== undefined || options.title !== undefined || options.tag !== undefined || options.alias !== undefined || options.status !== undefined || options.source !== undefined;
+  const hasFlags = options.body !== undefined
+    || options.append !== undefined
+    || options.title !== undefined
+    || options.tag !== undefined
+    || options.alias !== undefined
+    || options.status !== undefined
+    || options.source !== undefined
+    || options.reviewState !== undefined
+    || options.durability !== undefined
+    || options.derivedFrom !== undefined;
 
   if (hasFlags) {
     // Programmatic edit (agent mode)
@@ -60,6 +77,20 @@ export function editCommand(slug: string, options: EditOptions): void {
     if (options.source) {
       validateSource(options.source);
       frontmatter.source = options.source;
+    }
+
+    if (options.reviewState) {
+      validateReviewState(options.reviewState);
+      frontmatter.review_state = options.reviewState;
+    }
+
+    if (options.durability) {
+      validateDurability(options.durability);
+      frontmatter.durability = options.durability;
+    }
+
+    if (options.derivedFrom !== undefined) {
+      frontmatter.derived_from = options.derivedFrom.split(',').map(value => value.trim()).filter(Boolean);
     }
 
     if (options.body !== undefined) {

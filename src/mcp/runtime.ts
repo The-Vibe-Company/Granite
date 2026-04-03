@@ -384,6 +384,10 @@ export class GraniteMcpRuntime {
       .slice(0, 25);
   }
 
+  getTypeInstructions(typeName: string): string | undefined {
+    return this.config.note_types[typeName]?.instructions;
+  }
+
   noteResourceUri(slug: string): string {
     return `granite://notes/${encodeURIComponent(slug)}`;
   }

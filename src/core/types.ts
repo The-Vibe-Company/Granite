@@ -32,15 +32,6 @@ export interface FieldDefinition {
   description?: string;
 }
 
-export interface SyncConfig {
-  enabled: boolean;
-  server: string;
-  api_key: string;
-  device_name: string;
-  auto_sync: boolean;
-  interval: number;
-}
-
 export interface GraniteConfig {
   vault_name: string;
   version: number;
@@ -52,7 +43,6 @@ export interface GraniteConfig {
   index: {
     auto_rebuild: boolean;
   };
-  sync?: SyncConfig;
 }
 
 export interface NoteFrontmatter {
@@ -106,53 +96,3 @@ export interface DoctorIssue {
   message: string;
 }
 
-// --- Sync types ---
-
-export type SyncOperation = 'create' | 'update' | 'delete' | 'rename';
-
-export interface ChangelogEntry {
-  seq: number;
-  note_id: string;
-  operation: SyncOperation;
-  timestamp: string;
-  device_id: string;
-  checksum: string;
-  synced: boolean;
-}
-
-export interface SyncPushPayload {
-  device_id: string;
-  last_server_seq: number;
-  changes: SyncChange[];
-}
-
-export interface SyncChange {
-  note_id: string;
-  operation: SyncOperation;
-  timestamp: string;
-  checksum: string;
-  slug: string;
-  frontmatter?: NoteFrontmatter;
-  body?: string;
-}
-
-export interface SyncPullResponse {
-  changes: SyncChange[];
-  server_seq: number;
-}
-
-export interface SyncStatus {
-  device_id: string;
-  device_name: string;
-  last_sync: string | null;
-  pending_changes: number;
-  server_seq: number;
-}
-
-export interface SyncConflict {
-  note_id: string;
-  local_modified: string;
-  remote_modified: string;
-  resolved: boolean;
-  conflict_file: string;
-}

@@ -11,7 +11,6 @@ import {
   validateSource,
 } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
-import { getSyncManager } from '../core/sync/manager.js';
 
 export function newNote(
   title: string,
@@ -64,10 +63,6 @@ export function newNote(
 
   const lines = note.body.split('\n').length;
   const overLimit = typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit;
-
-  // Transparent sync: track + push in background
-  const sync = getSyncManager(vaultRoot, config);
-  sync?.trackAndPush(note, 'create');
 
   if (options.json) {
     console.log(jsonSuccess({

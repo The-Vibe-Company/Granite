@@ -11,7 +11,6 @@ import {
   validateSource,
 } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
-import { getSyncManager } from '../core/sync/manager.js';
 
 interface EditOptions {
   body?: string;
@@ -105,11 +104,6 @@ export function editCommand(slug: string, options: EditOptions): void {
     frontmatter.modified = new Date().toISOString();
     fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
-    // Transparent sync: track + push in background
-    const sync = getSyncManager(vaultRoot, config);
-    const updatedForSync = readNote(existingNote.filepath);
-    sync?.trackAndPush(updatedForSync, 'update');
-
     console.log(existingNote.filepath);
     const recommendationStrategy = options.title !== undefined || options.alias !== undefined ? 'rebuild' : 'incremental';
     printRecommendations(vaultRoot, config, existingNote.filepath, recommendationStrategy);
@@ -131,11 +125,6 @@ export function editCommand(slug: string, options: EditOptions): void {
       const { frontmatter, body } = parseFrontmatter(fs.readFileSync(existingNote.filepath, 'utf-8'));
       frontmatter.modified = new Date().toISOString();
       fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
-
-      // Transparent sync: track + push in background
-      const sync = getSyncManager(vaultRoot, config);
-      const updatedForSync = readNote(existingNote.filepath);
-      sync?.trackAndPush(updatedForSync, 'update');
 
       console.log(`Updated: ${existingNote.filepath}`);
       printRecommendations(vaultRoot, config, existingNote.filepath, 'rebuild');

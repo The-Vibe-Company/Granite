@@ -54,7 +54,7 @@ describe('granite MCP server', () => {
     expect(resources.resources.some(resource => resource.uri === 'granite://vault/config')).toBe(true);
     expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://notes/{slug}')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_refine_note')).toBe(true);
-    expect(client.getInstructions()).toContain('Granite exposes a local-first markdown vault.');
+    expect(client.getInstructions()).toContain('Knowledge Compilation System');
   });
 
   it('serves note resources and prompt templates', async () => {

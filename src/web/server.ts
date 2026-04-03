@@ -10,7 +10,6 @@ import { createNote, findNoteBySlug, listNotes, readNote } from '../core/note.js
 import { searchNotes } from '../core/search.js';
 import { getBacklinks } from '../core/backlinks.js';
 import { parseWikilinks, resolveWikilinks } from '../core/wikilinks.js';
-import { getSyncManager } from '../core/sync/manager.js';
 
 export function createApp(vaultRoot: string, config: GraniteConfig) {
   const app = new Hono();
@@ -100,10 +99,6 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
 
     try {
       const note = createNote(vaultRoot, config, type, title, noteBody || undefined);
-
-      // Transparent sync
-      const sync = getSyncManager(vaultRoot, config);
-      sync?.trackAndPush(note, 'create');
 
       return c.json({
         slug: note.slug,

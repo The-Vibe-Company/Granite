@@ -146,11 +146,40 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
     {
       capabilities: { logging: {} },
       instructions: [
-        'Granite exposes a local-first markdown vault.',
-        'Prefer read tools and resources first, then write with granite_create_note or granite_update_note.',
-        'Resources are read-only views; notes live on disk and the SQLite index is derived state.',
-        'Use granite_recommend_note_actions to preserve Granite’s capture -> link -> recommend loop.',
-      ].join(' '),
+        '# Granite — Knowledge Compilation System',
+        '',
+        'You are operating a local-first markdown knowledge base. You are the primary writer and gardener of this vault — the human rarely edits notes directly.',
+        '',
+        '## Core Loop',
+        '',
+        'Granite follows a continuous knowledge compilation loop:',
+        '',
+        '1. **Capture** — Ingest raw information quickly (granite_capture_note or granite_create_note). Don\'t over-structure at this stage.',
+        '2. **Compile** — Turn raw captures and sources into durable, linked notes and syntheses. Use granite_recommend_note_actions to find what to connect.',
+        '3. **Query** — Search and traverse the vault (granite_search_notes, granite_get_backlinks, granite_suggest_links) to answer questions by researching across notes.',
+        '4. **Output** — Generate audience-specific deliverables (type: output) that derive from durable notes. Always set derived_from.',
+        '5. **Lint** — Run granite_run_doctor and granite_recommend_note_actions regularly to find gaps, broken links, and opportunities to strengthen the vault.',
+        '',
+        'Every interaction should advance the vault. Queries become notes. Outputs feed back in. Knowledge compounds.',
+        '',
+        '## Note Types',
+        '',
+        '- **note**: Atomic, durable ideas — one idea per note, well-linked. The backbone of the vault.',
+        '- **source**: Imported material kept close to the original. Capture provenance, summarize essentials.',
+        '- **synthesis**: Compiled knowledge connecting multiple notes or sources. The most valuable type.',
+        '- **output**: Situational deliverables (reports, briefs). Ephemeral by default, always derived_from something durable.',
+        '',
+        'The natural flow is: source → note → synthesis → output',
+        '',
+        '## Working Principles',
+        '',
+        '- **Read before writing.** Use granite_search_notes and granite_list_notes to understand what already exists before creating new notes. Avoid duplicates.',
+        '- **Link aggressively.** Use [[wikilinks]] in note bodies. After writing, check granite_suggest_links to find missed connections.',
+        '- **Act on recommendations.** Every create/update returns recommendations — follow them. They are the compiler\'s suggestions for what to connect or write next.',
+        '- **Use the right type.** Don\'t dump everything into notes. Sources stay as sources. Syntheses emerge when you have enough connected notes.',
+        '- **Set metadata intentionally.** Use source: agent when you write, source: human when the human dictates. Use review_state: draft for first passes. Set durability to match the note\'s role.',
+        '- **Prefer read tools and resources first.** Resources (granite://vault/overview, granite://notes/{slug}) are lightweight reads. Use tools for writes and complex queries.',
+      ].join('\n'),
     },
   );
 
@@ -237,7 +266,7 @@ export async function withResponseCleanup(
 function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerTool('granite_get_vault_overview', {
     title: 'Granite Vault Overview',
-    description: 'Summarize the current Granite vault, including counts by type and recent notes.',
+    description: 'Start here. Get a snapshot of the vault: note counts by type, recent activity, and configuration. Use this to orient yourself before reading or writing notes.',
     inputSchema: {
       recent_limit: z.number().int().min(1).max(20).optional().describe('How many recent notes to include. Defaults to 10.'),
     },
@@ -253,7 +282,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_list_note_types', {
     title: 'Granite Note Types',
-    description: 'List the note types configured in the vault.',
+    description: 'List the note types configured in the vault, including their templates, line limits, and instructions. Check this before creating a note to use the right type.',
     outputSchema: z.object({
       default_type: z.string(),
       note_types: z.array(noteTypeInfoSchema),
@@ -269,7 +298,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_list_notes', {
     title: 'List Granite Notes',
-    description: 'List notes from the Granite vault with optional filters.',
+    description: 'Browse the vault with filters. Use this to find existing notes before creating new ones (avoid duplicates), to review inbox notes that need processing, or to find notes by type/status/source.',
     inputSchema: {
       type: z.string().optional().describe('Filter by note type.'),
       status: z.enum(['inbox', 'active', 'archived']).optional().describe('Filter by note status.'),
@@ -292,7 +321,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_get_note', {
     title: 'Get Granite Note',
-    description: 'Read a Granite note by slug, including frontmatter, body, and resolved outgoing links.',
+    description: 'Read a note in full: frontmatter, body, and resolved outgoing wikilinks. Use this to understand a note before updating it, to follow links in the knowledge graph, or to gather context for a synthesis.',
     inputSchema: {
       slug: z.string().describe('The note slug.'),
     },
@@ -311,7 +340,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_search_notes', {
     title: 'Search Granite Notes',
-    description: 'Run full-text search against the Granite index.',
+    description: 'Full-text search across all notes. Use this to research a topic before answering questions, to find related notes before creating a new one, or to discover connections across the vault.',
     inputSchema: {
       query: z.string().describe('Full-text query for the SQLite FTS index.'),
       limit: z.number().int().min(1).max(50).optional().describe('Maximum number of search results. Defaults to 10.'),
@@ -331,7 +360,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_create_note', {
     title: 'Create Granite Note',
-    description: 'Create a new note in the Granite vault.',
+    description: 'Create a structured note. Use this when you have a clear title and know the type. For raw captures, prefer granite_capture_note instead. Always search first to avoid duplicates. Returns recommendations — act on them to strengthen the vault.',
     inputSchema: {
       title: z.string().describe('Note title.'),
       type: z.string().optional().describe('Note type. Defaults to the vault default type.'),
@@ -351,12 +380,12 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async (args) => {
     const result = runtime.createNote(args);
-    return toolResult(result, `Created "${result.note.title}" (${result.note.slug}).`);
+    return toolResult(result, buildWriteSummary('Created', result, runtime));
   });
 
   server.registerTool('granite_capture_note', {
     title: 'Capture Granite Note',
-    description: 'Quick-capture a note from free-form text, similar to granite add.',
+    description: 'Quick-capture from raw text — the fastest way to get information into the vault. The title is auto-generated. Use this for rapid ingestion (conversations, ideas, observations). The note lands in inbox status, ready to be refined later. Returns recommendations for immediate linking.',
     inputSchema: {
       text: z.string().describe('Raw capture text.'),
       type: z.string().optional().describe('Optional note type override. Defaults to the vault default type.'),
@@ -375,12 +404,12 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async (args) => {
     const result = runtime.captureNote(args);
-    return toolResult(result, `Captured "${result.note.title}" (${result.note.slug}).`);
+    return toolResult(result, buildWriteSummary('Captured', result, runtime));
   });
 
   server.registerTool('granite_update_note', {
     title: 'Update Granite Note',
-    description: 'Update frontmatter or body fields for an existing Granite note.',
+    description: 'Update an existing note. Use this to refine captures into durable notes, add tags and links, change status (inbox→active→archived), append new information, or promote review_state. Use append to add without replacing the body.',
     inputSchema: {
       slug: z.string().describe('Slug of the note to update.'),
       title: z.string().optional().describe('Replace the note title.'),
@@ -401,12 +430,12 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async ({ slug, ...updates }) => {
     const result = runtime.updateNote(slug, updates);
-    return toolResult(result, `Updated "${result.note.title}" (${result.note.slug}).`);
+    return toolResult(result, buildWriteSummary('Updated', result, runtime));
   });
 
   server.registerTool('granite_get_backlinks', {
     title: 'Granite Backlinks',
-    description: 'List notes that link to a given Granite note.',
+    description: 'Find all notes that link to a given note. Use this to understand a note\'s role in the knowledge graph, to find context for a synthesis, or to check the impact before modifying a note.',
     inputSchema: {
       slug: z.string().describe('Slug of the target note.'),
     },
@@ -425,7 +454,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_suggest_links', {
     title: 'Suggest Granite Links',
-    description: 'Suggest missing wikilinks for a Granite note based on mentions.',
+    description: 'Find unlinked mentions — places where a note references another note\'s title or alias without a [[wikilink]]. Use this after creating or updating a note to strengthen the knowledge graph.',
     inputSchema: {
       slug: z.string().describe('Slug of the note to inspect.'),
     },
@@ -444,7 +473,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_recommend_note_actions', {
     title: 'Recommend Granite Actions',
-    description: 'Recommend follow-up links, tags, additions, and next notes for a Granite note.',
+    description: 'The heart of Granite\'s compile loop. Returns suggested links, tags, content additions, and next notes to create. Call this after every write operation and act on the results — this is how the vault grows into a connected knowledge base instead of a pile of files.',
     inputSchema: {
       slug: z.string().describe('Slug of the note to analyze.'),
     },
@@ -463,7 +492,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_run_doctor', {
     title: 'Run Granite Doctor',
-    description: 'Validate vault health and report structural issues.',
+    description: 'Lint the vault. Finds broken wikilinks, missing frontmatter fields, notes exceeding line limits, and other structural issues. Run this periodically to maintain vault integrity — part of the lint phase of the knowledge loop.',
     outputSchema: z.object({
       issues: z.array(doctorIssueSchema),
       counts: z.object({
@@ -550,7 +579,7 @@ function registerResources(server: McpServer, runtime: GraniteMcpRuntime): void 
 function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerPrompt('granite_refine_note', {
     title: 'Refine Granite Note',
-    description: 'Create a prompt for turning a note into a cleaner durable note draft.',
+    description: 'Turn a raw capture or draft into a durable, well-structured note. Use this on inbox notes to promote them to active status.',
     argsSchema: {
       slug: z.string().describe('Slug of the note to refine.'),
     },
@@ -587,7 +616,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerPrompt('granite_review_connections', {
     title: 'Review Granite Connections',
-    description: 'Create a prompt for improving note links, tags, and next steps.',
+    description: 'Analyze a note\'s place in the knowledge graph and propose better links, tags, and the most valuable follow-up note to create.',
     argsSchema: {
       slug: z.string().describe('Slug of the note to inspect.'),
     },
@@ -630,6 +659,150 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
       ],
     };
   });
+
+  server.registerPrompt('granite_process_inbox', {
+    title: 'Process Granite Inbox',
+    description: 'Review all inbox notes and decide what to do with each: refine into a durable note, merge into an existing note, archive, or delete. This is the compile phase of the knowledge loop.',
+  }, async () => {
+    const inboxNotes = runtime.listNotes({ status: 'inbox', limit: 50 });
+    const overview = runtime.getVaultOverview(5);
+
+    return {
+      description: 'Process the inbox: triage, refine, and compile captured notes.',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: [
+              'Process the Granite inbox. For each inbox note below, decide:',
+              '',
+              '1. **Refine** — If it contains a durable idea, refine it into a well-structured note (update body, set status: active, review_state: reviewed).',
+              '2. **Merge** — If it overlaps with an existing note, append the new information to that note and archive the inbox note.',
+              '3. **Promote to source** — If it\'s raw reference material, update its type to source and refine it.',
+              '4. **Archive** — If it\'s been processed or is no longer relevant, set status: archived.',
+              '',
+              'After processing each note, run granite_suggest_links to find connections, and granite_recommend_note_actions to see what to write next.',
+              '',
+              `Vault context: ${overview.note_count} notes total (${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}).`,
+              '',
+              `Inbox notes to process (${inboxNotes.length}):`,
+              '',
+              ...inboxNotes.map(n => `- **${n.slug}**: "${n.title}" (type: ${n.type}, created: ${n.created})`),
+            ].join('\n'),
+          },
+        },
+      ],
+    };
+  });
+
+  server.registerPrompt('granite_compile_synthesis', {
+    title: 'Compile Granite Synthesis',
+    description: 'Analyze a set of related notes and compile them into a synthesis note — the most valuable operation in the knowledge loop. Creates durable compiled knowledge from scattered notes.',
+    argsSchema: {
+      topic: z.string().describe('The topic or theme to synthesize notes around.'),
+    },
+  }, async ({ topic }) => {
+    const searchResults = runtime.search(topic, 20);
+    const noteDetails = searchResults.map(r => {
+      try { return runtime.getNote(r.slug); } catch { return null; }
+    }).filter(Boolean);
+
+    return {
+      description: `Compile a synthesis on "${topic}" from ${noteDetails.length} related notes.`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: [
+              `Compile a synthesis note on "${topic}" from the related notes below.`,
+              '',
+              'A good synthesis:',
+              '- Connects ideas across multiple sources and notes',
+              '- Identifies patterns, tensions, and open questions',
+              '- Uses [[wikilinks]] to link back to every source note',
+              '- Sets derived_from to the slugs of the notes it draws from',
+              '- Is more valuable than any individual note because it creates new understanding',
+              '',
+              'Steps:',
+              '1. Read the related notes below',
+              '2. Create a synthesis note (type: synthesis) with granite_create_note',
+              '3. Write a body that connects the key ideas, with [[wikilinks]] to sources',
+              '4. Set derived_from to the source note slugs',
+              '5. Run granite_recommend_note_actions on the new synthesis',
+              '',
+              `Related notes (${noteDetails.length} found for "${topic}"):`,
+              '',
+              ...noteDetails.map(n => n ? [
+                `### ${n.title} (${n.slug}, type: ${n.type})`,
+                n.body.slice(0, 500) + (n.body.length > 500 ? '...' : ''),
+                '',
+              ].join('\n') : ''),
+            ].join('\n'),
+          },
+        },
+      ],
+    };
+  });
+
+  server.registerPrompt('granite_vault_health_review', {
+    title: 'Granite Vault Health Review',
+    description: 'Run a comprehensive vault review: structural health, content gaps, orphan notes, and suggestions for strengthening the knowledge graph. The lint phase of the knowledge loop.',
+  }, async () => {
+    const doctorResult = runtime.runDoctor();
+    const overview = runtime.getVaultOverview(10);
+    const notes = runtime.listNotes({ limit: 200 });
+
+    // Find notes with no backlinks (potential orphans)
+    const orphanCandidates: string[] = [];
+    for (const note of notes.slice(0, 50)) {
+      const backlinks = runtime.getBacklinks(note.slug);
+      if (backlinks.length === 0) {
+        orphanCandidates.push(`${note.slug} ("${note.title}", type: ${note.type})`);
+      }
+    }
+
+    return {
+      description: 'Comprehensive vault health review.',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: [
+              'Run a comprehensive health review of this Granite vault and take action to improve it.',
+              '',
+              '## Structural Issues (from granite_run_doctor)',
+              '',
+              doctorResult.issues.length === 0
+                ? 'No structural issues found.'
+                : doctorResult.issues.map(i => `- [${i.level}] ${i.file}: ${i.message}`).join('\n'),
+              '',
+              '## Vault Overview',
+              '',
+              `${overview.note_count} notes: ${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}`,
+              '',
+              '## Orphan Notes (no backlinks)',
+              '',
+              orphanCandidates.length === 0
+                ? 'No orphans found in the first 50 notes.'
+                : orphanCandidates.map(o => `- ${o}`).join('\n'),
+              '',
+              '## Actions to Take',
+              '',
+              '1. Fix any structural errors reported by doctor',
+              '2. For each orphan note, use granite_suggest_links and granite_recommend_note_actions to find connections',
+              '3. If orphan notes should be linked from other notes, update those notes to add [[wikilinks]]',
+              '4. Look for clusters of notes that could be compiled into a synthesis',
+              '5. Check if any inbox notes need processing',
+              '6. Report a summary of what you found and what you fixed',
+            ].join('\n'),
+          },
+        },
+      ],
+    };
+  });
 }
 
 function toolResult<T>(structuredContent: T, summary: string) {
@@ -647,6 +820,22 @@ function createNoteResourceLink(name: string, uri: string) {
     mimeType: 'text/markdown',
     description: 'Read the markdown resource for this note.',
   };
+}
+
+function buildWriteSummary(verb: string, result: { note: { title: string; slug: string; type: string }; recommendations: NoteRecommendations }, runtime: GraniteMcpRuntime): string {
+  const lines = [`${verb} "${result.note.title}" (${result.note.slug}).`];
+
+  const instructions = runtime.getTypeInstructions(result.note.type);
+  if (instructions) {
+    lines.push('', `Type guidance for "${result.note.type}": ${instructions}`);
+  }
+
+  const recSummary = recommendationSummary(result.recommendations);
+  if (recSummary) {
+    lines.push('', `Recommendations: ${recSummary}. Act on these to strengthen the vault.`);
+  }
+
+  return lines.join('\n');
 }
 
 function recommendationSummary(recommendations: NoteRecommendations): string {

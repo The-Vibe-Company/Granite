@@ -36,6 +36,10 @@ export function requireVaultRoot(from?: string): string {
   return root;
 }
 
+export function getGraniteDir(vaultRoot: string): string {
+  return path.join(vaultRoot, '.granite');
+}
+
 export function getIndexDbPath(vaultRoot: string): string {
   if (path.basename(path.resolve(vaultRoot)) === DEFAULT_VAULT_DIRNAME) {
     return path.join(vaultRoot, 'index.db');

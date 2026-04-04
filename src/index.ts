@@ -173,7 +173,6 @@ const mcpCmd = program
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
   .option('--tunnel <provider>', 'Expose MCP over internet via tunnel (cloudflare or tailscale)')
   .option('--background', 'Run MCP server as a background daemon')
-  .alias('--bg')
   .action(async (options: {
     vault?: string;
     transport?: 'stdio' | 'http';

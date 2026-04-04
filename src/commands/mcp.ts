@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { requireVaultRoot } from '../core/vault.js';
+import { requireVaultRoot, getGraniteDir } from '../core/vault.js';
 import { startGraniteMcpHttpServer, startGraniteMcpStdioServer } from '../mcp/server.js';
 import { GraniteMcpRuntime } from '../mcp/runtime.js';
 import { startTunnel, stopTunnel, type TunnelProvider } from '../tunnel.js';
@@ -19,16 +19,16 @@ interface McpCommandOptions {
 
 // ---- PID / URL file helpers ------------------------------------------------
 
-function graniteDir(vaultRoot: string): string {
-  return path.join(vaultRoot, '.granite');
-}
-
 function pidPath(vaultRoot: string): string {
-  return path.join(graniteDir(vaultRoot), 'mcp.pid');
+  return path.join(getGraniteDir(vaultRoot), 'mcp.pid');
 }
 
 function urlPath(vaultRoot: string): string {
-  return path.join(graniteDir(vaultRoot), 'mcp.url');
+  return path.join(getGraniteDir(vaultRoot), 'mcp.url');
+}
+
+function ensureGraniteDir(vaultRoot: string): void {
+  fs.mkdirSync(getGraniteDir(vaultRoot), { recursive: true });
 }
 
 function readPid(vaultRoot: string): number | null {
@@ -36,22 +36,16 @@ function readPid(vaultRoot: string): number | null {
     const raw = fs.readFileSync(pidPath(vaultRoot), 'utf-8').trim();
     const pid = Number.parseInt(raw, 10);
     if (Number.isNaN(pid)) return null;
-    // Check if the process is still running
+    // signal 0 probes liveness without actually sending a signal
     try { process.kill(pid, 0); return pid; } catch { return null; }
   } catch {
     return null;
   }
 }
 
-function writePid(vaultRoot: string, pid: number): void {
-  const dir = graniteDir(vaultRoot);
-  fs.mkdirSync(dir, { recursive: true });
+function writeDaemonState(vaultRoot: string, pid: number, url: string): void {
+  ensureGraniteDir(vaultRoot);
   fs.writeFileSync(pidPath(vaultRoot), String(pid), 'utf-8');
-}
-
-function writeUrl(vaultRoot: string, url: string): void {
-  const dir = graniteDir(vaultRoot);
-  fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(urlPath(vaultRoot), url, 'utf-8');
 }
 
@@ -64,7 +58,6 @@ function cleanupFiles(vaultRoot: string): void {
 
 export async function mcpCommand(options: McpCommandOptions): Promise<void> {
   const tunnel = options.tunnel;
-  // --tunnel implies --transport http
   const transport = tunnel ? 'http' : parseTransport(options.transport);
   const vaultRoot = resolveVaultRoot(options.vault);
 
@@ -81,29 +74,39 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
       process.exit(1);
     }
 
-    const args = process.argv.slice(1).filter(a => a !== '--background' && a !== '--bg');
-    const logFile = path.join(graniteDir(vaultRoot), 'mcp.log');
-    fs.mkdirSync(graniteDir(vaultRoot), { recursive: true });
-    const out = fs.openSync(logFile, 'a');
+    // Use env var to detect daemon mode — avoids fragile argv stripping
+    const logFile = path.join(getGraniteDir(vaultRoot), 'mcp.log');
+    ensureGraniteDir(vaultRoot);
+    const fd = fs.openSync(logFile, 'a');
 
-    const child = spawn(process.execPath, args, {
+    const child = spawn(process.execPath, process.argv.slice(1), {
       detached: true,
-      stdio: ['ignore', out, out],
+      stdio: ['ignore', fd, fd],
       env: { ...process.env, GRANITE_MCP_DAEMONIZED: '1' },
     });
 
     child.unref();
-    writePid(vaultRoot, child.pid!);
+    fs.closeSync(fd);
+
+    if (!child.pid) {
+      console.error('Failed to start background process');
+      process.exit(1);
+    }
+
+    writeDaemonState(vaultRoot, child.pid, '(starting...)');
     console.error(`MCP server starting in background (PID ${child.pid})`);
     console.error(`Log: ${logFile}`);
     console.error(`Stop with: granite mcp stop`);
     process.exit(0);
   }
 
-  const runtime = new GraniteMcpRuntime(vaultRoot);
+  // In daemon mode, --background flag is still in argv but we skip it via env var
   const isDaemon = process.env.GRANITE_MCP_DAEMONIZED === '1';
+  const runtime = new GraniteMcpRuntime(vaultRoot);
+  let tunnelProcess: import('node:child_process').ChildProcess | null = null;
 
   const shutdown = () => {
+    if (tunnelProcess) stopTunnel(tunnelProcess);
     if (isDaemon) cleanupFiles(vaultRoot);
     runtime.close();
     process.exit(0);
@@ -124,39 +127,23 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
       jsonResponse: options.jsonResponse ?? false,
     });
 
-    if (isDaemon) {
-      writePid(vaultRoot, process.pid);
-      writeUrl(vaultRoot, localUrl);
-    }
+    if (isDaemon) writeDaemonState(vaultRoot, process.pid, localUrl);
 
     if (tunnel) {
       try {
         console.error(`\nStarting ${tunnel} tunnel...`);
         const result = await startTunnel({ provider: tunnel, port, host });
+        tunnelProcess = result.process;
         const publicMcpUrl = `${result.url}/mcp`;
         console.error(`\n🚇 Tunnel active!\n`);
         console.error(`  Public MCP endpoint: ${publicMcpUrl}`);
         console.error(`  Provider: ${tunnel}`);
         console.error(`\nUse this URL in your remote MCP client configuration.\n`);
 
-        if (isDaemon) writeUrl(vaultRoot, publicMcpUrl);
-
-        // Cleanup tunnel on exit
-        const shutdownWithTunnel = () => {
-          stopTunnel(result.process);
-          if (isDaemon) cleanupFiles(vaultRoot);
-          runtime.close();
-          process.exit(0);
-        };
-        process.removeListener('SIGINT', shutdown);
-        process.removeListener('SIGTERM', shutdown);
-        process.once('SIGINT', shutdownWithTunnel);
-        process.once('SIGTERM', shutdownWithTunnel);
+        if (isDaemon) writeDaemonState(vaultRoot, process.pid, publicMcpUrl);
       } catch (err) {
         console.error(`\nFailed to start tunnel: ${err instanceof Error ? err.message : err}`);
-        if (isDaemon) cleanupFiles(vaultRoot);
-        runtime.close();
-        process.exit(1);
+        shutdown();
       }
     }
 

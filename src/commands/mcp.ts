@@ -2,6 +2,7 @@ import path from 'node:path';
 import { requireVaultRoot } from '../core/vault.js';
 import { startGraniteMcpHttpServer, startGraniteMcpStdioServer } from '../mcp/server.js';
 import { GraniteMcpRuntime } from '../mcp/runtime.js';
+import { startTunnel, stopTunnel, type TunnelProvider } from '../tunnel.js';
 
 interface McpCommandOptions {
   vault?: string;
@@ -10,10 +11,13 @@ interface McpCommandOptions {
   port?: string;
   allowOrigin?: string[];
   jsonResponse?: boolean;
+  tunnel?: TunnelProvider;
 }
 
 export async function mcpCommand(options: McpCommandOptions): Promise<void> {
-  const transport = parseTransport(options.transport);
+  const tunnel = options.tunnel;
+  // --tunnel implies --transport http
+  const transport = tunnel ? 'http' : parseTransport(options.transport);
   const vaultRoot = resolveVaultRoot(options.vault);
   const runtime = new GraniteMcpRuntime(vaultRoot);
 
@@ -27,12 +31,41 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
 
   if (transport === 'http') {
     const port = parsePort(options.port);
+    const host = options.host ?? '127.0.0.1';
+
     startGraniteMcpHttpServer(runtime, {
-      host: options.host ?? '127.0.0.1',
+      host,
       port,
       allowedOrigins: options.allowOrigin ?? [],
       jsonResponse: options.jsonResponse ?? false,
     });
+
+    if (tunnel) {
+      try {
+        console.error(`\nStarting ${tunnel} tunnel...`);
+        const result = await startTunnel({ provider: tunnel, port, host });
+        console.error(`\n🚇 Tunnel active!\n`);
+        console.error(`  Public MCP endpoint: ${result.url}/mcp`);
+        console.error(`  Provider: ${tunnel}`);
+        console.error(`\nUse this URL in your remote MCP client configuration.\n`);
+
+        // Cleanup tunnel on exit
+        const shutdownWithTunnel = () => {
+          stopTunnel(result.process);
+          runtime.close();
+          process.exit(0);
+        };
+        process.removeListener('SIGINT', shutdown);
+        process.removeListener('SIGTERM', shutdown);
+        process.once('SIGINT', shutdownWithTunnel);
+        process.once('SIGTERM', shutdownWithTunnel);
+      } catch (err) {
+        console.error(`\nFailed to start tunnel: ${err instanceof Error ? err.message : err}`);
+        runtime.close();
+        process.exit(1);
+      }
+    }
+
     return;
   }
 

@@ -171,6 +171,7 @@ program
   .option('--port <port>', 'Port for HTTP transport', '3321')
   .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
+  .option('--tunnel <provider>', 'Expose MCP over internet via tunnel (cloudflare or tailscale)')
   .action(async (options: {
     vault?: string;
     transport?: 'stdio' | 'http';
@@ -178,6 +179,7 @@ program
     port?: string;
     allowOrigin?: string[];
     jsonResponse?: boolean;
+    tunnel?: 'cloudflare' | 'tailscale';
   }) => {
     await mcpCommand(options);
   });

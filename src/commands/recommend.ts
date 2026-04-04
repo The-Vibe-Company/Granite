@@ -33,13 +33,25 @@ export function recommendCommand(slug: string, options: { json?: boolean }): voi
 
   const lines = formatRecommendations(recommendations);
   if (lines.length === 0) {
-    console.log(`No recommendations found for "${existingNote.frontmatter.title}".`);
+    console.log(`"${existingNote.frontmatter.title}" is well-connected. No actions needed.`);
+    console.log('');
+    console.log('Keep the loop going: granite status');
     return;
   }
 
-  console.log(`Recommendations for "${existingNote.frontmatter.title}":`);
+  console.log(`Recommendations for "${existingNote.frontmatter.title}" (${existingNote.frontmatter.type}):`);
   console.log('');
   for (const line of lines) {
     console.log(line);
+  }
+
+  // Contextual guidance based on what's recommended
+  console.log('');
+  if (recommendations.next_steps.length > 0) {
+    const step = recommendations.next_steps[0];
+    const hint = step.title_hint ? ` "${step.title_hint}"` : '';
+    console.log(`The vault is asking for: granite new${hint} --type ${step.type}`);
+  } else if (recommendations.links.length > 0) {
+    console.log(`Strengthen this note: granite edit ${slug} --append $'See also: [[${recommendations.links[0].slug}]]'`);
   }
 }

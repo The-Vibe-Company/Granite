@@ -30,13 +30,18 @@ export function suggestLinksCommand(slug: string, options: { json?: boolean }): 
   }
 
   if (suggestions.length === 0) {
-    console.log('No link suggestions found.');
+    console.log(`No unlinked mentions found for "${existingNote.frontmatter.title}".`);
+    console.log('');
+    console.log(`All mentions are linked. See what else to do: granite recommend ${slug}`);
     return;
   }
 
-  console.log(`Suggested links for "${existingNote.frontmatter.title}":`);
+  console.log(`Unlinked mentions in "${existingNote.frontmatter.title}":`);
   console.log('');
   for (const s of suggestions) {
     console.log(`  → [[${s.target_title}]] — ${s.mentions} mention${s.mentions > 1 ? 's' : ''}`);
   }
+
+  console.log('');
+  console.log(`Add [[wikilinks]] to strengthen the graph. Then: granite recommend ${slug}`);
 }

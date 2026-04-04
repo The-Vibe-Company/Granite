@@ -19,6 +19,8 @@ export function searchCommand(query: string, options: { json?: boolean }): void 
 
   if (results.length === 0) {
     console.log('No results found.');
+    console.log('');
+    console.log(`Nothing in the vault matches "${query}". Capture it: granite add "${query}"`);
     return;
   }
 
@@ -27,4 +29,8 @@ export function searchCommand(query: string, options: { json?: boolean }): void 
     console.log(`    ${r.snippet}`);
     console.log('');
   }
+
+  console.log(`${results.length} result(s) for "${query}"`);
+  console.log('');
+  console.log(`Dive deeper: granite show ${results[0].slug} | granite backlinks ${results[0].slug}`);
 }

@@ -34,6 +34,14 @@ export function initVault(dir = getDefaultVaultRoot()): void {
   for (const [name, typeConfig] of Object.entries(config.note_types)) {
     console.log(`  ${typeConfig.folder}/  (${name})`);
   }
+
   console.log('');
-  console.log('Next: granite new "My first note" --type note');
+  console.log('The knowledge loop: capture → compile → query → output → lint');
+  console.log('');
+  console.log('  source → note → synthesis → output');
+  console.log('');
+  console.log('Get started:');
+  console.log('  granite add "Your first thought"          # Capture something');
+  console.log('  granite new "Topic" --type source          # Import source material');
+  console.log('  granite status                             # See what to do next');
 }

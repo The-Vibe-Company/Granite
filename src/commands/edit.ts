@@ -142,11 +142,14 @@ function printRecommendations(
   const recommendations = recommendNote(vaultRoot, config, updatedNote, { strategy });
   const lines = formatRecommendations(recommendations);
 
-  if (lines.length === 0) return;
+  if (lines.length > 0) {
+    console.log('');
+    console.log('Recommendations:');
+    for (const line of lines) {
+      console.log(line);
+    }
+  }
 
   console.log('');
-  console.log('Recommendations:');
-  for (const line of lines) {
-    console.log(line);
-  }
+  console.log(`Next: Check connections → granite suggest-links ${updatedNote.slug} | Compile → granite recommend ${updatedNote.slug}`);
 }

@@ -81,6 +81,11 @@ export function listCommand(options: ListOptions): void {
 
   if (notes.length === 0) {
     console.log('No notes found.');
+    if (options.type) {
+      console.log(`\nNo ${options.type} notes yet. Create one: granite new "Title" --type ${options.type}`);
+    } else {
+      console.log('\nVault is empty. Start: granite add "Your first thought"');
+    }
     return;
   }
 
@@ -92,4 +97,9 @@ export function listCommand(options: ListOptions): void {
   }
 
   console.log(`\n${notes.length} note(s)`);
+
+  // Contextual tip based on filter
+  if (options.status === 'inbox') {
+    console.log('\nProcess inbox: granite show <slug> → granite edit <slug> --status active');
+  }
 }

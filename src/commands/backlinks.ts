@@ -19,6 +19,9 @@ export function backlinksCommand(slug: string, options: { json?: boolean }): voi
 
   if (backlinks.length === 0) {
     console.log(`No backlinks found for "${slug}".`);
+    console.log('');
+    console.log('This note is an orphan — nothing links to it.');
+    console.log(`Connect it: granite suggest-links ${slug} | granite recommend ${slug}`);
     return;
   }
 
@@ -31,4 +34,6 @@ export function backlinksCommand(slug: string, options: { json?: boolean }): voi
     }
     console.log('');
   }
+
+  console.log(`${backlinks.length} note(s) link here. Strengthen: granite suggest-links ${slug}`);
 }

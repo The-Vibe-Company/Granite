@@ -106,4 +106,23 @@ export function newNote(
       console.log(line);
     }
   }
+
+  // Contextual next step based on type
+  console.log('');
+  switch (resolvedType) {
+    case 'source':
+      console.log(`Next: Fill the note, then compile → granite recommend ${note.slug}`);
+      break;
+    case 'note':
+      console.log(`Next: Link to related notes → granite suggest-links ${note.slug}`);
+      break;
+    case 'synthesis':
+      console.log(`Next: Review connections → granite backlinks ${note.slug}`);
+      break;
+    case 'output':
+      console.log(`Next: Verify provenance → granite show ${note.slug}`);
+      break;
+    default:
+      console.log(`Next: granite recommend ${note.slug}`);
+  }
 }

@@ -13,6 +13,7 @@ import { serveCommand } from './commands/serve.js';
 import { typesCommand } from './commands/types.js';
 import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
+import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
 import { GRANITE_VERSION } from './version.js';
 
@@ -20,26 +21,38 @@ const program = new Command();
 
 program
   .name('granite')
-  .description('Granite — a local-first markdown memory system')
+  .description('Granite — a local-first knowledge compiler. capture → compile → query → output → lint')
   .version(GRANITE_VERSION);
+
+// ─── Setup ────────────────────────────────────────────────────────────
 
 program
   .command('init')
-  .description('Initialize the default vault in ~/.granite')
+  .description('Create a new vault and start the knowledge loop')
   .action(() => {
     initVault();
   });
 
 program
+  .command('status')
+  .description('See where your vault stands and what to do next')
+  .option('--json', 'Output as JSON')
+  .action((options: { json?: boolean }) => {
+    statusCommand(options);
+  });
+
+// ─── Capture ──────────────────────────────────────────────────────────
+
+program
   .command('new')
-  .description('Create a new note')
+  .description('Create a structured note — search first to avoid duplicates')
   .argument('<title>', 'Note title')
-  .option('-t, --type <type>', 'Note type (e.g. note, source, synthesis, output)')
-  .option('--source <source>', 'Set source (human, agent, extraction)')
-  .option('--status <status>', 'Set status (inbox, active, archived)')
-  .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
-  .option('--durability <durability>', 'Set durability (canonical, working, ephemeral)')
-  .option('--derived-from <refs>', 'Set derived_from references (comma-separated note IDs or slugs)')
+  .option('-t, --type <type>', 'Note type (note, source, synthesis, output)')
+  .option('--source <source>', 'Who created it (human, agent, extraction)')
+  .option('--status <status>', 'Lifecycle state (inbox, active, archived)')
+  .option('--review-state <state>', 'Editorial state (draft, reviewed, locked)')
+  .option('--durability <durability>', 'Knowledge permanence (canonical, working, ephemeral)')
+  .option('--derived-from <refs>', 'Provenance: slugs this note derives from (comma-separated)')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((title: string, options: { type?: string; source?: string; status?: string; reviewState?: string; durability?: string; derivedFrom?: string; json?: boolean }) => {
     newNote(title, options);
@@ -47,29 +60,53 @@ program
 
 program
   .command('add')
-  .description('Quick-capture a note using the default note type (reads stdin if no text given)')
+  .description('Quick-capture raw text into the vault — the fastest way to get something in')
   .argument('[text]', 'Note text (or pipe via stdin)')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((text: string | undefined, options: { json?: boolean }) => {
     addNote(text, options);
   });
 
+// ─── Query ────────────────────────────────────────────────────────────
+
 program
   .command('list')
   .alias('ls')
-  .description('List notes')
+  .description('Browse the vault — filter by type, status, source, or date')
   .option('-t, --type <type>', 'Filter by note type')
   .option('-s, --status <status>', 'Filter by status (inbox, active, archived)')
   .option('--source <source>', 'Filter by source (human, agent, extraction)')
-  .option('--since <date>', 'Filter notes modified since date (YYYY-MM-DD)')
-  .option('--json [fields]', 'Output as JSON; optionally specify fields (e.g. --json slug,title,type)')
+  .option('--since <date>', 'Only notes modified since (YYYY-MM-DD)')
+  .option('--json [fields]', 'Output as JSON; optionally select fields (e.g. --json slug,title,type)')
   .action((options: { type?: string; status?: string; source?: string; since?: string; json?: boolean | string }) => {
     listCommand(options);
   });
 
 program
+  .command('show')
+  .alias('cat')
+  .description('Read a note in full — frontmatter, body, and metadata')
+  .argument('<slug>', 'Note slug')
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .option('--body', 'Output body only (for piping)')
+  .action((slug: string, options: { json?: boolean; body?: boolean }) => {
+    showCommand(slug, options);
+  });
+
+program
+  .command('search')
+  .description('Research a topic across the vault — use before creating to avoid duplicates')
+  .argument('<query>', 'Search query')
+  .option('--json', 'Output as JSON (agent-friendly)')
+  .action((query: string, options: { json?: boolean }) => {
+    searchCommand(query, options);
+  });
+
+// ─── Compile ──────────────────────────────────────────────────────────
+
+program
   .command('edit')
-  .description('Edit a note (opens $EDITOR, or use flags for programmatic edits)')
+  .description('Refine a note — append, rewrite, promote status, add tags and links')
   .argument('<slug>', 'Note slug')
   .option('--body <text>', 'Replace the note body')
   .option('--append <text>', 'Append text to the note body')
@@ -80,42 +117,22 @@ program
   .option('--source <source>', 'Set source (human, agent, extraction)')
   .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
   .option('--durability <durability>', 'Set durability (canonical, working, ephemeral)')
-  .option('--derived-from <refs>', 'Set derived_from references (comma-separated note IDs or slugs)')
+  .option('--derived-from <refs>', 'Set derived_from references (comma-separated slugs)')
   .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string; reviewState?: string; durability?: string; derivedFrom?: string }) => {
     editCommand(slug, options);
   });
 
 program
   .command('open')
-  .description('Open a note in your editor (alias for edit)')
+  .description('Open a note in your editor')
   .argument('<slug>', 'Note slug')
   .action((slug: string) => {
     openNote(slug);
   });
 
 program
-  .command('show')
-  .alias('cat')
-  .description('Display a note by slug')
-  .argument('<slug>', 'Note slug')
-  .option('--json', 'Output as JSON (agent-friendly)')
-  .option('--body', 'Output body only (no frontmatter)')
-  .action((slug: string, options: { json?: boolean; body?: boolean }) => {
-    showCommand(slug, options);
-  });
-
-program
-  .command('search')
-  .description('Full-text search across notes')
-  .argument('<query>', 'Search query')
-  .option('--json', 'Output as JSON (agent-friendly)')
-  .action((query: string, options: { json?: boolean }) => {
-    searchCommand(query, options);
-  });
-
-program
   .command('backlinks')
-  .description('Show notes that link to a given note')
+  .description("See a note's role in the graph — who links here and why")
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
@@ -124,7 +141,7 @@ program
 
 program
   .command('suggest-links')
-  .description('Suggest wikilinks based on unlinked mentions')
+  .description('Find unlinked mentions — strengthen the graph by adding missed [[wikilinks]]')
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
@@ -133,30 +150,35 @@ program
 
 program
   .command('recommend')
-  .description('Suggest links, tags, and the next note to create')
+  .description('The heart of the compile loop — what to link, tag, and write next')
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
     recommendCommand(slug, options);
   });
 
+// ─── Lint ─────────────────────────────────────────────────────────────
+
+program
+  .command('doctor')
+  .description('Health-check the vault — broken links, missing fields, line limit violations')
+  .option('--json', 'Output as JSON')
+  .action((options: { json?: boolean }) => {
+    doctorCommand(options);
+  });
+
 program
   .command('types')
-  .description('List available note types')
+  .description('See the note types and the natural flow: source → note → synthesis → output')
   .action(() => {
     typesCommand();
   });
 
-program
-  .command('doctor')
-  .description('Validate vault health')
-  .action(() => {
-    doctorCommand();
-  });
+// ─── Serve ────────────────────────────────────────────────────────────
 
 program
   .command('serve')
-  .description('Start the local web UI')
+  .description('Start the local web UI — browse, search, and visualize the knowledge graph')
   .option('-p, --port <port>', 'Port number', '4321')
   .action((options: { port: string }) => {
     serveCommand(options);

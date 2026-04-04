@@ -55,4 +55,8 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
       console.log(line);
     }
   }
+
+  console.log('');
+  console.log(`Captured as "${note.frontmatter.title}" (${note.slug})`);
+  console.log(`Next: Refine → granite edit ${note.slug} | Find links → granite suggest-links ${note.slug}`);
 }

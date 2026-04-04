@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.8](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.7...granite-mem-v0.1.8) (2026-04-04)
+
+
+### Features
+
+* add agent-friendly note protocol metadata ([#22](https://github.com/The-Vibe-Company/Granite/issues/22)) ([68b0527](https://github.com/The-Vibe-Company/Granite/commit/68b05277f55587fabb2b29aa05eadb95b5101dfa))
+* redesign web UI with command palette, mobile nav, and accessibility ([2cb8a46](https://github.com/The-Vibe-Company/Granite/commit/2cb8a46c9b6998371051bd101437d3f6cc4f6296))
+* remove sync, upgrade MCP server to knowledge compiler ([207794a](https://github.com/The-Vibe-Company/Granite/commit/207794a9f1c811663746b5c7beed9d54811e1e3f))
+* split granite skill into loop-phase skills ([#25](https://github.com/The-Vibe-Company/Granite/issues/25)) ([f751d34](https://github.com/The-Vibe-Company/Granite/commit/f751d341bc26fc39b4b57077332ca22b87009d94))
+
 ## [0.1.7](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.6...granite-mem-v0.1.7) (2026-03-31)
 
 

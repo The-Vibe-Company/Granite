@@ -76,7 +76,7 @@ const GraphEngine = (() => {
         x: Math.cos(angle) * spread * (0.5 + Math.random() * 0.5),
         y: Math.sin(angle) * spread * (0.5 + Math.random() * 0.5),
         vx: 0, vy: 0,
-        radius: Math.max(4, Math.min(14, 4 + connections * 1.5)),
+        radius: Math.max(5, Math.min(22, 5 + Math.sqrt(connections) * 4)),
         connections,
       };
     });
@@ -227,13 +227,15 @@ const GraphEngine = (() => {
       ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Label
-      ctx.font = LABEL_FONT;
+      // Label — larger font for bigger nodes
+      const fontSize = Math.round(9 + (node.radius - 5) * 0.3);
+      ctx.font = `${fontSize}px "Instrument Sans", sans-serif`;
       ctx.fillStyle = isDimmed ? LABEL_DIM : LABEL_COLOR;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      const label = node.title.length > 24 ? node.title.slice(0, 22) + '…' : node.title;
-      ctx.fillText(label, node.x, node.y + node.radius + 5);
+      const maxLen = Math.round(18 + node.radius);
+      const label = node.title.length > maxLen ? node.title.slice(0, maxLen - 1) + '…' : node.title;
+      ctx.fillText(label, node.x, node.y + node.radius + 6);
       ctx.globalAlpha = 1;
     }
 

@@ -1,35 +1,32 @@
 # Granite
 
-> A local-first markdown memory system for humans and agents.
+> A local-first knowledge compiler for humans and agents.
 
-Granite is a simple PKM tool built around plain Markdown files, a small set of opinionated note types, and a fast loop for turning raw notes into useful memory.
+Karpathy described a system where LLMs don't just answer questions — they compile and maintain a knowledge base. Raw data in, structured wiki out, health checks to keep it clean. Then he said:
 
-Most PKM tools give you a blank canvas. Granite gives you a working system:
+> *"I think there is room here for an incredible new product instead of a hacky collection of scripts."*
 
-- capture quickly
-- structure ideas without over-designing your workflow
-- keep sources, durable notes, syntheses, and outputs connected
-- surface what to connect or write next
-- stay fully local, scriptable, and agent-friendly
+Granite is that product.
 
-If you want a flexible framework, there are already many options. Granite is for people who want plain files, strong defaults, and a memory system that starts helping immediately.
+Plain Markdown files. A CLI for humans. An MCP server that teaches AI agents how to be knowledge gardeners. One loop:
+
+**capture → compile → query → output → lint**
+
+No scripts to maintain. No glue code. Your agent writes the notes, links them, and recommends what to write next. You never touch a file.
 
 ![Granite note view](docs/screenshots/granite-note.png)
 
 ## Why Granite
 
-Granite is built around a simple loop:
+Most PKM tools give you a blank canvas. Granite gives you a working system:
 
-`capture -> link -> recommend -> resurface`
-
-That means:
-
-- your notes live as plain Markdown files with YAML frontmatter
-- the index is derived state, not the source of truth
-- the default note types create just enough structure to stay useful
-- custom note types are easy to add in `granite.yml`
-- the CLI is predictable for both humans and agents
-- the local web UI makes the vault browseable without adding cloud lock-in
+- Notes are plain Markdown files with YAML frontmatter
+- The index is derived state, not the source of truth
+- Four note types encode the knowledge lifecycle: `source → note → synthesis → output`
+- Custom note types are easy to add in `granite.yml`
+- The CLI is predictable for both humans and agents
+- The MCP server teaches methodology, not just CRUD — any LLM client that connects immediately knows how to operate the vault
+- The local web UI makes the vault browseable without cloud lock-in
 
 Granite is opinionated where it matters and flexible where it should be.
 
@@ -54,16 +51,22 @@ You can add your own note types in `granite.yml`, but Granite still works out of
 
 ### 3. Agent-native, not just agent-compatible
 
-Granite is designed to be easy for agents to read and act on:
+Granite is designed so AI agents can operate the vault autonomously:
 
-- notes are plain files
-- metadata is explicit
-- commands support `--json`
-- Granite ships with an MCP server
-- vault structure is predictable
-- search, backlinks, and recommendations are available from the CLI
+- Notes are plain files with explicit metadata
+- Commands support `--json` for structured output
+- The MCP server exposes the full knowledge loop with rich instructions
+- Tool descriptions say *when and why*, not just *what*
+- Write responses return recommendations for what to do next
+- Three workflow prompts encode the compile and lint phases
 
-It works well as a personal system, and it also works as a memory layer for coding agents, assistants, or local automation.
+Connect Claude Code in one command:
+
+```bash
+claude mcp add granite -- granite mcp --vault ~/.granite
+```
+
+Your agent now has a knowledge base it knows how to operate. No system prompt needed — the methodology lives in the server.
 
 ## Quickstart
 

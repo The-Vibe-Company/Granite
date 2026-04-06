@@ -35,15 +35,17 @@ const GraphEngine = (() => {
   let dragNode = null;
   let isPanning = false;
   let panStart = { x: 0, y: 0 };
+  let dragStartPos = { x: 0, y: 0 };
+  let dragDistance = 0;
   let activeSlug = null;
   let onNavigate = null;
   let isRunning = false;
   let simulationAlpha = 1;
 
   // ── Physics constants ──
-  const REPULSION = 800;
-  const ATTRACTION = 0.008;
-  const GRAVITY = 0.02;
+  const REPULSION = 2500;
+  const ATTRACTION = 0.005;
+  const GRAVITY = 0.012;
   const DAMPING = 0.88;
   const MIN_ALPHA = 0.001;
   const VELOCITY_LIMIT = 8;
@@ -68,7 +70,7 @@ const GraphEngine = (() => {
     nodes = graphData.nodes.map((n, i) => {
       const connections = connectionCount[n.slug] || 0;
       const angle = (i / graphData.nodes.length) * Math.PI * 2;
-      const spread = Math.min(300, graphData.nodes.length * 15);
+      const spread = Math.min(600, graphData.nodes.length * 25);
       return {
         ...n,
         x: Math.cos(angle) * spread * (0.5 + Math.random() * 0.5),
@@ -283,6 +285,8 @@ const GraphEngine = (() => {
         dragNode = node;
         dragNode.vx = 0;
         dragNode.vy = 0;
+        dragStartPos = { x: e.clientX, y: e.clientY };
+        dragDistance = 0;
         simulationAlpha = Math.max(simulationAlpha, 0.3);
       } else {
         isPanning = true;
@@ -298,7 +302,9 @@ const GraphEngine = (() => {
         const { x, y } = screenToWorld(sx, sy);
         dragNode.x = x;
         dragNode.y = y;
+        dragDistance += Math.abs(e.movementX) + Math.abs(e.movementY);
         simulationAlpha = Math.max(simulationAlpha, 0.1);
+        canvas.style.cursor = 'grabbing';
       } else if (isPanning) {
         transform.x = e.clientX - panStart.x;
         transform.y = e.clientY - panStart.y;
@@ -327,13 +333,12 @@ const GraphEngine = (() => {
 
     canvas.addEventListener('mouseup', (e) => {
       if (dragNode) {
-        // If barely moved, treat as click
-        const rect = canvas.getBoundingClientRect();
-        const node = findNodeAt(e.clientX - rect.left, e.clientY - rect.top);
-        if (node && node === dragNode && onNavigate) {
-          onNavigate(node.slug);
+        // Only navigate if the mouse barely moved (true click, not drag)
+        if (dragDistance < 5 && onNavigate) {
+          onNavigate(dragNode.slug);
         }
         dragNode = null;
+        canvas.style.cursor = 'grab';
       }
       isPanning = false;
     });

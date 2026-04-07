@@ -495,7 +495,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     description: 'Load a compressed AAAK snapshot of the entire vault into context. Call this at the start of every session to know what exists, how notes cluster, and what changed recently. Costs ~200-500 tokens instead of reading every note.',
     outputSchema: z.object({
       total: z.number(),
-      by_type: z.record(z.number()),
+      by_type: z.record(z.string(), z.number()),
       modified: z.string(),
       clusters: z.array(z.object({
         tag: z.string(),

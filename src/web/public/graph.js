@@ -1,29 +1,23 @@
 /**
  * Granite — Force-Directed Graph Visualization
  *
- * Interactive canvas graph showing note connections.
- * Physics: repulsion between all nodes, attraction along edges, gravity to center.
- * Interactions: drag, zoom, pan, click-to-navigate, hover highlight.
+ * Monochrome, organic, spread-out layout inspired by knowledge graph explorers.
+ * Hub nodes are large, leaf nodes are tiny. Labels are clean and readable.
  */
 
 const GraphEngine = (() => {
 
-  // ── Type colors ──
-  const TYPE_COLORS = {
-    note:       { fill: '#a8aaff', glow: 'rgba(168, 170, 255, 0.25)' },
-    source:     { fill: '#5cd9a8', glow: 'rgba(92, 217, 168, 0.25)' },
-    synthesis:  { fill: '#e0a0ff', glow: 'rgba(224, 160, 255, 0.25)' },
-    output:     { fill: '#ffb86c', glow: 'rgba(255, 184, 108, 0.25)' },
-    _default:   { fill: '#6b6b7a', glow: 'rgba(107, 107, 122, 0.25)' },
-  };
-
-  const BG_COLOR = '#050507';
-  const EDGE_COLOR = 'rgba(60, 60, 75, 0.3)';
-  const EDGE_HIGHLIGHT = 'rgba(168, 170, 255, 0.5)';
-  const LABEL_COLOR = '#a8a8b4';
-  const LABEL_DIM = 'rgba(107, 107, 122, 0.25)';
-  const LABEL_FONT = '11px "Instrument Sans", sans-serif';
-  const NODE_ACTIVE_RING = '#7c7fff';
+  // ── Visual constants ──
+  const BG_COLOR = '#1a1a1e';
+  const NODE_COLOR = 'rgba(200, 200, 210, 0.9)';
+  const NODE_COLOR_DIM = 'rgba(200, 200, 210, 0.12)';
+  const NODE_HOVER_COLOR = '#ffffff';
+  const EDGE_COLOR = 'rgba(100, 100, 115, 0.18)';
+  const EDGE_HOVER_COLOR = 'rgba(180, 180, 200, 0.45)';
+  const LABEL_COLOR = 'rgba(190, 190, 200, 0.75)';
+  const LABEL_HOVER_COLOR = '#ffffff';
+  const LABEL_DIM = 'rgba(190, 190, 200, 0.08)';
+  const ACTIVE_RING_COLOR = 'rgba(255, 255, 255, 0.6)';
 
   // ── State ──
   let canvas, ctx;
@@ -42,17 +36,13 @@ const GraphEngine = (() => {
   let isRunning = false;
   let simulationAlpha = 1;
 
-  // ── Physics constants ──
-  const REPULSION = 2500;
-  const ATTRACTION = 0.005;
-  const GRAVITY = 0.012;
-  const DAMPING = 0.88;
+  // ── Physics — spread out, organic layout ──
+  const REPULSION = 5000;
+  const ATTRACTION = 0.003;
+  const GRAVITY = 0.004;
+  const DAMPING = 0.85;
   const MIN_ALPHA = 0.001;
-  const VELOCITY_LIMIT = 8;
-
-  function getTypeColor(type) {
-    return TYPE_COLORS[type] || TYPE_COLORS._default;
-  }
+  const VELOCITY_LIMIT = 10;
 
   function init(canvasEl, graphData, options = {}) {
     canvas = canvasEl;
@@ -67,16 +57,21 @@ const GraphEngine = (() => {
       connectionCount[e.target] = (connectionCount[e.target] || 0) + 1;
     }
 
+    // Find max connections for relative sizing
+    const maxCx = Math.max(1, ...Object.values(connectionCount));
+
     nodes = graphData.nodes.map((n, i) => {
       const connections = connectionCount[n.slug] || 0;
+      const ratio = connections / maxCx;
       const angle = (i / graphData.nodes.length) * Math.PI * 2;
-      const spread = Math.min(600, graphData.nodes.length * 25);
+      const spread = Math.max(400, graphData.nodes.length * 30);
       return {
         ...n,
-        x: Math.cos(angle) * spread * (0.5 + Math.random() * 0.5),
-        y: Math.sin(angle) * spread * (0.5 + Math.random() * 0.5),
+        x: Math.cos(angle) * spread * (0.3 + Math.random() * 0.7),
+        y: Math.sin(angle) * spread * (0.3 + Math.random() * 0.7),
         vx: 0, vy: 0,
-        radius: Math.max(5, Math.min(22, 5 + Math.sqrt(connections) * 4)),
+        // Dramatic size range: leaf=3, hub=28
+        radius: Math.max(3, Math.round(3 + ratio * 25)),
         connections,
       };
     });
@@ -120,7 +115,9 @@ const GraphEngine = (() => {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = REPULSION / (dist * dist) * simulationAlpha;
+        // Stronger repulsion for big nodes
+        const sizeFactor = (a.radius + b.radius) * 0.15;
+        const force = (REPULSION * sizeFactor) / (dist * dist) * simulationAlpha;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         a.vx -= fx; a.vy -= fy;
@@ -140,7 +137,7 @@ const GraphEngine = (() => {
       edge.target.vx -= fx; edge.target.vy -= fy;
     }
 
-    // Gravity toward center
+    // Very weak gravity — let nodes spread to edges
     for (const node of nodes) {
       node.vx -= node.x * GRAVITY * simulationAlpha;
       node.vy -= node.y * GRAVITY * simulationAlpha;
@@ -151,7 +148,6 @@ const GraphEngine = (() => {
       if (node === dragNode) continue;
       node.vx *= DAMPING;
       node.vy *= DAMPING;
-      // Clamp velocity
       const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
       if (speed > VELOCITY_LIMIT) {
         node.vx = (node.vx / speed) * VELOCITY_LIMIT;
@@ -161,7 +157,7 @@ const GraphEngine = (() => {
       node.y += node.vy;
     }
 
-    simulationAlpha *= 0.995;
+    simulationAlpha *= 0.994;
   }
 
   // ── Render ──
@@ -185,58 +181,66 @@ const GraphEngine = (() => {
 
     const dimming = hoveredNode !== null;
 
-    // Draw edges
+    // Draw edges — thin, subtle
     for (const edge of edges) {
       const isHighlighted = hoveredNode && (edge.source === hoveredNode || edge.target === hoveredNode);
-      ctx.strokeStyle = isHighlighted ? EDGE_HIGHLIGHT : (dimming ? 'rgba(50, 50, 60, 0.15)' : EDGE_COLOR);
-      ctx.lineWidth = isHighlighted ? 1.5 : 0.75;
+      ctx.strokeStyle = isHighlighted ? EDGE_HOVER_COLOR : (dimming ? 'rgba(80, 80, 90, 0.06)' : EDGE_COLOR);
+      ctx.lineWidth = isHighlighted ? 1 : 0.5;
       ctx.beginPath();
       ctx.moveTo(edge.source.x, edge.source.y);
       ctx.lineTo(edge.target.x, edge.target.y);
       ctx.stroke();
     }
 
-    // Draw nodes
+    // Draw nodes — monochrome circles, no glow
     for (const node of nodes) {
-      const colors = getTypeColor(node.type);
       const isNeighbor = hoveredNeighbors.has(node);
       const isDimmed = dimming && !isNeighbor;
+      const isHovered = node === hoveredNode;
       const isActive = node.slug === activeSlug;
-
-      // Glow for hovered/active
-      if ((node === hoveredNode || isActive) && !isDimmed) {
-        ctx.fillStyle = colors.glow;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
-        ctx.fill();
-      }
 
       // Active ring
       if (isActive) {
-        ctx.strokeStyle = NODE_ACTIVE_RING;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ACTIVE_RING_COLOR;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
         ctx.stroke();
       }
 
       // Node circle
-      ctx.globalAlpha = isDimmed ? 0.15 : 1;
-      ctx.fillStyle = colors.fill;
+      if (isHovered) {
+        ctx.fillStyle = NODE_HOVER_COLOR;
+      } else if (isDimmed) {
+        ctx.fillStyle = NODE_COLOR_DIM;
+      } else {
+        ctx.fillStyle = NODE_COLOR;
+      }
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Label — larger font for bigger nodes
-      const fontSize = Math.round(9 + (node.radius - 5) * 0.3);
-      ctx.font = `${fontSize}px "Instrument Sans", sans-serif`;
-      ctx.fillStyle = isDimmed ? LABEL_DIM : LABEL_COLOR;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const maxLen = Math.round(18 + node.radius);
-      const label = node.title.length > maxLen ? node.title.slice(0, maxLen - 1) + '…' : node.title;
-      ctx.fillText(label, node.x, node.y + node.radius + 6);
-      ctx.globalAlpha = 1;
+      // Label — only show for nodes with enough connections or when hovered/neighbor
+      const showLabel = isHovered || isActive || node.connections >= 3 || (dimming && isNeighbor);
+      if (showLabel) {
+        const fontSize = Math.max(9, Math.min(13, Math.round(8 + node.radius * 0.2)));
+        ctx.font = `${fontSize}px "Instrument Sans", -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        if (isHovered || isActive) {
+          ctx.fillStyle = LABEL_HOVER_COLOR;
+        } else if (isDimmed) {
+          ctx.fillStyle = LABEL_DIM;
+        } else {
+          ctx.fillStyle = LABEL_COLOR;
+        }
+
+        // Truncate slug-style: kebab-case, shorter
+        let label = node.slug;
+        if (label.length > 28) label = label.slice(0, 26) + '…';
+        ctx.fillText(label, node.x, node.y + node.radius + 5);
+      }
     }
 
     ctx.restore();
@@ -269,10 +273,12 @@ const GraphEngine = (() => {
 
   function findNodeAt(sx, sy) {
     const { x, y } = screenToWorld(sx, sy);
+    // Generous hit area for small nodes
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
       const dx = n.x - x, dy = n.y - y;
-      if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+      const hitRadius = Math.max(n.radius, 8);
+      if (dx * dx + dy * dy < hitRadius * hitRadius) return n;
     }
     return null;
   }
@@ -314,8 +320,7 @@ const GraphEngine = (() => {
         const node = findNodeAt(sx, sy);
         if (node !== hoveredNode) {
           hoveredNode = node;
-          canvas.style.cursor = node ? 'pointer' : 'grab';
-          // Show tooltip
+          canvas.style.cursor = node ? 'pointer' : 'default';
           const tooltip = document.getElementById('graph-tooltip');
           if (node) {
             tooltip.textContent = node.title;
@@ -335,12 +340,11 @@ const GraphEngine = (() => {
 
     canvas.addEventListener('mouseup', (e) => {
       if (dragNode) {
-        // Only navigate if the mouse barely moved (true click, not drag)
         if (dragDistance < 5 && onNavigate) {
           onNavigate(dragNode.slug);
         }
         dragNode = null;
-        canvas.style.cursor = 'grab';
+        canvas.style.cursor = 'default';
       }
       isPanning = false;
     });
@@ -356,8 +360,6 @@ const GraphEngine = (() => {
       e.preventDefault();
       const scaleFactor = e.deltaY > 0 ? 0.92 : 1.08;
       const newScale = Math.max(0.1, Math.min(5, transform.scale * scaleFactor));
-
-      // Zoom toward cursor
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left - width / 2;
       const my = e.clientY - rect.top - height / 2;
@@ -366,7 +368,6 @@ const GraphEngine = (() => {
       transform.scale = newScale;
     }, { passive: false });
 
-    // Resize observer
     const ro = new ResizeObserver(() => { resize(); });
     ro.observe(canvas.parentElement);
   }

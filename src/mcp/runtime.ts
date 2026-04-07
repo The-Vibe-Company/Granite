@@ -279,6 +279,110 @@ export class GraniteMcpRuntime {
     };
   }
 
+  wakeup(): {
+    total: number;
+    by_type: Record<string, number>;
+    modified: string;
+    clusters: Array<{ tag: string; slugs: string[]; hub: string | null }>;
+    people: Array<{ slug: string; title: string }>;
+    recent: Array<{ slug: string; age: string }>;
+    stale: Array<{ slug: string; reason: string }>;
+    aaak: string;
+  } {
+    this.refreshIndex();
+    const notes = this.readAllNotes().filter(n => n.frontmatter.status !== 'archived');
+
+    // Count connections
+    const cx = new Map<string, number>();
+    const linkRows = this.db.prepare(
+      'SELECT source_slug, target_slug FROM links WHERE target_slug IS NOT NULL',
+    ).all() as Array<{ source_slug: string; target_slug: string }>;
+    for (const r of linkRows) {
+      cx.set(r.source_slug, (cx.get(r.source_slug) ?? 0) + 1);
+      cx.set(r.target_slug, (cx.get(r.target_slug) ?? 0) + 1);
+    }
+
+    // By type
+    const byType: Record<string, number> = {};
+    for (const n of notes) byType[n.frontmatter.type] = (byType[n.frontmatter.type] ?? 0) + 1;
+
+    // Clusters by tag
+    const tagNotes = new Map<string, Set<string>>();
+    for (const n of notes) {
+      for (const tag of n.frontmatter.tags ?? []) {
+        if (!tagNotes.has(tag)) tagNotes.set(tag, new Set());
+        tagNotes.get(tag)!.add(n.slug);
+      }
+    }
+    const assigned = new Set<string>();
+    const clusters: Array<{ tag: string; slugs: string[]; hub: string | null }> = [];
+    const sortedTags = [...tagNotes.entries()]
+      .filter(([, s]) => s.size >= 2)
+      .sort((a, b) => b[1].size - a[1].size);
+    for (const [tag, slugSet] of sortedTags) {
+      const unassigned = [...slugSet].filter(s => !assigned.has(s));
+      if (unassigned.length < 2) continue;
+      let hub: string | null = null;
+      let maxCx = 0;
+      for (const s of unassigned) {
+        const c = cx.get(s) ?? 0;
+        if (c > maxCx) { maxCx = c; hub = s; }
+      }
+      clusters.push({ tag, slugs: unassigned, hub });
+      for (const s of unassigned) assigned.add(s);
+    }
+    const misc = notes.filter(n => !assigned.has(n.slug)).map(n => n.slug);
+    if (misc.length > 0) clusters.push({ tag: 'misc', slugs: misc, hub: null });
+
+    // People
+    const people = notes
+      .filter(n => (n.frontmatter.tags ?? []).some(t => ['prospect', 'person', 'contact', 'founder', 'client'].includes(t)))
+      .map(n => ({ slug: n.slug, title: n.frontmatter.title }));
+
+    // Recent
+    const sorted = [...notes].sort((a, b) => b.frontmatter.modified.localeCompare(a.frontmatter.modified));
+    const getAge = (d: string): string => {
+      const diff = Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+      if (diff === 0) return 'today';
+      if (diff === 1) return 'yesterday';
+      if (diff < 7) return `${diff}d`;
+      if (diff < 30) return `${Math.floor(diff / 7)}w`;
+      return `${Math.floor(diff / 30)}mo`;
+    };
+    const recent = sorted.slice(0, 5).map(n => ({ slug: n.slug, age: getAge(n.frontmatter.modified) }));
+
+    // Stale
+    const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+    const stale = notes
+      .filter(n => n.frontmatter.durability === 'working' && n.frontmatter.modified < twoWeeksAgo && (cx.get(n.slug) ?? 0) < 2)
+      .map(n => ({ slug: n.slug, reason: 'working+stale+disconnected' }));
+
+    // AAAK
+    const typeBreak = Object.entries(byType).map(([t, c]) => `${c}${t.slice(0, 3)}`).join(',');
+    const lastMod = sorted[0]?.frontmatter.modified?.slice(0, 10) ?? '';
+    const lines = [`VAULT: ${notes.length}n (${typeBreak}) | modified:${lastMod}`, 'CLUSTERS:'];
+    for (const cl of clusters) {
+      const slugList = cl.slugs.map(s => {
+        const c = cx.get(s) ?? 0;
+        const n = notes.find(x => x.slug === s);
+        const ann: string[] = [];
+        if (s === cl.hub && c >= 5) ann.push('hub');
+        if (n?.frontmatter.type === 'synthesis') ann.push('syn');
+        if (n?.frontmatter.type === 'source') ann.push('src');
+        if (n?.frontmatter.type === 'output') ann.push('out');
+        if (c >= 5) ann.push(`${c}cx`);
+        const short = s.length > 30 ? s.slice(0, 30) : s;
+        return ann.length ? `${short}(${ann.join(',')})` : short;
+      });
+      lines.push(`  ${cl.tag.toUpperCase()}: ${slugList.join(' ')}`);
+    }
+    if (people.length) lines.push(`PEOPLE: ${people.map(p => p.title.slice(0, 20)).join(', ')}`);
+    if (recent.length) lines.push(`RECENT: ${recent.slice(0, 5).map(r => `${r.slug.slice(0, 25)}(${r.age})`).join(' ')}`);
+    const aaak = lines.join('\n');
+
+    return { total: notes.length, by_type: byType, modified: sorted[0]?.frontmatter.modified ?? '', clusters, people, recent, stale, aaak };
+  }
+
   createNote(input: CreateNoteInput): NoteMutationResult {
     const resolvedType = input.type ?? this.config.defaults.note_type;
     const typeConfig = this.config.note_types[resolvedType];

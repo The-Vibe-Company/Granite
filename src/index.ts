@@ -15,6 +15,7 @@ import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
 import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
+import { wakeupCommand } from './commands/wakeup.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -172,6 +173,14 @@ program
   .description('See the note types and the natural flow: source → note → synthesis → output')
   .action(() => {
     typesCommand();
+  });
+
+program
+  .command('wakeup')
+  .description('Generate a compressed AAAK snapshot of the vault for LLM context loading')
+  .option('--json', 'Output as JSON (includes structured data + AAAK)')
+  .action((options: { json?: boolean }) => {
+    wakeupCommand(options);
   });
 
 // ─── Serve ────────────────────────────────────────────────────────────

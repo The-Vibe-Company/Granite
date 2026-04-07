@@ -490,6 +490,32 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     }, recommendationSummary(recommendations));
   });
 
+  server.registerTool('granite_wakeup', {
+    title: 'Granite Wakeup',
+    description: 'Load a compressed AAAK snapshot of the entire vault into context. Call this at the start of every session to know what exists, how notes cluster, and what changed recently. Costs ~200-500 tokens instead of reading every note.',
+    outputSchema: z.object({
+      total: z.number(),
+      by_type: z.record(z.number()),
+      modified: z.string(),
+      clusters: z.array(z.object({
+        tag: z.string(),
+        slugs: z.array(z.string()),
+        hub: z.string().nullable(),
+      })),
+      people: z.array(z.object({ slug: z.string(), title: z.string() })),
+      recent: z.array(z.object({ slug: z.string(), age: z.string() })),
+      stale: z.array(z.object({ slug: z.string(), reason: z.string() })),
+      aaak: z.string(),
+    }),
+    annotations: readOnlyAnnotations,
+  }, async () => {
+    const result = runtime.wakeup();
+    return toolResult(
+      result,
+      result.aaak,
+    );
+  });
+
   server.registerTool('granite_run_doctor', {
     title: 'Run Granite Doctor',
     description: 'Lint the vault. Finds broken wikilinks, missing frontmatter fields, notes exceeding line limits, and other structural issues. Run this periodically to maintain vault integrity — part of the lint phase of the knowledge loop.',

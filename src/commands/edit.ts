@@ -11,6 +11,7 @@ import {
   validateSource,
 } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
+import { ensureIndex, syncNoteInIndex } from '../core/index-db.js';
 
 interface EditOptions {
   body?: string;
@@ -103,6 +104,12 @@ export function editCommand(slug: string, options: EditOptions): void {
 
     frontmatter.modified = new Date().toISOString();
     fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+
+    // Sync the updated note into the SQLite index so new wikilinks are tracked
+    const updatedNote = readNote(existingNote.filepath);
+    const db = ensureIndex(vaultRoot, config);
+    syncNoteInIndex(vaultRoot, config, db, updatedNote);
+    db.close();
 
     console.log(existingNote.filepath);
     const recommendationStrategy = options.title !== undefined || options.alias !== undefined ? 'rebuild' : 'incremental';

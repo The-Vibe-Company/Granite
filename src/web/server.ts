@@ -123,6 +123,37 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
     return c.json({ nodes, edges });
   });
 
+  // Serve vault assets (images, files) from {vault}/assets/
+  app.get('/assets/*', (c) => {
+    const assetPath = c.req.path.replace(/^\/assets\//, '');
+    const fullPath = path.join(vaultRoot, 'assets', assetPath);
+
+    if (!fs.existsSync(fullPath)) {
+      return c.notFound();
+    }
+
+    const content = fs.readFileSync(fullPath);
+    const ext = path.extname(fullPath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.pdf': 'application/pdf',
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    return new Response(content, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  });
+
   // Static files — serve from the web/public directory
   // We need to resolve the path relative to where the source files are
   const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');

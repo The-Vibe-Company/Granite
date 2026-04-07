@@ -16,6 +16,7 @@ import { editCommand } from './commands/edit.js';
 import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
 import { wakeupCommand } from './commands/wakeup.js';
+import { attachCommand } from './commands/attach.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -173,6 +174,15 @@ program
   .description('See the note types and the natural flow: source → note → synthesis → output')
   .action(() => {
     typesCommand();
+  });
+
+program
+  .command('attach <file>')
+  .description('Attach a file (image, video, PDF) to the vault and get markdown embed syntax')
+  .option('--slug <slug>', 'Note slug to suggest appending to')
+  .option('--json', 'Output as JSON')
+  .action((file: string, options: { slug?: string; json?: boolean }) => {
+    attachCommand(file, options);
   });
 
 program

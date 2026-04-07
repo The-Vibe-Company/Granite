@@ -474,6 +474,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 #note-body .external-link:hover { color: var(--text-1); text-decoration-color: var(--text-2); }
 
 /* ── Markdown table ── */
+#note-body .md-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 16px 0;
+  display: block;
+  border: 1px solid var(--border);
+}
+#note-body .md-image:hover {
+  border-color: var(--text-2);
+  cursor: zoom-in;
+}
 #note-body .md-table-wrap {
   overflow-x: auto;
   margin: 16px 0;

@@ -490,6 +490,28 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     }, recommendationSummary(recommendations));
   });
 
+  server.registerTool('granite_attach', {
+    title: 'Attach File to Vault',
+    description: 'Copy an image, screenshot, video, or PDF into the vault assets folder and get markdown embed syntax. Use this when you need to attach a visual to a note. Returns the markdown syntax to paste into a note body.',
+    inputSchema: {
+      file_path: z.string().describe('Absolute path to the file to attach'),
+      slug: z.string().optional().describe('Optional note slug to suggest appending the image to'),
+    },
+    outputSchema: z.object({
+      file: z.string(),
+      path: z.string(),
+      markdown: z.string(),
+      slug: z.string().nullable(),
+    }),
+    annotations: writeAnnotations,
+  }, async ({ file_path, slug }) => {
+    const result = runtime.attach(file_path, slug);
+    return toolResult(
+      result,
+      `Attached ${result.file}. Embed with: ${result.markdown}`,
+    );
+  });
+
   server.registerTool('granite_wakeup', {
     title: 'Granite Wakeup',
     description: 'Load a compressed AAAK snapshot of the entire vault into context. Call this at the start of every session to know what exists, how notes cluster, and what changed recently. Costs ~200-500 tokens instead of reading every note.',

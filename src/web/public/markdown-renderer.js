@@ -7,7 +7,7 @@
 const MarkdownRenderer = (() => {
 
   function parseInline(text, outgoingLinks) {
-    const re = /(\[\[([^\]]+)\]\])|(`([^`]+)`)|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[([^\]]+)\]\(([^)]+)\))/g;
+    const re = /(\[\[([^\]]+)\]\])|(`([^`]+)`)|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[([^\]]+)\]\(([^)]+)\))|(!\[([^\]]*)\]\(([^)]+)\))/g;
     let result = '';
     let lastIndex = 0;
     let match;
@@ -36,6 +36,13 @@ const MarkdownRenderer = (() => {
         result += `<em>${escapeHtml(match[8])}</em>`;
       } else if (match[9]) {
         result += `<a class="external-link" href="${escapeAttr(match[11])}" target="_blank" rel="noopener">${escapeHtml(match[10])}</a>`;
+      } else if (match[12]) {
+        // Image: ![alt](src)
+        const alt = match[13];
+        const src = match[14];
+        // Resolve relative paths to /assets/
+        const resolvedSrc = src.startsWith('http') ? src : `/assets/${src.replace(/^\.?\/?assets\//, '')}`;
+        result += `<img class="md-image" src="${escapeAttr(resolvedSrc)}" alt="${escapeAttr(alt)}" loading="lazy">`;
       }
       lastIndex = match.index + match[0].length;
     }

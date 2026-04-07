@@ -383,6 +383,35 @@ export class GraniteMcpRuntime {
     return { total: notes.length, by_type: byType, modified: sorted[0]?.frontmatter.modified ?? '', clusters, people, recent, stale, aaak };
   }
 
+  attach(filePath: string, slug?: string): { file: string; path: string; markdown: string; slug: string | null } {
+    const assetsDir = path.join(this.vaultRoot, 'assets');
+    fs.mkdirSync(assetsDir, { recursive: true });
+
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    const fileName = path.basename(filePath);
+    let finalName = fileName;
+    const destPath = path.join(assetsDir, fileName);
+    if (fs.existsSync(destPath)) {
+      const ext = path.extname(fileName);
+      const base = path.basename(fileName, ext);
+      finalName = `${base}-${Date.now()}${ext}`;
+    }
+
+    const finalPath = path.join(assetsDir, finalName);
+    fs.copyFileSync(filePath, finalPath);
+
+    const ext = path.extname(finalName).toLowerCase();
+    const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+    const markdown = imageExts.includes(ext)
+      ? `![${finalName}](assets/${finalName})`
+      : `[${finalName}](assets/${finalName})`;
+
+    return { file: finalName, path: finalPath, markdown, slug: slug ?? null };
+  }
+
   createNote(input: CreateNoteInput): NoteMutationResult {
     const resolvedType = input.type ?? this.config.defaults.note_type;
     const typeConfig = this.config.note_types[resolvedType];

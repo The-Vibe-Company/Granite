@@ -6,7 +6,7 @@
   let allNotes = [];
   let currentNote = null;
   let currentType = '';
-  let currentView = 'note';
+  let currentView = 'graph';
   let graphData = null;
   let previewCache = {};
   let previewTimeout = null;
@@ -20,9 +20,16 @@
   const noteView = document.getElementById('note-view');
   const noteScroll = document.getElementById('note-scroll');
   const noteTypeLine = document.getElementById('note-type-line');
+  const noteSlug = document.getElementById('note-slug');
+  const noteKicker = document.getElementById('note-kicker');
   const noteTitle = document.getElementById('note-title');
+  const noteDeck = document.getElementById('note-deck');
   const noteDate = document.getElementById('note-date');
+  const noteModified = document.getElementById('note-modified');
+  const noteLinkCount = document.getElementById('note-link-count');
+  const noteMetaGrid = document.getElementById('note-meta-grid');
   const noteTags = document.getElementById('note-tags');
+  const noteAliases = document.getElementById('note-aliases');
   const noteBody = document.getElementById('note-body');
   const backlinks = document.getElementById('backlinks');
   const backlinksList = document.getElementById('backlinks-list');
@@ -31,6 +38,20 @@
   const graphView = document.getElementById('graph-view');
   const graphCanvas = document.getElementById('graph-canvas');
   const previewEl = document.getElementById('wikilink-preview');
+  const vaultTotal = document.getElementById('vault-total');
+  const vaultUpdated = document.getElementById('vault-updated');
+  const navListTitle = document.getElementById('nav-list-title');
+  const navFilterCount = document.getElementById('nav-filter-count');
+  const graphSummary = document.getElementById('graph-summary');
+  const graphNodeCount = document.getElementById('graph-node-count');
+  const graphEdgeCount = document.getElementById('graph-edge-count');
+  const graphDensestType = document.getElementById('graph-densest-type');
+  const graphFocusTitle = document.getElementById('graph-focus-title');
+  const graphFocusMeta = document.getElementById('graph-focus-meta');
+  const graphFocusState = document.getElementById('graph-focus-state');
+  const graphFocusLinks = document.getElementById('graph-focus-links');
+  const graphFocusBacklinks = document.getElementById('graph-focus-backlinks');
+  const graphFocusMode = document.getElementById('graph-focus-mode');
 
   // Command bar
   const commandOverlay = document.getElementById('command-bar-overlay');
@@ -78,7 +99,9 @@
     setupCreate();
     setupCommand();
     setupWikilinkPreviews();
+    setupGraphHud();
     initGrain();
+    setView('graph');
   }
 
   // ═══ GRAIN TEXTURE (static, rendered once) ═══
@@ -216,7 +239,7 @@
       if (e.key === 'Escape') {
         if (!commandOverlay.classList.contains('hidden')) { closeCommand(); return; }
         if (!createOverlay.classList.contains('hidden')) { closeCreate(); return; }
-        if (currentView === 'graph') { setView('note'); return; }
+        if (currentView === 'graph' && currentNote) { setView('note'); return; }
       }
     });
   }
@@ -227,7 +250,8 @@
 
   function setupNav() {
     document.getElementById('nav-search').addEventListener('click', openCommand);
-    document.getElementById('nav-new').addEventListener('click', openCreate);
+    const navNew = document.getElementById('nav-new');
+    if (navNew) navNew.addEventListener('click', openCreate);
     document.getElementById('nav-graph').addEventListener('click', toggleGraph);
 
     // Mobile
@@ -236,6 +260,16 @@
     if (mobileMenu) mobileMenu.addEventListener('click', openMobileNav);
     if (mobileSearch) mobileSearch.addEventListener('click', openCommand);
     if (navBackdrop) navBackdrop.addEventListener('click', closeMobileNav);
+  }
+
+  function setupGraphHud() {
+    document.getElementById('graph-fit').addEventListener('click', () => GraphEngine.fitView());
+    document.getElementById('graph-reheat').addEventListener('click', () => GraphEngine.reheat());
+    document.getElementById('graph-focus-active').addEventListener('click', () => {
+      if (!currentNote) return;
+      GraphEngine.centerOnSlug(currentNote.slug);
+      GraphEngine.reheat();
+    });
   }
 
   function openMobileNav() {
@@ -334,7 +368,11 @@
   }
 
   async function loadGraph() {
-    if (!graphData) graphData = await api('/api/graph');
+    if (!graphData) {
+      graphData = await api('/api/graph');
+      updateGraphSummary(graphData);
+    }
+    updateGraphFocus();
     GraphEngine.init(graphCanvas, graphData, {
       activeSlug: currentNote?.slug || null,
       onNavigate: (slug) => { loadNote(slug); setView('note'); },
@@ -406,6 +444,7 @@
     const data = await api(url);
     allNotes = data.notes;
     graphData = null;
+    updateVaultSummary(allNotes);
     renderNoteList(allNotes);
   }
 
@@ -419,9 +458,11 @@
 
   // ═══ RENDER ═══
   function renderNoteList(notes) {
+    navListTitle.textContent = currentType ? `${currentType} notes` : 'All notes';
+    navFilterCount.textContent = String(notes.length);
     noteList.innerHTML = '';
     if (notes.length === 0) {
-      noteList.innerHTML = '<div style="padding:16px 12px;color:var(--text-3);font-size:12px;">No notes</div>';
+      noteList.innerHTML = '<div style="padding:16px 12px;color:var(--ink-faint);font-size:12px;">No notes in this slice.</div>';
       return;
     }
     for (const note of notes) {
@@ -465,12 +506,20 @@
       requestAnimationFrame(() => article.classList.add('animate'));
     });
 
-    noteTypeLine.textContent = note.type;
+    noteTypeLine.textContent = note.type || 'note';
+    noteSlug.textContent = note.slug;
+    noteKicker.textContent = `${formatTypeLabel(note.type)} note`;
     noteTitle.textContent = note.title;
+    noteDeck.textContent = extractDeck(note.body);
     noteDate.textContent = formatDate(note.created);
-    noteTags.innerHTML = (note.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+    noteModified.textContent = formatDate(note.modified || note.created);
+    noteLinkCount.textContent = String((note.outgoing_links || []).filter(link => link.resolved).length);
+    noteTags.innerHTML = (note.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join('');
+    noteAliases.innerHTML = (note.aliases || []).map(alias => `<span class="alias-chip">${esc(alias)}</span>`).join('');
+    noteMetaGrid.innerHTML = renderMetaGrid(note);
 
     noteBody.innerHTML = MarkdownRenderer.render(note.body, note.outgoing_links);
+    updateGraphFocus();
 
     if (note.backlinks && note.backlinks.length > 0) {
       backlinks.style.display = 'block';
@@ -534,6 +583,92 @@
     if (!iso) return '';
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function updateVaultSummary(notes) {
+    vaultTotal.textContent = String(notes.length);
+    if (notes.length === 0) {
+      vaultUpdated.textContent = '-';
+      return;
+    }
+    const latest = [...notes]
+      .filter(note => note.modified || note.created)
+      .sort((a, b) => new Date(b.modified || b.created) - new Date(a.modified || a.created))[0];
+    vaultUpdated.textContent = formatDate(latest.modified || latest.created);
+  }
+
+  function updateGraphSummary(data) {
+    const counts = {};
+    for (const node of data.nodes || []) {
+      counts[node.type || 'note'] = (counts[node.type || 'note'] || 0) + 1;
+    }
+    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    graphNodeCount.textContent = String(data.nodes?.length || 0);
+    graphEdgeCount.textContent = String(data.edges?.length || 0);
+    graphDensestType.textContent = dominant ? dominant[0] : '-';
+    graphSummary.textContent = dominant
+      ? `${data.nodes.length} notes · ${data.edges.length} links · ${formatTypeLabel(dominant[0])} dominant`
+      : 'No graph data available yet.';
+  }
+
+  function updateGraphFocus() {
+    if (!currentNote) {
+      graphFocusTitle.textContent = 'No note selected';
+      graphFocusMeta.textContent = 'Hover a node, inspect a cluster, then open a note.';
+      graphFocusState.textContent = 'Exploration';
+      graphFocusLinks.textContent = '0';
+      graphFocusBacklinks.textContent = '0';
+      graphFocusMode.textContent = 'Atlas';
+      document.getElementById('graph-focus-bar').classList.add('graph-focus-idle');
+      return;
+    }
+    const backlinkCount = currentNote.backlinks?.length || 0;
+    const linkCount = currentNote.outgoing_links?.filter(link => link.resolved).length || 0;
+    graphFocusTitle.textContent = currentNote.title;
+    graphFocusMeta.textContent = `${formatTypeLabel(currentNote.type)} node with ${linkCount} outgoing links and ${backlinkCount} backlinks.`;
+    graphFocusState.textContent = formatTypeLabel(currentNote.type);
+    graphFocusLinks.textContent = String(linkCount);
+    graphFocusBacklinks.textContent = String(backlinkCount);
+    graphFocusMode.textContent = 'Focused';
+    document.getElementById('graph-focus-bar').classList.remove('graph-focus-idle');
+  }
+
+  function renderMetaGrid(note) {
+    const items = [
+      ['Type', note.type || 'note'],
+      ['Status', note.status],
+      ['Source', note.source],
+      ['Review', note.review_state],
+      ['Durability', note.durability],
+      ['Derived from', Array.isArray(note.derived_from) ? note.derived_from.join(', ') : ''],
+    ].filter(([, value]) => value && String(value).trim().length > 0);
+
+    if (!items.length) {
+      return '<div class="note-meta-item"><span class="note-meta-label">State</span><span class="note-meta-value">Metadata will appear here when present.</span></div>';
+    }
+
+    return items.map(([label, value]) => `
+      <div class="note-meta-item">
+        <span class="note-meta-label">${esc(label)}</span>
+        <span class="note-meta-value">${esc(String(value))}</span>
+      </div>
+    `).join('');
+  }
+
+  function extractDeck(body) {
+    const text = body
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/!\[[^\]]*]\([^)]+\)/g, ' ')
+      .replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, '$2$1')
+      .replace(/[#>*`_-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) return 'A structured note inside the Granite atlas.';
+    return text.length > 210 ? `${text.slice(0, 207).trim()}...` : text;
+  }
+
+  function formatTypeLabel(type) {
+    return type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Note';
   }
 
   init();

@@ -6,7 +6,7 @@
   <title>Granite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -69,14 +69,37 @@
     <!-- Navigation -->
     <nav id="nav">
       <div class="nav-brand">
-        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-          <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.9"/>
-          <rect x="11" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.45"/>
-          <rect x="1" y="11" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.45"/>
-          <rect x="11" y="11" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.2"/>
-        </svg>
-        <span>Granite</span>
+        <div class="nav-brand-mark">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.95"/>
+            <rect x="11" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.55"/>
+            <rect x="1" y="11" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.35"/>
+            <rect x="11" y="11" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.18"/>
+          </svg>
+        </div>
+        <div class="nav-brand-copy">
+          <span class="nav-brand-name">Granite</span>
+          <span class="nav-brand-subtitle">Knowledge atlas</span>
+        </div>
       </div>
+      <section class="nav-intro">
+        <div class="nav-intro-row">
+          <div class="nav-intro-copywrap">
+            <p class="nav-intro-eyebrow">Vault pulse</p>
+            <p class="nav-intro-copy">Search, scan the graph, inspect the vault.</p>
+          </div>
+          <div class="nav-metrics">
+            <div class="nav-metric">
+              <span class="nav-metric-value" id="vault-total">0</span>
+              <span class="nav-metric-label">notes</span>
+            </div>
+            <div class="nav-metric">
+              <span class="nav-metric-value" id="vault-updated">-</span>
+              <span class="nav-metric-label">latest</span>
+            </div>
+          </div>
+        </div>
+      </section>
       <div class="nav-actions">
         <button id="nav-search" class="nav-btn" title="Search (⌘K)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -84,12 +107,6 @@
           </svg>
           <span>Search</span>
           <kbd>⌘K</kbd>
-        </button>
-        <button id="nav-new" class="nav-btn" title="New note (⌘N)">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 3v10M3 8h10"/>
-          </svg>
-          <span>New</span>
         </button>
         <button id="nav-graph" class="nav-btn" title="Graph (⌘G)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -100,6 +117,13 @@
         </button>
       </div>
       <div id="nav-note-list">
+        <div class="nav-list-header">
+          <div>
+            <p class="nav-list-label">Browse notes</p>
+            <p class="nav-list-title" id="nav-list-title">All notes</p>
+          </div>
+          <div class="nav-list-badge" id="nav-filter-count">0</div>
+        </div>
         <div id="type-filters">
           <button class="type-pill active" data-type="">All</button>
         </div>
@@ -112,26 +136,100 @@
       <!-- Note view -->
       <div id="note-view">
         <div id="note-scroll">
-          <article id="note-article">
-            <div id="note-type-line"></div>
-            <h1 id="note-title"></h1>
-            <div id="note-meta">
-              <span id="note-date"></span>
-              <div id="note-tags"></div>
-            </div>
-            <div id="note-body"></div>
-            <section id="backlinks">
-              <div class="backlinks-label">
-                <span id="backlinks-count">0</span> references
+          <section id="note-shell">
+            <aside id="note-aside">
+              <div class="note-panel note-panel-primary">
+                <p class="note-panel-kicker">Selected note</p>
+                <div id="note-type-line"></div>
+                <p id="note-slug"></p>
               </div>
-              <div id="backlinks-list"></div>
-            </section>
-          </article>
+              <div class="note-panel">
+                <p class="note-panel-kicker">Metadata</p>
+                <div id="note-meta-grid"></div>
+              </div>
+              <div class="note-panel">
+                <p class="note-panel-kicker">Linked context</p>
+                <div id="note-tags"></div>
+                <div id="note-aliases"></div>
+              </div>
+            </aside>
+            <article id="note-article">
+              <div id="note-hero">
+                <div class="note-hero-copy">
+                  <p id="note-kicker"></p>
+                  <h1 id="note-title"></h1>
+                  <p id="note-deck"></p>
+                </div>
+                <div id="note-meta">
+                  <div class="note-stat">
+                    <span class="note-stat-label">Created</span>
+                    <span id="note-date"></span>
+                  </div>
+                  <div class="note-stat">
+                    <span class="note-stat-label">Updated</span>
+                    <span id="note-modified"></span>
+                  </div>
+                  <div class="note-stat">
+                    <span class="note-stat-label">Links</span>
+                    <span id="note-link-count">0</span>
+                  </div>
+                </div>
+              </div>
+              <div id="note-body"></div>
+              <section id="backlinks">
+                <div class="backlinks-label">
+                  <span id="backlinks-count">0</span> references
+                </div>
+                <div id="backlinks-list"></div>
+              </section>
+            </article>
+          </section>
         </div>
       </div>
 
       <!-- Graph view -->
       <div id="graph-view" class="hidden">
+        <div id="graph-header">
+          <div class="graph-titlebar graph-card">
+            <div class="graph-title-main">
+              <p class="graph-eyebrow">Graph View</p>
+              <h2>Knowledge constellation</h2>
+            </div>
+            <p id="graph-summary">Mapping note relationships across the vault.</p>
+            <div id="graph-inline-stats" class="graph-inline-stats">
+              <span><strong id="graph-node-count">0</strong> nodes</span>
+              <span><strong id="graph-edge-count">0</strong> links</span>
+              <span><strong id="graph-densest-type">-</strong> dominant</span>
+            </div>
+          </div>
+        </div>
+        <div id="graph-focus-bar" class="graph-card graph-card-focus">
+          <div class="graph-focus-leading">
+            <p class="graph-eyebrow">Focus</p>
+            <h3 id="graph-focus-title">No note selected</h3>
+            <div id="graph-focus-state" class="graph-focus-state">Exploration</div>
+          </div>
+          <p id="graph-focus-meta">Open a note or select a node to center the map around it.</p>
+          <div id="graph-focus-strip" class="graph-focus-strip">
+            <div class="graph-focus-metric">
+              <span class="graph-focus-metric-label">Out</span>
+              <span id="graph-focus-links" class="graph-focus-metric-value">0</span>
+            </div>
+            <div class="graph-focus-metric">
+              <span class="graph-focus-metric-label">Back</span>
+              <span id="graph-focus-backlinks" class="graph-focus-metric-value">0</span>
+            </div>
+            <div class="graph-focus-metric">
+              <span class="graph-focus-metric-label">Mode</span>
+              <span id="graph-focus-mode" class="graph-focus-metric-value">Atlas</span>
+            </div>
+          </div>
+          <div class="graph-card-actions">
+            <button id="graph-fit" class="graph-btn">Fit map</button>
+            <button id="graph-focus-active" class="graph-btn">Focus note</button>
+            <button id="graph-reheat" class="graph-btn graph-btn-accent">Reheat</button>
+          </div>
+        </div>
         <canvas id="graph-canvas" aria-label="Knowledge graph visualization"></canvas>
         <div id="graph-tooltip"></div>
       </div>
@@ -147,7 +245,7 @@
           </svg>
         </div>
         <p class="empty-title">Select a note to begin</p>
-        <p class="empty-shortcuts"><kbd>⌘K</kbd> search <span class="dot"></span> <kbd>⌘N</kbd> new <span class="dot"></span> <kbd>⌘G</kbd> graph</p>
+        <p class="empty-shortcuts"><kbd>⌘K</kbd> search <span class="dot"></span> <kbd>⌘G</kbd> graph</p>
       </div>
     </main>
   </div>

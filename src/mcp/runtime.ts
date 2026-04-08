@@ -93,6 +93,20 @@ export interface NoteRecommendations {
   next_steps: Array<{ type: string; title_hint?: string; reason: string }>;
 }
 
+export interface NoteUnderstanding {
+  note: NoteDetails;
+  backlinks: BacklinkEntry[];
+  link_suggestions: Array<{ target_slug: string; target_title: string; mentions: number }>;
+  recommendations: NoteRecommendations;
+  graph_role: {
+    role: 'hub' | 'bridge' | 'reference' | 'isolated' | 'draft' | 'synthesis';
+    reason: string;
+    inbound_links: number;
+    outbound_links: number;
+    total_connections: number;
+  };
+}
+
 export interface CreateNoteInput {
   title: string;
   type?: string;
@@ -119,6 +133,7 @@ export interface CaptureNoteInput {
 }
 
 export interface UpdateNoteInput {
+  type?: string;
   title?: string;
   body?: string;
   append?: string;
@@ -142,6 +157,14 @@ export interface ListNotesInput {
 export interface NoteMutationResult {
   note: NoteDetails;
   recommendations: NoteRecommendations;
+}
+
+export interface DisposeNoteResult {
+  slug: string;
+  mode: 'archive' | 'delete';
+  backlinks_removed: number;
+  derived_children: number;
+  note: NoteDetails | null;
 }
 
 export class GraniteMcpRuntime {
@@ -263,6 +286,50 @@ export class GraniteMcpRuntime {
     const note = this.requireNote(slug);
     this.refreshIndex();
     return getRecommendations(this.db, note, this.config);
+  }
+
+  understandNote(slug: string): NoteUnderstanding {
+    const note = this.getNote(slug);
+    const backlinks = this.getBacklinks(slug);
+    const linkSuggestions = this.suggestLinks(slug);
+    const recommendations = this.recommend(slug);
+    const outboundLinks = note.outgoing_links.filter(link => link.resolved).length;
+    const inboundLinks = backlinks.length;
+    const totalConnections = inboundLinks + outboundLinks;
+
+    let role: NoteUnderstanding['graph_role']['role'] = 'isolated';
+    let reason = 'This note is currently disconnected from the graph.';
+
+    if (note.frontmatter.status === 'inbox') {
+      role = 'draft';
+      reason = 'This note is still in the inbox and should be refined before it compounds.';
+    } else if (note.frontmatter.type === 'synthesis') {
+      role = 'synthesis';
+      reason = 'This synthesis connects multiple notes and should remain highly linked.';
+    } else if (inboundLinks >= 3 && outboundLinks >= 3) {
+      role = 'hub';
+      reason = 'This note has strong inbound and outbound links, so it acts as a hub.';
+    } else if (inboundLinks > 0 && outboundLinks > 0) {
+      role = 'bridge';
+      reason = 'This note both references other notes and is referenced back, so it bridges context.';
+    } else if (inboundLinks > 0) {
+      role = 'reference';
+      reason = 'Other notes point here, but this note is not yet linking back into the graph much.';
+    }
+
+    return {
+      note,
+      backlinks,
+      link_suggestions: linkSuggestions,
+      recommendations,
+      graph_role: {
+        role,
+        reason,
+        inbound_links: inboundLinks,
+        outbound_links: outboundLinks,
+        total_connections: totalConnections,
+      },
+    };
   }
 
   runDoctor(): { issues: DoctorIssue[]; counts: { errors: number; warnings: number; info: number } } {
@@ -467,6 +534,10 @@ export class GraniteMcpRuntime {
   }
 
   updateNote(slug: string, input: UpdateNoteInput): NoteMutationResult {
+    if (input.type !== undefined) {
+      return this.reviseNote(slug, input);
+    }
+
     const note = this.requireNote(slug);
     const needsFullRebuild = input.title !== undefined || (input.aliases?.length ?? 0) > 0;
 
@@ -484,6 +555,117 @@ export class GraniteMcpRuntime {
     return {
       note: this.getNote(updated.slug),
       recommendations: getRecommendations(this.db, updated, this.config),
+    };
+  }
+
+  reviseNote(slug: string, input: UpdateNoteInput): NoteMutationResult {
+    const note = this.requireNote(slug);
+    const raw = fs.readFileSync(note.filepath, 'utf-8');
+    const { frontmatter, body: existingBody } = parseFrontmatter(raw);
+    let body = existingBody;
+    let nextFilepath = note.filepath;
+    let movedType = false;
+
+    if (input.type !== undefined) {
+      const nextType = this.config.note_types[input.type];
+      if (!nextType) {
+        throw new Error(`Unknown note type: "${input.type}"`);
+      }
+
+      if (frontmatter.type !== input.type) {
+        const targetFolder = path.join(this.vaultRoot, nextType.folder);
+        fs.mkdirSync(targetFolder, { recursive: true });
+        const candidatePath = path.join(targetFolder, `${slug}.md`);
+        if (candidatePath !== note.filepath && fs.existsSync(candidatePath)) {
+          throw new Error(`Cannot move "${slug}" to type "${input.type}" because ${candidatePath} already exists.`);
+        }
+        frontmatter.type = input.type;
+        nextFilepath = candidatePath;
+        movedType = true;
+      }
+    }
+
+    if (input.title !== undefined) {
+      frontmatter.title = input.title;
+    }
+
+    if (input.tags && input.tags.length > 0) {
+      frontmatter.tags = mergeUnique(frontmatter.tags, input.tags);
+    }
+
+    if (input.aliases && input.aliases.length > 0) {
+      frontmatter.aliases = mergeUnique(frontmatter.aliases, input.aliases);
+    }
+
+    if (input.status !== undefined) {
+      validateStatus(input.status);
+      frontmatter.status = input.status;
+    }
+
+    if (input.source !== undefined) {
+      validateSource(input.source);
+      frontmatter.source = input.source;
+    }
+
+    if (input.review_state !== undefined) {
+      validateReviewState(input.review_state);
+      frontmatter.review_state = input.review_state;
+    }
+
+    if (input.durability !== undefined) {
+      validateDurability(input.durability);
+      frontmatter.durability = input.durability;
+    }
+
+    if (input.derived_from !== undefined) {
+      frontmatter.derived_from = [...input.derived_from];
+    }
+
+    if (input.body !== undefined) {
+      body = ensureTrailingNewline(input.body);
+    }
+
+    if (input.append !== undefined) {
+      body = `${body.trimEnd()}\n${input.append}\n`;
+    }
+
+    frontmatter.modified = new Date().toISOString();
+    fs.writeFileSync(nextFilepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+
+    if (movedType && nextFilepath !== note.filepath && fs.existsSync(note.filepath)) {
+      fs.unlinkSync(note.filepath);
+    }
+
+    return this.afterWrite(slug, movedType || input.title !== undefined || (input.aliases?.length ?? 0) > 0);
+  }
+
+  disposeNote(slug: string, mode: 'archive' | 'delete' = 'archive'): DisposeNoteResult {
+    const note = this.requireNote(slug);
+    const backlinks = this.getBacklinks(slug);
+    const derivedChildren = this.readAllNotes().filter(candidate =>
+      candidate.frontmatter.derived_from.includes(slug),
+    ).length;
+
+    if (mode === 'archive') {
+      const revised = this.reviseNote(slug, { status: 'archived' });
+      return {
+        slug,
+        mode,
+        backlinks_removed: backlinks.length,
+        derived_children: derivedChildren,
+        note: revised.note,
+      };
+    }
+
+    fs.unlinkSync(note.filepath);
+    this.refreshIndex(true);
+
+    return {
+      slug,
+      mode,
+      backlinks_removed: backlinks.length,
+      derived_children: derivedChildren,
+      note: null,
     };
   }
 

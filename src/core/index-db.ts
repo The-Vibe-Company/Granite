@@ -174,6 +174,28 @@ export function syncNoteInIndex(
   upsertNoteAndLinks(db, note);
 }
 
+export function syncVaultIndexAfterNoteWrite(
+  vaultRoot: string,
+  config: GraniteConfig,
+  note: Note,
+  options: { rebuild?: boolean } = {},
+): void {
+  const db = openDatabase(vaultRoot);
+
+  try {
+    const noteExists = db.prepare('SELECT 1 FROM notes WHERE slug = ?').get(note.slug) as { 1: number } | undefined;
+
+    if (options.rebuild || !noteExists) {
+      rebuildIndex(vaultRoot, config, db);
+      return;
+    }
+
+    syncNoteInIndex(vaultRoot, config, db, note);
+  } finally {
+    db.close();
+  }
+}
+
 export function ensureIndex(vaultRoot: string, config: GraniteConfig): Database.Database {
   const db = openDatabase(vaultRoot);
 

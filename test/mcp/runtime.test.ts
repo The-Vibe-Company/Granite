@@ -51,4 +51,36 @@ describe('GraniteMcpRuntime', () => {
     expect(result.note.frontmatter.created).toBe(result.note.frontmatter.modified);
     runtime.close();
   });
+
+  it('revises a note type and keeps it addressable by slug', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const created = runtime.createNote({
+      title: 'Type Promotion',
+      type: 'note',
+      body: 'Promote me.\n',
+    });
+
+    const revised = runtime.reviseNote(created.note.slug, { type: 'source' });
+
+    expect(revised.note.type).toBe('source');
+    expect(revised.note.slug).toBe(created.note.slug);
+    runtime.close();
+  });
+
+  it('deletes a note and removes it from search', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const created = runtime.createNote({
+      title: 'Disposable',
+      type: 'note',
+      body: 'Delete me from the index.\n',
+    });
+
+    expect(runtime.search('delete')).toHaveLength(1);
+
+    const disposed = runtime.disposeNote(created.note.slug, 'delete');
+
+    expect(disposed.note).toBeNull();
+    expect(runtime.search('delete')).toHaveLength(0);
+    runtime.close();
+  });
 });

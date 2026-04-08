@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
+import { syncVaultIndexAfterNoteWrite } from '../core/index-db.js';
 import { createNote } from '../core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
 import {
@@ -58,8 +59,8 @@ export function newNote(
     note.frontmatter = frontmatter;
   }
 
-  const recommendationStrategy = typeConfig?.slug_format === 'date' ? 'incremental' : 'rebuild';
-  const recommendations = recommendNote(vaultRoot, config, note, { strategy: recommendationStrategy });
+  syncVaultIndexAfterNoteWrite(vaultRoot, config, note, { rebuild: true });
+  const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
 
   const lines = note.body.split('\n').length;
   const overLimit = typeConfig && typeConfig.line_limit && lines > typeConfig.line_limit;

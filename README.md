@@ -220,9 +220,9 @@ granite mcp --transport http --host 127.0.0.1 --port 3321
 
 The server exposes:
 
-- tools for vault overview, list/get/search, create/update, backlinks, link suggestions, recommendations, and doctor
-- resources for `granite.yml`, vault overview, note types, and individual notes via `granite://notes/{slug}`
-- prompts for refining notes and reviewing links/next steps
+- tools for wakeup, topic research, knowledge capture, note understanding, targeted revision, and note disposal
+- resources for note types and individual notes via `granite://vault/types` and `granite://notes/{slug}`
+- prompts for refining notes, compiling a topic, processing the inbox, and gardening the vault
 
 The note payloads exposed through MCP include the shared protocol fields (`status`, `source`, `review_state`, `durability`, `derived_from`) so clients can make safer decisions without Granite embedding any model-specific logic.
 

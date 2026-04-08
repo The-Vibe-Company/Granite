@@ -11,7 +11,7 @@ import {
   validateSource,
 } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
-import { ensureIndex, syncNoteInIndex } from '../core/index-db.js';
+import { syncVaultIndexAfterNoteWrite } from '../core/index-db.js';
 
 interface EditOptions {
   body?: string;
@@ -105,15 +105,12 @@ export function editCommand(slug: string, options: EditOptions): void {
     frontmatter.modified = new Date().toISOString();
     fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
 
-    // Sync the updated note into the SQLite index so new wikilinks are tracked
     const updatedNote = readNote(existingNote.filepath);
-    const db = ensureIndex(vaultRoot, config);
-    syncNoteInIndex(vaultRoot, config, db, updatedNote);
-    db.close();
+    const requiresFullRebuild = options.title !== undefined || options.alias !== undefined;
+    syncVaultIndexAfterNoteWrite(vaultRoot, config, updatedNote, { rebuild: requiresFullRebuild });
 
     console.log(existingNote.filepath);
-    const recommendationStrategy = options.title !== undefined || options.alias !== undefined ? 'rebuild' : 'incremental';
-    printRecommendations(vaultRoot, config, existingNote.filepath, recommendationStrategy);
+    printRecommendations(vaultRoot, config, existingNote.filepath, 'incremental');
   } else {
     // Interactive edit (human mode) — open in $EDITOR
     const editor = process.env.EDITOR || 'vi';
@@ -132,9 +129,10 @@ export function editCommand(slug: string, options: EditOptions): void {
       const { frontmatter, body } = parseFrontmatter(fs.readFileSync(existingNote.filepath, 'utf-8'));
       frontmatter.modified = new Date().toISOString();
       fs.writeFileSync(existingNote.filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+      syncVaultIndexAfterNoteWrite(vaultRoot, config, readNote(existingNote.filepath), { rebuild: true });
 
       console.log(`Updated: ${existingNote.filepath}`);
-      printRecommendations(vaultRoot, config, existingNote.filepath, 'rebuild');
+      printRecommendations(vaultRoot, config, existingNote.filepath, 'incremental');
     }
   }
 }

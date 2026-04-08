@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { GraniteConfig } from '../core/types.js';
-import { ensureIndex } from '../core/index-db.js';
+import { ensureIndex, syncVaultIndexAfterNoteWrite } from '../core/index-db.js';
 import { createNote, findNoteBySlug, listNotes, readNote } from '../core/note.js';
 import { searchNotes } from '../core/search.js';
 import { getBacklinks } from '../core/backlinks.js';
@@ -99,6 +99,7 @@ export function createApp(vaultRoot: string, config: GraniteConfig) {
 
     try {
       const note = createNote(vaultRoot, config, type, title, noteBody || undefined);
+      syncVaultIndexAfterNoteWrite(vaultRoot, config, note, { rebuild: true });
 
       return c.json({
         slug: note.slug,

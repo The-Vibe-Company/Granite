@@ -198,16 +198,23 @@ granite edit state-of-transformer-scaling --append $'\n## Links\n\n- [[scaling-l
 
 If Granite exposes an MCP server, the split is:
 
-**Resources (reads, application-controlled):**
-- `granite://vault/notes/{slug}` — read a note
-- `granite://vault/search?q={query}` — search results
-- `granite://vault/backlinks/{slug}` — backlink graph
-- `granite://vault/types` — available note types with schemas
+**Resources (raw reads, application-controlled):**
+- `granite://notes/{slug}` — read the source markdown for a note
+- `granite://vault/types` — read the note-type contract for the vault
 
-**Tools (writes, model-controlled):**
-- `create_note(title, type, body, fields)` — create a note
-- `update_note(slug, body?, append?, title?, tags?, aliases?)` — edit a note
-- `link_notes(source, target, relationship?)` — add a wikilink
+**Public tools (intent-first, model-controlled):**
+- `granite_wakeup()` — load the compressed map of the vault
+- `granite_research_topic(query, limit?)` — discover relevant notes for a topic
+- `granite_capture_knowledge(...)` — capture new knowledge into the vault
+- `granite_understand_note(slug)` — inspect a note in graph context
+- `granite_revise_note(slug, changes...)` — make targeted revisions
+- `granite_dispose_note(slug, mode?)` — archive by default, delete intentionally
+
+**Workflow prompts (agent-facing methodology):**
+- `granite_refine_note(slug)` — turn a draft into a durable note
+- `granite_compile_topic(topic)` — compile related notes into a synthesis
+- `granite_process_inbox()` — triage and refine inbox notes
+- `granite_garden_vault()` — review and strengthen the graph
 
 ---
 

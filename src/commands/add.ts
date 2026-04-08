@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { loadConfig } from '../core/config.js';
 import { requireVaultRoot } from '../core/vault.js';
+import { syncVaultIndexAfterNoteWrite } from '../core/index-db.js';
 import { createNote } from '../core/note.js';
 import { jsonSuccess } from '../core/json-output.js';
 import { recommendNote, formatRecommendations } from '../core/recommendations.js';
@@ -32,6 +33,7 @@ export function addNote(text?: string, options: { json?: boolean } = {}): void {
   const title = firstLine.length > 60 ? firstLine.slice(0, 60).trim() + '...' : firstLine;
 
   const note = createNote(vaultRoot, config, typeName, title, content + '\n');
+  syncVaultIndexAfterNoteWrite(vaultRoot, config, note, { rebuild: true });
   const recommendations = recommendNote(vaultRoot, config, note, { strategy: 'incremental' });
 
   if (options.json) {

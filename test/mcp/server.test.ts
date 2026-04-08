@@ -50,29 +50,32 @@ describe('granite MCP server', () => {
     const templates = await client.listResourceTemplates();
     const prompts = await client.listPrompts();
 
-    expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(true);
-    expect(resources.resources.some(resource => resource.uri === 'granite://vault/config')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(false);
+    expect(resources.resources.some(resource => resource.uri === 'granite://vault/types')).toBe(true);
     expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://notes/{slug}')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_refine_note')).toBe(true);
+    expect(prompts.prompts.some(prompt => prompt.name === 'granite_compile_topic')).toBe(true);
     expect(client.getInstructions()).toContain('Knowledge Compilation System');
   });
 
   it('serves note resources and prompt templates', async () => {
     const resource = await client.readResource({ uri: 'granite://notes/mcp-note' });
     const prompt = await client.getPrompt({
-      name: 'granite_review_connections',
-      arguments: { slug: 'mcp-note' },
+      name: 'granite_compile_topic',
+      arguments: { topic: 'MCP' },
     });
 
     const noteText = resource.contents[0] && 'text' in resource.contents[0] ? resource.contents[0].text : '';
 
     expect(noteText).toContain('title: MCP Note');
-    expect(prompt.messages).toHaveLength(3);
+    expect(prompt.messages).toHaveLength(1);
   });
 
-  it('creates notes and updates backlinks through MCP tools', async () => {
+  it('captures notes and understands them through the public MCP tools', async () => {
     const created = await client.callTool({
-      name: 'granite_create_note',
+      name: 'granite_capture_knowledge',
       arguments: {
         title: 'Linked Result',
         type: 'note',
@@ -88,16 +91,33 @@ describe('granite MCP server', () => {
     expect(createdData.note.slug).toBe('linked-result');
     expect(createdData.note.source).toBe('agent');
 
-    const backlinks = await client.callTool({
-      name: 'granite_get_backlinks',
+    const understood = await client.callTool({
+      name: 'granite_understand_note',
       arguments: { slug: 'mcp-note' },
     });
 
-    const backlinkData = extractStructuredContent(backlinks) as {
+    const understoodData = extractStructuredContent(understood) as {
       backlinks: Array<{ source_slug: string }>;
+      graph_role: { role: string };
     };
 
-    expect(backlinkData.backlinks.some(link => link.source_slug === 'linked-result')).toBe(true);
+    expect(understoodData.backlinks.some(link => link.source_slug === 'linked-result')).toBe(true);
+    expect(typeof understoodData.graph_role.role).toBe('string');
+  });
+
+  it('archives notes through granite_dispose_note', async () => {
+    const disposed = await client.callTool({
+      name: 'granite_dispose_note',
+      arguments: { slug: 'mcp-note' },
+    });
+
+    const disposedData = extractStructuredContent(disposed) as {
+      mode: string;
+      note: { status: string } | null;
+    };
+
+    expect(disposedData.mode).toBe('archive');
+    expect(disposedData.note?.status).toBe('archived');
   });
 
   it('closes cleanup hooks after an HTTP response body is consumed', async () => {

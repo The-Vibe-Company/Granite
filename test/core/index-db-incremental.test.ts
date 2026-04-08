@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig, writeDefaultConfig } from '../../src/core/config.js';
-import { createDatabase, openDatabase, rebuildIndex, syncNoteInIndex } from '../../src/core/index-db.js';
+import { createDatabase, openDatabase, rebuildIndex, syncNoteInIndex, syncVaultIndexAfterNoteWrite } from '../../src/core/index-db.js';
 import { createNote, findNoteBySlug, readNote } from '../../src/core/note.js';
 import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
 import type { GraniteConfig } from '../../src/core/types.js';
@@ -90,6 +90,25 @@ describe('index-db incremental flows', () => {
     ).toEqual([{ slug: 'keep' }]);
 
     db.close();
+  });
+
+  it('rebuilds backlinks when a newly created note resolves older broken links', () => {
+    createNote(tmpDir, config, 'note', 'Existing Source', 'Points to [[Future Note]].\n');
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const unresolved = db.prepare('SELECT target_slug FROM links WHERE source_slug = ?').get('existing-source') as { target_slug: string | null };
+    expect(unresolved.target_slug).toBeNull();
+    db.close();
+
+    const future = createNote(tmpDir, config, 'note', 'Future Note', 'Arrived later.\n');
+    syncVaultIndexAfterNoteWrite(tmpDir, config, future);
+
+    const reopened = openDatabase(tmpDir);
+    const resolved = reopened.prepare('SELECT target_slug FROM links WHERE source_slug = ?').get('existing-source') as { target_slug: string | null };
+    expect(resolved.target_slug).toBe('future-note');
+    reopened.close();
   });
 
   it('keeps malformed alias JSON from crashing link resolution', () => {

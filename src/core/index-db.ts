@@ -71,6 +71,7 @@ export function createDatabase(dbPath: string): Database.Database {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA_SQL);
   db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
   return db;
@@ -83,6 +84,7 @@ export function openDatabase(vaultRoot: string): Database.Database {
   }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
 
   // Check schema version — if outdated, drop and recreate
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
@@ -99,11 +101,6 @@ export function openDatabase(vaultRoot: string): Database.Database {
 export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Database.Database): void {
   const notes = listNotes(vaultRoot, config);
 
-  db.exec('DELETE FROM links');
-  db.exec('DELETE FROM notes');
-  // Rebuild FTS
-  db.exec("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
-
   const insertNote = db.prepare(`
     INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
     VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath, @status, @source)
@@ -115,6 +112,12 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
   `);
 
   const transaction = db.transaction(() => {
+    db.exec('DELETE FROM links');
+    db.exec('DELETE FROM notes');
+    // Rebuild FTS after clearing the content table, but keep this inside
+    // the transaction so concurrent readers/writers never observe a half-reset index.
+    db.exec("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
+
     for (const note of notes) {
       insertNote.run({
         slug: note.slug,

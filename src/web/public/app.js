@@ -20,6 +20,13 @@
   let commandResults = [];
   let releaseTrap = null;
   const GRAPH_PREFERENCES_KEY = 'granite.graph.preferences.v1';
+  const GRAPH_DEFAULT_PREFERENCES = {
+    progressiveReveal: true,
+    nodeScale: 1.1,
+    clusterTightness: 0.58,
+    labelDensity: 0.48,
+    edgeOpacity: 0.58,
+  };
   let graphPreferences = loadGraphPreferences();
 
   // ── DOM ──
@@ -68,6 +75,15 @@
   const graphFocusLinks = document.getElementById('graph-focus-links');
   const graphFocusBacklinks = document.getElementById('graph-focus-backlinks');
   const graphFocusMode = document.getElementById('graph-focus-mode');
+  const graphNodeScaleSlider = document.getElementById('graph-node-scale');
+  const graphNodeScaleValue = document.getElementById('graph-node-scale-value');
+  const graphClusterTightnessSlider = document.getElementById('graph-cluster-tightness');
+  const graphClusterTightnessValue = document.getElementById('graph-cluster-tightness-value');
+  const graphLabelDensitySlider = document.getElementById('graph-label-density');
+  const graphLabelDensityValue = document.getElementById('graph-label-density-value');
+  const graphEdgeOpacitySlider = document.getElementById('graph-edge-opacity');
+  const graphEdgeOpacityValue = document.getElementById('graph-edge-opacity-value');
+  const graphTuningReset = document.getElementById('graph-tuning-reset');
 
   // Command bar
   const commandOverlay = document.getElementById('command-bar-overlay');
@@ -311,6 +327,35 @@
       handleGraphStateChange(GraphEngine.getState());
       updateGraphFocus();
     });
+    bindGraphSlider(graphNodeScaleSlider, (value) => {
+      graphPreferences.nodeScale = value / 100;
+      applyGraphTuning();
+    });
+    bindGraphSlider(graphClusterTightnessSlider, (value) => {
+      graphPreferences.clusterTightness = value / 100;
+      applyGraphTuning();
+    });
+    bindGraphSlider(graphLabelDensitySlider, (value) => {
+      graphPreferences.labelDensity = value / 100;
+      applyGraphTuning({ reheat: false });
+    });
+    bindGraphSlider(graphEdgeOpacitySlider, (value) => {
+      graphPreferences.edgeOpacity = value / 100;
+      applyGraphTuning({ reheat: false });
+    });
+    graphTuningReset.addEventListener('click', () => {
+      graphPreferences.nodeScale = GRAPH_DEFAULT_PREFERENCES.nodeScale;
+      graphPreferences.clusterTightness = GRAPH_DEFAULT_PREFERENCES.clusterTightness;
+      graphPreferences.labelDensity = GRAPH_DEFAULT_PREFERENCES.labelDensity;
+      graphPreferences.edgeOpacity = GRAPH_DEFAULT_PREFERENCES.edgeOpacity;
+      applyGraphTuning();
+    });
+  }
+
+  function bindGraphSlider(slider, onChange) {
+    slider.addEventListener('input', (event) => {
+      onChange(Number(event.target.value));
+    });
   }
 
   function openMobileNav() {
@@ -422,6 +467,7 @@
     const graphOptions = {
       activeSlug: graphSelectedSlug || currentNote?.slug || null,
       progressiveReveal: graphPreferences.progressiveReveal,
+      tuning: getGraphTuningOptions(),
       onSelect: selectGraphNode,
       onOpen: (slug) => { loadNote(slug); },
       onStateChange: handleGraphStateChange,
@@ -819,9 +865,13 @@
       const parsed = raw ? JSON.parse(raw) : {};
       return {
         progressiveReveal: parsed.progressiveReveal !== false,
+        nodeScale: readGraphPreferenceNumber(parsed.nodeScale, GRAPH_DEFAULT_PREFERENCES.nodeScale, 0.72, 1.9),
+        clusterTightness: readGraphPreferenceNumber(parsed.clusterTightness, GRAPH_DEFAULT_PREFERENCES.clusterTightness, 0, 1),
+        labelDensity: readGraphPreferenceNumber(parsed.labelDensity, GRAPH_DEFAULT_PREFERENCES.labelDensity, 0, 1),
+        edgeOpacity: readGraphPreferenceNumber(parsed.edgeOpacity, GRAPH_DEFAULT_PREFERENCES.edgeOpacity, 0, 1),
       };
     } catch {
-      return { progressiveReveal: true };
+      return { ...GRAPH_DEFAULT_PREFERENCES };
     }
   }
 
@@ -837,12 +887,60 @@
     graphProgressiveToggle.setAttribute('aria-pressed', String(graphPreferences.progressiveReveal));
     graphProgressiveToggle.classList.toggle('is-enabled', graphPreferences.progressiveReveal);
     graphProgressiveState.textContent = graphPreferences.progressiveReveal ? 'On' : 'Off';
+    graphNodeScaleSlider.value = String(Math.round(graphPreferences.nodeScale * 100));
+    graphNodeScaleValue.textContent = `${Math.round(graphPreferences.nodeScale * 100)}%`;
+    graphClusterTightnessSlider.value = String(Math.round(graphPreferences.clusterTightness * 100));
+    graphClusterTightnessValue.textContent = describeGraphTightness(graphPreferences.clusterTightness);
+    graphLabelDensitySlider.value = String(Math.round(graphPreferences.labelDensity * 100));
+    graphLabelDensityValue.textContent = describeGraphLabels(graphPreferences.labelDensity);
+    graphEdgeOpacitySlider.value = String(Math.round(graphPreferences.edgeOpacity * 100));
+    graphEdgeOpacityValue.textContent = describeGraphEdgeOpacity(graphPreferences.edgeOpacity);
   }
 
   function syncGraphActionButtons() {
     const hasSelection = Boolean(graphSelectedSlug || currentNote?.slug);
     graphCenterButton.disabled = !hasSelection;
     graphOpenButton.disabled = !hasSelection;
+  }
+
+  function applyGraphTuning(options = {}) {
+    persistGraphPreferences();
+    syncGraphPreferenceUi();
+    if (!graphData || !graphHasMounted) return;
+    GraphEngine.setTuning(getGraphTuningOptions(), { reheat: options.reheat !== false });
+  }
+
+  function getGraphTuningOptions() {
+    return {
+      nodeScale: graphPreferences.nodeScale,
+      clusterTightness: graphPreferences.clusterTightness,
+      labelDensity: graphPreferences.labelDensity,
+      edgeOpacity: graphPreferences.edgeOpacity,
+    };
+  }
+
+  function readGraphPreferenceNumber(value, fallback, min, max) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.min(max, Math.max(min, numeric));
+  }
+
+  function describeGraphTightness(value) {
+    if (value < 0.34) return 'Open';
+    if (value < 0.67) return 'Balanced';
+    return 'Tight';
+  }
+
+  function describeGraphLabels(value) {
+    if (value < 0.34) return 'Quiet';
+    if (value < 0.67) return 'Balanced';
+    return 'Rich';
+  }
+
+  function describeGraphEdgeOpacity(value) {
+    if (value < 0.34) return 'Muted';
+    if (value < 0.67) return 'Balanced';
+    return 'Bold';
   }
 
   init();

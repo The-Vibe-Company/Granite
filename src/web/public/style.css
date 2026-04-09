@@ -899,9 +899,9 @@ body::after {
   gap: 14px;
   padding: 14px;
   background:
-    radial-gradient(circle at 18% 15%, rgba(255, 255, 255, 0.1), transparent 22%),
-    radial-gradient(circle at 70% 18%, rgba(186, 104, 68, 0.08), transparent 18%),
-    linear-gradient(135deg, #171311 0%, #211813 42%, #100d0c 100%);
+    radial-gradient(circle at 18% 14%, rgba(214, 154, 118, 0.05), transparent 22%),
+    radial-gradient(circle at 78% 74%, rgba(103, 181, 161, 0.035), transparent 22%),
+    linear-gradient(135deg, #140f0d 0%, #181210 42%, #0f0b09 100%);
 }
 
 #graph-view::before {
@@ -909,10 +909,10 @@ body::after {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 140px 140px;
-  opacity: 0.28;
+    linear-gradient(rgba(255, 244, 232, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 244, 232, 0.012) 1px, transparent 1px);
+  background-size: 144px 144px;
+  opacity: 0.14;
   pointer-events: none;
 }
 
@@ -947,12 +947,16 @@ body::after {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 236, 220, 0.07);
   background:
-    radial-gradient(circle at 16% 14%, rgba(255, 255, 255, 0.04), transparent 18%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    linear-gradient(rgba(255, 244, 232, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 244, 232, 0.02) 1px, transparent 1px),
+    linear-gradient(180deg, #231915, #17110f);
+  background-size: 120px 120px, 120px 120px, auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.16);
 }
 
 #graph-focus-bar {
@@ -969,10 +973,9 @@ body::after {
 
 .graph-card {
   padding: 8px 10px;
-  background: linear-gradient(180deg, rgba(250, 244, 235, 0.08), rgba(250, 244, 235, 0.03));
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #2b201a;
+  border-color: rgba(255, 232, 212, 0.07);
   color: rgba(255, 246, 236, 0.92);
-  backdrop-filter: blur(10px);
   pointer-events: auto;
 }
 
@@ -980,10 +983,10 @@ body::after {
 .graph-stage-pill,
 .graph-focus-state {
   padding: 2px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 236, 220, 0.72);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #1a1311;
+  color: rgba(255, 236, 220, 0.76);
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1065,20 +1068,20 @@ body::after {
 }
 
 .graph-stage-pill[data-tone="revealing"] {
-  background: rgba(186, 104, 68, 0.18);
-  border-color: rgba(255, 203, 180, 0.22);
+  background: #4e3024;
+  border-color: rgba(255, 203, 180, 0.18);
   color: rgba(255, 243, 232, 0.94);
 }
 
 .graph-stage-pill[data-tone="memory"] {
-  background: rgba(103, 181, 161, 0.16);
-  border-color: rgba(183, 236, 223, 0.16);
+  background: #223a34;
+  border-color: rgba(183, 236, 223, 0.12);
   color: rgba(230, 250, 245, 0.92);
 }
 
 .graph-stage-pill[data-tone="instant"] {
-  background: rgba(228, 182, 95, 0.14);
-  border-color: rgba(245, 224, 177, 0.16);
+  background: #54401f;
+  border-color: rgba(245, 224, 177, 0.12);
   color: rgba(255, 245, 220, 0.9);
 }
 
@@ -1092,17 +1095,17 @@ body::after {
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #1b1411;
   color: rgba(255, 247, 239, 0.92);
   cursor: pointer;
   transition: background-color 160ms var(--ease), border-color 160ms var(--ease), transform 160ms var(--ease);
 }
 
 .graph-toggle:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: #2a1f19;
+  border-color: rgba(255, 236, 220, 0.16);
 }
 
 .graph-toggle-copy {
@@ -1130,8 +1133,8 @@ body::after {
   width: 42px;
   height: 22px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #34261f;
   transition: background-color 160ms var(--ease), border-color 160ms var(--ease);
 }
 
@@ -1142,19 +1145,19 @@ body::after {
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: rgba(255, 247, 239, 0.92);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.24);
+  background: #f5e6d7;
+  box-shadow: none;
   transition: transform 160ms var(--ease), background-color 160ms var(--ease);
 }
 
 .graph-toggle.is-enabled {
-  border-color: rgba(255, 203, 180, 0.22);
-  background: rgba(186, 104, 68, 0.16);
+  border-color: rgba(255, 203, 180, 0.16);
+  background: #472d21;
 }
 
 .graph-toggle.is-enabled .graph-toggle-switch {
-  background: rgba(186, 104, 68, 0.32);
-  border-color: rgba(255, 203, 180, 0.18);
+  background: #6a4433;
+  border-color: rgba(255, 203, 180, 0.12);
 }
 
 .graph-toggle.is-enabled .graph-toggle-knob {
@@ -1163,11 +1166,12 @@ body::after {
 
 #graph-focus-bar.graph-card {
   padding: 14px;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(247, 238, 226, 0.12), rgba(247, 238, 226, 0.04)),
-    rgba(19, 15, 13, 0.38);
-  box-shadow: 0 20px 48px rgba(7, 5, 4, 0.28);
+  border-radius: 12px;
+  pointer-events: auto;
+  background: #241b17;
+  box-shadow:
+    0 18px 40px rgba(8, 6, 5, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 #graph-focus-bar.graph-focus-idle {
@@ -1214,9 +1218,9 @@ body::after {
 .graph-focus-preview {
   min-height: 104px;
   padding: 12px 13px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #1a1310;
   color: rgba(255, 243, 231, 0.84);
   font-size: 0.76rem;
   line-height: 1.58;
@@ -1232,9 +1236,9 @@ body::after {
 .graph-focus-metric {
   min-width: 56px;
   padding: 6px 7px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  background: #1a1310;
+  border: 1px solid rgba(255, 236, 220, 0.06);
 }
 
 .graph-focus-metric-label {
@@ -1263,9 +1267,9 @@ body::after {
 
 .graph-btn {
   padding: 6px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #1c1512;
   color: rgba(255, 247, 239, 0.92);
   font-size: 0.68rem;
   font-weight: 700;
@@ -1273,18 +1277,134 @@ body::after {
 }
 
 .graph-btn:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: #30231d;
 }
 
 .graph-btn:disabled {
   opacity: 0.42;
   cursor: default;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(18, 13, 10, 0.6);
 }
 
 .graph-btn-accent {
-  background: rgba(186, 104, 68, 0.24);
-  border-color: rgba(255, 203, 180, 0.2);
+  background: #6d4330;
+  border-color: rgba(255, 203, 180, 0.14);
+}
+
+.graph-tuning-panel {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.graph-tuning-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graph-tuning-copy {
+  margin-top: 4px;
+  max-width: 28ch;
+  font-size: 0.67rem;
+  line-height: 1.4;
+  color: rgba(255, 236, 220, 0.56);
+}
+
+.graph-chip-btn {
+  appearance: none;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 236, 220, 0.08);
+  background: #1a1310;
+  color: rgba(255, 244, 232, 0.82);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.graph-slider {
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 236, 220, 0.06);
+  background: #1d1612;
+}
+
+.graph-slider-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graph-slider-label {
+  color: rgba(255, 247, 239, 0.9);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.graph-slider-value {
+  color: rgba(255, 236, 220, 0.62);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.graph-slider-input {
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.graph-slider-input::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(103, 181, 161, 0.26), rgba(211, 122, 87, 0.54));
+}
+
+.graph-slider-input::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(103, 181, 161, 0.26), rgba(211, 122, 87, 0.54));
+}
+
+.graph-slider-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 240, 228, 0.8);
+  background: #f5e6d7;
+  box-shadow: none;
+}
+
+.graph-slider-input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 240, 228, 0.8);
+  background: #f5e6d7;
+  box-shadow: none;
+}
+
+.graph-slider-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 236, 220, 0.44);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 #graph-tooltip {
@@ -1666,6 +1786,11 @@ body::after {
     min-width: 0;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .graph-tuning-header {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

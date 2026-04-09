@@ -252,6 +252,59 @@
               <button id="graph-focus-active" class="graph-btn" disabled>Open note</button>
               <button id="graph-reheat" class="graph-btn graph-btn-accent">Reheat layout</button>
             </div>
+            <section class="graph-tuning-panel">
+              <div class="graph-tuning-header">
+                <div>
+                  <p class="graph-eyebrow">Atlas tuning</p>
+                  <p class="graph-tuning-copy">Retune the map live without resetting the session layout.</p>
+                </div>
+                <button id="graph-tuning-reset" class="graph-chip-btn" type="button">Reset</button>
+              </div>
+              <label class="graph-slider">
+                <div class="graph-slider-heading">
+                  <span class="graph-slider-label">Node scale</span>
+                  <output id="graph-node-scale-value" class="graph-slider-value">110%</output>
+                </div>
+                <input id="graph-node-scale" class="graph-slider-input" type="range" min="72" max="190" step="1" value="110">
+                <div class="graph-slider-legend">
+                  <span>Small</span>
+                  <span>Large</span>
+                </div>
+              </label>
+              <label class="graph-slider">
+                <div class="graph-slider-heading">
+                  <span class="graph-slider-label">Tightness</span>
+                  <output id="graph-cluster-tightness-value" class="graph-slider-value">Balanced</output>
+                </div>
+                <input id="graph-cluster-tightness" class="graph-slider-input" type="range" min="0" max="100" step="1" value="58">
+                <div class="graph-slider-legend">
+                  <span>Loose</span>
+                  <span>Tight</span>
+                </div>
+              </label>
+              <label class="graph-slider">
+                <div class="graph-slider-heading">
+                  <span class="graph-slider-label">Labels</span>
+                  <output id="graph-label-density-value" class="graph-slider-value">Balanced</output>
+                </div>
+                <input id="graph-label-density" class="graph-slider-input" type="range" min="0" max="100" step="1" value="48">
+                <div class="graph-slider-legend">
+                  <span>Few</span>
+                  <span>Many</span>
+                </div>
+              </label>
+              <label class="graph-slider">
+                <div class="graph-slider-heading">
+                  <span class="graph-slider-label">Link opacity</span>
+                  <output id="graph-edge-opacity-value" class="graph-slider-value">Balanced</output>
+                </div>
+                <input id="graph-edge-opacity" class="graph-slider-input" type="range" min="0" max="100" step="1" value="58">
+                <div class="graph-slider-legend">
+                  <span>Muted</span>
+                  <span>Bold</span>
+                </div>
+              </label>
+            </section>
           </aside>
         </div>
         <div id="graph-tooltip"></div>

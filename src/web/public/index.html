@@ -199,38 +199,61 @@
             <div id="graph-inline-stats" class="graph-inline-stats">
               <span><strong id="graph-node-count">0</strong> nodes</span>
               <span><strong id="graph-edge-count">0</strong> links</span>
+              <span><strong id="graph-visible-count">0</strong> live</span>
               <span><strong id="graph-densest-type">-</strong> dominant</span>
             </div>
+            <div class="graph-mode-cluster">
+              <div id="graph-stage-pill" class="graph-stage-pill" data-tone="steady">Fresh atlas</div>
+              <button id="graph-progressive-toggle" class="graph-toggle is-enabled" type="button" aria-pressed="true">
+                <span class="graph-toggle-copy">
+                  <span class="graph-toggle-label">Cascade</span>
+                  <span id="graph-progressive-state" class="graph-toggle-state">On</span>
+                </span>
+                <span class="graph-toggle-switch" aria-hidden="true">
+                  <span class="graph-toggle-knob"></span>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
-        <div id="graph-focus-bar" class="graph-card graph-card-focus">
-          <div class="graph-focus-leading">
-            <p class="graph-eyebrow">Focus</p>
-            <h3 id="graph-focus-title">No note selected</h3>
-            <div id="graph-focus-state" class="graph-focus-state">Exploration</div>
+        <div id="graph-workspace">
+          <div id="graph-stage">
+            <canvas id="graph-canvas" aria-label="Knowledge graph visualization"></canvas>
           </div>
-          <p id="graph-focus-meta">Open a note or select a node to center the map around it.</p>
-          <div id="graph-focus-strip" class="graph-focus-strip">
-            <div class="graph-focus-metric">
-              <span class="graph-focus-metric-label">Out</span>
-              <span id="graph-focus-links" class="graph-focus-metric-value">0</span>
+          <aside id="graph-focus-bar" class="graph-card graph-card-focus">
+            <div class="graph-focus-heading">
+              <div class="graph-focus-leading">
+                <p class="graph-eyebrow">Preview</p>
+                <h3 id="graph-focus-title">Map preview</h3>
+                <div id="graph-focus-state" class="graph-focus-state">Explorer</div>
+              </div>
+              <div class="graph-focus-caption">1 click previews · 2 clicks opens</div>
             </div>
-            <div class="graph-focus-metric">
-              <span class="graph-focus-metric-label">Back</span>
-              <span id="graph-focus-backlinks" class="graph-focus-metric-value">0</span>
+            <p id="graph-focus-meta">Single click keeps you in the graph. Double-click opens the note.</p>
+            <p id="graph-focus-slug" class="graph-focus-slug">No node selected</p>
+            <div id="graph-focus-preview" class="graph-focus-preview">Select a node to inspect its note in place without pushing the graph aside.</div>
+            <div id="graph-focus-strip" class="graph-focus-strip">
+              <div class="graph-focus-metric">
+                <span class="graph-focus-metric-label">Out</span>
+                <span id="graph-focus-links" class="graph-focus-metric-value">0</span>
+              </div>
+              <div class="graph-focus-metric">
+                <span class="graph-focus-metric-label">Back</span>
+                <span id="graph-focus-backlinks" class="graph-focus-metric-value">0</span>
+              </div>
+              <div class="graph-focus-metric">
+                <span class="graph-focus-metric-label">Mode</span>
+                <span id="graph-focus-mode" class="graph-focus-metric-value">Atlas</span>
+              </div>
             </div>
-            <div class="graph-focus-metric">
-              <span class="graph-focus-metric-label">Mode</span>
-              <span id="graph-focus-mode" class="graph-focus-metric-value">Atlas</span>
+            <div class="graph-card-actions">
+              <button id="graph-center-active" class="graph-btn" disabled>Center</button>
+              <button id="graph-fit" class="graph-btn">Fit map</button>
+              <button id="graph-focus-active" class="graph-btn" disabled>Open note</button>
+              <button id="graph-reheat" class="graph-btn graph-btn-accent">Reheat layout</button>
             </div>
-          </div>
-          <div class="graph-card-actions">
-            <button id="graph-fit" class="graph-btn">Fit map</button>
-            <button id="graph-focus-active" class="graph-btn">Focus note</button>
-            <button id="graph-reheat" class="graph-btn graph-btn-accent">Reheat</button>
-          </div>
+          </aside>
         </div>
-        <canvas id="graph-canvas" aria-label="Knowledge graph visualization"></canvas>
         <div id="graph-tooltip"></div>
       </div>
 

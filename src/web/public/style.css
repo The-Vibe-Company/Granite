@@ -894,6 +894,10 @@ body::after {
   overflow: hidden;
   min-height: 0;
   width: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
   background:
     radial-gradient(circle at 18% 15%, rgba(255, 255, 255, 0.1), transparent 22%),
     radial-gradient(circle at 70% 18%, rgba(186, 104, 68, 0.08), transparent 18%),
@@ -924,27 +928,43 @@ body::after {
 }
 
 #graph-header {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  right: 14px;
   display: block;
   z-index: 3;
   pointer-events: none;
 }
 
+#graph-workspace {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  gap: 14px;
+}
+
+#graph-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at 16% 14%, rgba(255, 255, 255, 0.04), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
 #graph-focus-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  width: min(620px, calc(100% - 28px));
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 3;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
   pointer-events: none;
-  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease), border-color 180ms var(--ease);
 }
 
 .graph-card {
@@ -957,6 +977,7 @@ body::after {
 }
 
 .graph-home-badge,
+.graph-stage-pill,
 .graph-focus-state {
   padding: 2px 6px;
   border-radius: 999px;
@@ -970,18 +991,17 @@ body::after {
 }
 
 .graph-titlebar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(180px, 0.7fr) auto auto;
   align-items: center;
-  gap: 12px;
+  gap: 12px 14px;
   min-width: 0;
-  justify-content: space-between;
   padding-right: 12px;
 }
 
 .graph-title-main {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -1005,12 +1025,9 @@ body::after {
 
 #graph-summary {
   min-width: 0;
-  max-width: 24ch;
+  max-width: 30ch;
   font-size: 0.74rem;
   line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .graph-inline-stats {
@@ -1034,14 +1051,133 @@ body::after {
   font-weight: 500;
 }
 
-#graph-focus-bar.graph-card {
+.graph-mode-cluster {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+
+.graph-stage-pill {
+  padding: 5px 10px;
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+}
+
+.graph-stage-pill[data-tone="revealing"] {
+  background: rgba(186, 104, 68, 0.18);
+  border-color: rgba(255, 203, 180, 0.22);
+  color: rgba(255, 243, 232, 0.94);
+}
+
+.graph-stage-pill[data-tone="memory"] {
+  background: rgba(103, 181, 161, 0.16);
+  border-color: rgba(183, 236, 223, 0.16);
+  color: rgba(230, 250, 245, 0.92);
+}
+
+.graph-stage-pill[data-tone="instant"] {
+  background: rgba(228, 182, 95, 0.14);
+  border-color: rgba(245, 224, 177, 0.16);
+  color: rgba(255, 245, 220, 0.9);
+}
+
+.graph-stage-pill[data-tone="idle"] {
+  color: rgba(255, 236, 220, 0.56);
+}
+
+.graph-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
   border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 247, 239, 0.92);
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), border-color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.graph-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.graph-toggle-copy {
+  display: grid;
+  justify-items: start;
+  gap: 1px;
+}
+
+.graph-toggle-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.graph-toggle-state {
+  color: rgba(255, 236, 220, 0.58);
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.graph-toggle-switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  transition: background-color 160ms var(--ease), border-color 160ms var(--ease);
+}
+
+.graph-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 247, 239, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.24);
+  transition: transform 160ms var(--ease), background-color 160ms var(--ease);
+}
+
+.graph-toggle.is-enabled {
+  border-color: rgba(255, 203, 180, 0.22);
+  background: rgba(186, 104, 68, 0.16);
+}
+
+.graph-toggle.is-enabled .graph-toggle-switch {
+  background: rgba(186, 104, 68, 0.32);
+  border-color: rgba(255, 203, 180, 0.18);
+}
+
+.graph-toggle.is-enabled .graph-toggle-knob {
+  transform: translateX(19px);
+}
+
+#graph-focus-bar.graph-card {
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(247, 238, 226, 0.12), rgba(247, 238, 226, 0.04)),
+    rgba(19, 15, 13, 0.38);
+  box-shadow: 0 20px 48px rgba(7, 5, 4, 0.28);
 }
 
 #graph-focus-bar.graph-focus-idle {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px);
-  pointer-events: none;
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.graph-focus-heading {
+  display: grid;
+  gap: 8px;
 }
 
 .graph-focus-leading {
@@ -1049,20 +1185,47 @@ body::after {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex-wrap: wrap;
+}
+
+.graph-focus-caption {
+  color: rgba(255, 236, 220, 0.52);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 #graph-focus-meta {
-  flex: 1;
   min-width: 0;
   font-size: 0.72rem;
   line-height: 1.35;
-  white-space: nowrap;
+}
+
+.graph-focus-slug {
+  color: rgba(255, 236, 220, 0.52);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.graph-focus-preview {
+  min-height: 104px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 243, 231, 0.84);
+  font-size: 0.76rem;
+  line-height: 1.58;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .graph-focus-strip {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1092,9 +1255,9 @@ body::after {
 }
 
 .graph-card-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
-  flex-shrink: 0;
   pointer-events: auto;
 }
 
@@ -1106,10 +1269,17 @@ body::after {
   color: rgba(255, 247, 239, 0.92);
   font-size: 0.68rem;
   font-weight: 700;
+  width: 100%;
 }
 
 .graph-btn:hover {
   background: rgba(255, 255, 255, 0.11);
+}
+
+.graph-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .graph-btn-accent {
@@ -1454,28 +1624,41 @@ body::after {
   }
 
   #graph-header {
-    left: 18px;
-    right: 18px;
     display: grid;
     grid-template-columns: 1fr;
   }
 
+  #graph-view {
+    padding: 18px;
+  }
+
+  #graph-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  #graph-stage {
+    min-height: 360px;
+  }
+
   .graph-titlebar {
-    display: grid;
+    grid-template-columns: 1fr;
     justify-content: start;
   }
 
   #graph-focus-bar {
-    left: 18px;
-    right: 18px;
-    width: auto;
-    transform: none;
     display: grid;
     grid-template-columns: 1fr;
     align-items: stretch;
+    max-height: none;
   }
 
   .graph-inline-stats {
+    flex-wrap: wrap;
+  }
+
+  .graph-mode-cluster {
+    justify-self: start;
     flex-wrap: wrap;
   }
 
@@ -1504,10 +1687,19 @@ body::after {
   }
 
   .graph-card-actions {
-    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .graph-btn {
     width: 100%;
+  }
+
+  .graph-mode-cluster {
+    width: 100%;
+  }
+
+  .graph-toggle {
+    width: 100%;
+    justify-content: space-between;
   }
 }

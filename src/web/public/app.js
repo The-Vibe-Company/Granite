@@ -8,11 +8,19 @@
   let currentType = '';
   let currentView = 'graph';
   let graphData = null;
+  let graphSelectedSlug = null;
+  let graphSelectedNote = null;
+  let graphSelectionRequestId = 0;
+  let graphHasMounted = false;
+  let graphNeedsRebuild = true;
+  let graphSessionStatus = 'fresh';
   let previewCache = {};
   let previewTimeout = null;
   let commandIndex = -1;
   let commandResults = [];
   let releaseTrap = null;
+  const GRAPH_PREFERENCES_KEY = 'granite.graph.preferences.v1';
+  let graphPreferences = loadGraphPreferences();
 
   // ── DOM ──
   const noteList = document.getElementById('note-list');
@@ -45,9 +53,17 @@
   const graphSummary = document.getElementById('graph-summary');
   const graphNodeCount = document.getElementById('graph-node-count');
   const graphEdgeCount = document.getElementById('graph-edge-count');
+  const graphVisibleCount = document.getElementById('graph-visible-count');
   const graphDensestType = document.getElementById('graph-densest-type');
+  const graphCenterButton = document.getElementById('graph-center-active');
+  const graphOpenButton = document.getElementById('graph-focus-active');
+  const graphStagePill = document.getElementById('graph-stage-pill');
+  const graphProgressiveToggle = document.getElementById('graph-progressive-toggle');
+  const graphProgressiveState = document.getElementById('graph-progressive-state');
   const graphFocusTitle = document.getElementById('graph-focus-title');
   const graphFocusMeta = document.getElementById('graph-focus-meta');
+  const graphFocusSlug = document.getElementById('graph-focus-slug');
+  const graphFocusPreview = document.getElementById('graph-focus-preview');
   const graphFocusState = document.getElementById('graph-focus-state');
   const graphFocusLinks = document.getElementById('graph-focus-links');
   const graphFocusBacklinks = document.getElementById('graph-focus-backlinks');
@@ -100,6 +116,8 @@
     setupCommand();
     setupWikilinkPreviews();
     setupGraphHud();
+    syncGraphPreferenceUi();
+    handleGraphStateChange(GraphEngine.getState());
     initGrain();
     setView('graph');
   }
@@ -265,10 +283,33 @@
   function setupGraphHud() {
     document.getElementById('graph-fit').addEventListener('click', () => GraphEngine.fitView());
     document.getElementById('graph-reheat').addEventListener('click', () => GraphEngine.reheat());
-    document.getElementById('graph-focus-active').addEventListener('click', () => {
-      if (!currentNote) return;
-      GraphEngine.centerOnSlug(currentNote.slug);
+    graphCenterButton.addEventListener('click', () => {
+      const slug = graphSelectedSlug || currentNote?.slug || null;
+      if (!slug) return;
+      GraphEngine.centerOnSlug(slug);
       GraphEngine.reheat();
+    });
+    graphOpenButton.addEventListener('click', () => {
+      const slug = graphSelectedSlug || currentNote?.slug || null;
+      if (!slug) return;
+      loadNote(slug);
+    });
+    graphProgressiveToggle.addEventListener('click', () => {
+      const nextValue = !graphPreferences.progressiveReveal;
+      graphPreferences.progressiveReveal = nextValue;
+      persistGraphPreferences();
+      syncGraphPreferenceUi();
+      if (nextValue) {
+        graphHasMounted = false;
+        graphNeedsRebuild = true;
+        graphSessionStatus = 'fresh';
+        GraphEngine.destroy();
+        loadGraph();
+      } else {
+        GraphEngine.setProgressiveReveal(false);
+      }
+      handleGraphStateChange(GraphEngine.getState());
+      updateGraphFocus();
     });
   }
 
@@ -334,6 +375,7 @@
     if (result.error) return;
     if (result.slug) {
       closeCreate();
+      invalidateGraph();
       await loadNotes();
       loadNote(result.slug);
     }
@@ -372,11 +414,28 @@
       graphData = await api('/api/graph');
       updateGraphSummary(graphData);
     }
+    if (!graphSelectedSlug && currentNote?.slug) {
+      graphSelectedSlug = currentNote.slug;
+      graphSelectedNote = currentNote;
+    }
     updateGraphFocus();
-    GraphEngine.init(graphCanvas, graphData, {
-      activeSlug: currentNote?.slug || null,
-      onNavigate: (slug) => { loadNote(slug); setView('note'); },
-    });
+    const graphOptions = {
+      activeSlug: graphSelectedSlug || currentNote?.slug || null,
+      progressiveReveal: graphPreferences.progressiveReveal,
+      onSelect: selectGraphNode,
+      onOpen: (slug) => { loadNote(slug); },
+      onStateChange: handleGraphStateChange,
+    };
+    if (!graphHasMounted || graphNeedsRebuild) {
+      graphSessionStatus = 'fresh';
+      GraphEngine.init(graphCanvas, graphData, graphOptions);
+      graphHasMounted = true;
+      graphNeedsRebuild = false;
+    } else {
+      graphSessionStatus = 'memory';
+      GraphEngine.resume(graphCanvas, graphOptions);
+    }
+    handleGraphStateChange(GraphEngine.getState());
   }
 
   // ═══ WIKILINK PREVIEWS ═══
@@ -443,7 +502,6 @@
     const url = currentType ? `/api/notes?type=${currentType}` : '/api/notes';
     const data = await api(url);
     allNotes = data.notes;
-    graphData = null;
     updateVaultSummary(allNotes);
     renderNoteList(allNotes);
   }
@@ -493,6 +551,8 @@
     const note = await api(`/api/notes/${slug}`);
     if (note.error) return;
     currentNote = note;
+    graphSelectedSlug = slug;
+    graphSelectedNote = note;
 
     if (currentView === 'graph') setView('note');
 
@@ -605,6 +665,7 @@
     const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     graphNodeCount.textContent = String(data.nodes?.length || 0);
     graphEdgeCount.textContent = String(data.edges?.length || 0);
+    graphVisibleCount.textContent = String(data.nodes?.length || 0);
     graphDensestType.textContent = dominant ? dominant[0] : '-';
     graphSummary.textContent = dominant
       ? `${data.nodes.length} notes · ${data.edges.length} links · ${formatTypeLabel(dominant[0])} dominant`
@@ -612,25 +673,106 @@
   }
 
   function updateGraphFocus() {
-    if (!currentNote) {
-      graphFocusTitle.textContent = 'No note selected';
-      graphFocusMeta.textContent = 'Hover a node, inspect a cluster, then open a note.';
-      graphFocusState.textContent = 'Exploration';
+    const focusSlug = graphSelectedSlug || currentNote?.slug || null;
+    const focusNote = graphSelectedNote?.slug === focusSlug
+      ? graphSelectedNote
+      : currentNote?.slug === focusSlug
+        ? currentNote
+        : null;
+
+    if (!focusSlug) {
+      graphFocusTitle.textContent = 'Map preview';
+      graphFocusMeta.textContent = 'Single click previews a node here. Double-click opens it directly.';
+      graphFocusSlug.textContent = 'No node selected';
+      graphFocusPreview.textContent = 'Select a node to inspect its note in place without pushing the graph aside.';
+      graphFocusState.textContent = 'Explorer';
       graphFocusLinks.textContent = '0';
       graphFocusBacklinks.textContent = '0';
-      graphFocusMode.textContent = 'Atlas';
+      graphFocusMode.textContent = graphPreferences.progressiveReveal ? 'Cascade' : 'Instant';
       document.getElementById('graph-focus-bar').classList.add('graph-focus-idle');
+      syncGraphActionButtons();
       return;
     }
-    const backlinkCount = currentNote.backlinks?.length || 0;
-    const linkCount = currentNote.outgoing_links?.filter(link => link.resolved).length || 0;
-    graphFocusTitle.textContent = currentNote.title;
-    graphFocusMeta.textContent = `${formatTypeLabel(currentNote.type)} node with ${linkCount} outgoing links and ${backlinkCount} backlinks.`;
-    graphFocusState.textContent = formatTypeLabel(currentNote.type);
+    if (!focusNote) {
+      const graphNode = graphData?.nodes?.find(node => node.slug === focusSlug);
+      graphFocusTitle.textContent = graphNode?.title || focusSlug;
+      graphFocusMeta.textContent = 'Preview loading. Double-click now if you want to open the note directly.';
+      graphFocusSlug.textContent = focusSlug;
+      graphFocusPreview.textContent = 'Fetching the note preview from the vault...';
+      graphFocusState.textContent = formatTypeLabel(graphNode?.type);
+      graphFocusLinks.textContent = '...';
+      graphFocusBacklinks.textContent = '...';
+      graphFocusMode.textContent = graphPreferences.progressiveReveal ? 'Cascade' : 'Instant';
+      document.getElementById('graph-focus-bar').classList.remove('graph-focus-idle');
+      syncGraphActionButtons();
+      return;
+    }
+    const backlinkCount = focusNote.backlinks?.length || 0;
+    const linkCount = focusNote.outgoing_links?.filter(link => link.resolved).length || 0;
+    graphFocusTitle.textContent = focusNote.title;
+    graphFocusMeta.textContent = `${formatTypeLabel(focusNote.type)} preview. Single click stays in the atlas; double-click opens the note.`;
+    graphFocusSlug.textContent = focusNote.slug;
+    graphFocusPreview.textContent = extractDeck(focusNote.body, 280);
+    graphFocusState.textContent = formatTypeLabel(focusNote.type);
     graphFocusLinks.textContent = String(linkCount);
     graphFocusBacklinks.textContent = String(backlinkCount);
-    graphFocusMode.textContent = 'Focused';
+    graphFocusMode.textContent = graphPreferences.progressiveReveal ? 'Cascade' : 'Instant';
     document.getElementById('graph-focus-bar').classList.remove('graph-focus-idle');
+    syncGraphActionButtons();
+  }
+
+  function invalidateGraph() {
+    graphData = null;
+    graphSelectedSlug = currentNote?.slug || null;
+    graphSelectedNote = currentNote || null;
+    graphHasMounted = false;
+    graphNeedsRebuild = true;
+    graphSessionStatus = 'fresh';
+    GraphEngine.destroy();
+    handleGraphStateChange(GraphEngine.getState());
+  }
+
+  function handleGraphStateChange(state) {
+    const totalNodes = state.totalNodes ?? graphData?.nodes?.length ?? 0;
+    const visibleNodes = state.visibleNodes ?? totalNodes;
+    graphVisibleCount.textContent = String(visibleNodes);
+
+    if (!graphStagePill) return;
+
+    let tone = 'steady';
+    let label = 'Fresh atlas';
+    if (!totalNodes) {
+      tone = 'idle';
+      label = 'Awaiting graph';
+    } else if (state.progressiveReveal && !state.revealComplete) {
+      tone = 'revealing';
+      label = `Revealing ${visibleNodes}/${totalNodes}`;
+    } else if (graphSessionStatus === 'memory') {
+      tone = 'memory';
+      label = 'Session memory';
+    } else if (state.progressiveReveal) {
+      tone = 'steady';
+      label = 'Settled atlas';
+    } else {
+      tone = 'instant';
+      label = 'Instant atlas';
+    }
+
+    graphStagePill.dataset.tone = tone;
+    graphStagePill.textContent = label;
+  }
+
+  async function selectGraphNode(slug) {
+    graphSelectedSlug = slug;
+    graphSelectedNote = currentNote?.slug === slug ? currentNote : null;
+    updateGraphFocus();
+
+    const requestId = ++graphSelectionRequestId;
+    const note = await api(`/api/notes/${slug}`);
+    if (requestId !== graphSelectionRequestId || graphSelectedSlug !== slug || note.error) return;
+
+    graphSelectedNote = note;
+    updateGraphFocus();
   }
 
   function renderMetaGrid(note) {
@@ -655,7 +797,7 @@
     `).join('');
   }
 
-  function extractDeck(body) {
+  function extractDeck(body, maxLength = 210) {
     const text = body
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/!\[[^\]]*]\([^)]+\)/g, ' ')
@@ -664,11 +806,43 @@
       .replace(/\s+/g, ' ')
       .trim();
     if (!text) return 'A structured note inside the Granite atlas.';
-    return text.length > 210 ? `${text.slice(0, 207).trim()}...` : text;
+    return text.length > maxLength ? `${text.slice(0, maxLength - 3).trim()}...` : text;
   }
 
   function formatTypeLabel(type) {
     return type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Note';
+  }
+
+  function loadGraphPreferences() {
+    try {
+      const raw = localStorage.getItem(GRAPH_PREFERENCES_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        progressiveReveal: parsed.progressiveReveal !== false,
+      };
+    } catch {
+      return { progressiveReveal: true };
+    }
+  }
+
+  function persistGraphPreferences() {
+    try {
+      localStorage.setItem(GRAPH_PREFERENCES_KEY, JSON.stringify(graphPreferences));
+    } catch {
+      // Ignore localStorage write errors in ephemeral/private contexts.
+    }
+  }
+
+  function syncGraphPreferenceUi() {
+    graphProgressiveToggle.setAttribute('aria-pressed', String(graphPreferences.progressiveReveal));
+    graphProgressiveToggle.classList.toggle('is-enabled', graphPreferences.progressiveReveal);
+    graphProgressiveState.textContent = graphPreferences.progressiveReveal ? 'On' : 'Off';
+  }
+
+  function syncGraphActionButtons() {
+    const hasSelection = Boolean(graphSelectedSlug || currentNote?.slug);
+    graphCenterButton.disabled = !hasSelection;
+    graphOpenButton.disabled = !hasSelection;
   }
 
   init();

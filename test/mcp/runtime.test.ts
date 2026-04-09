@@ -83,4 +83,23 @@ describe('GraniteMcpRuntime', () => {
     expect(runtime.search('delete')).toHaveLength(0);
     runtime.close();
   });
+
+  it('imports a document as a source stub and exposes the linked asset resource', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const inputFile = path.join(tmpDir, 'design-brief.pdf');
+    fs.writeFileSync(inputFile, '%PDF-1.4\nbrief\n');
+
+    const imported = runtime.importDocument({ file_path: inputFile });
+
+    expect(imported.note.type).toBe('source');
+    expect(imported.note.status).toBe('inbox');
+    expect(imported.note.source).toBe('extraction');
+    expect(imported.note.frontmatter.document_file).toBe(imported.document.file);
+    expect(imported.document.resource_uri).toBe(`granite://assets/${encodeURIComponent(imported.document.file)}`);
+
+    const asset = runtime.readAsset(imported.document.file);
+    expect('blob' in asset).toBe(true);
+    expect(asset.mimeType).toBe('application/pdf');
+    runtime.close();
+  });
 });

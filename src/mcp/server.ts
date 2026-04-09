@@ -72,6 +72,16 @@ const noteDetailsSchema = noteSummarySchema.extend({
   outgoing_links: z.array(wikiLinkSchema),
 });
 
+const importedDocumentAssetSchema = z.object({
+  file: z.string(),
+  path: z.string(),
+  relative_path: z.string(),
+  markdown: z.string(),
+  mime_type: z.string(),
+  sha256: z.string(),
+  resource_uri: z.string(),
+});
+
 const searchResultSchema = z.object({
   slug: z.string(),
   title: z.string(),
@@ -181,6 +191,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **granite_wakeup** — load the map of the vault before doing work',
         '- **granite_research_topic** — discover relevant notes for a topic',
         '- **granite_capture_knowledge** — capture new knowledge into the vault',
+        '- **granite_import_document** — attach a file and create a linked source note without extracting it',
         '- **granite_understand_note** — inspect a note in context, not in isolation',
         '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
         '- **granite_dispose_note** — archive by default, delete only when intentional',
@@ -202,7 +213,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
         '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
         '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
-        '- **Prefer resources for raw reads.** Use granite://notes/{slug} for markdown and granite://vault/types for type contracts.',
+        '- **Prefer resources for raw reads.** Use granite://notes/{slug} for markdown, granite://assets/{filename} for imported documents, and granite://vault/types for type contracts.',
       ].join('\n'),
     },
   );
@@ -384,6 +395,41 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(result, buildWriteSummary('Captured', result, runtime));
   });
 
+  server.registerTool('granite_import_document', {
+    title: 'Import Granite Document',
+    description: 'Import a local document into the vault by attaching the file and creating a linked source note. This does not extract the document text; it creates a source stub that points to the file for later LLM or human reading.',
+    inputSchema: {
+      file_path: z.string().describe('Absolute or relative path to the local document file to import.'),
+      title: z.string().optional().describe('Optional explicit title for the source note. Defaults to a title derived from the filename.'),
+      tags: z.array(z.string()).optional().describe('Tags to add immediately to the source note.'),
+      aliases: z.array(z.string()).optional().describe('Aliases to add immediately to the source note.'),
+    },
+    outputSchema: z.object({
+      note: noteDetailsSchema,
+      document: importedDocumentAssetSchema,
+      recommendations: recommendationSchema,
+    }),
+    annotations: writeAnnotations,
+  }, async ({ file_path, title, tags, aliases }) => {
+    const result = runtime.importDocument({ file_path, title, tags, aliases });
+    const summary = [
+      `Imported "${result.document.file}" as source "${result.note.title}" (${result.note.slug}).`,
+      '',
+      'The note is intentionally a stub. Read the linked document resource before summarizing or revising it.',
+      '',
+      `Recommendations: ${recommendationSummary(result.recommendations)}.`,
+    ].join('\n');
+
+    return {
+      ...toolResult(result, summary),
+      content: [
+        { type: 'text', text: summary },
+        createNoteResourceLink(result.note.title, result.note.resource_uri),
+        createAssetResourceLink(result.document.file, result.document.resource_uri, result.document.mime_type),
+      ],
+    };
+  });
+
   server.registerTool('granite_understand_note', {
     title: 'Understand Granite Note',
     description: 'Inspect a note in context. Returns the note, its outgoing links, backlinks, unlinked mentions, recommendations, and its likely role in the graph.',
@@ -396,10 +442,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     const result = runtime.understandNote(slug);
     return {
       ...toolResult(result, `Understood "${result.note.title}" (${result.note.slug}) as a ${result.graph_role.role} note.`),
-      content: [
-        { type: 'text', text: `Understood "${result.note.title}" (${result.note.slug}) as a ${result.graph_role.role} note.` },
-        createNoteResourceLink(result.note.title, result.note.resource_uri),
-      ],
+      content: buildUnderstandNoteContent(result),
     };
   });
 
@@ -484,6 +527,29 @@ function registerResources(server: McpServer, runtime: GraniteMcpRuntime): void 
       }],
     };
   });
+
+  const assetTemplate = new ResourceTemplate('granite://assets/{filename}', {
+    list: undefined,
+    complete: {
+      filename: async (value) => runtime.completeAssets(value),
+    },
+  });
+
+  server.registerResource('granite-asset', assetTemplate, {
+    title: 'Granite Asset',
+    description: 'Read an imported Granite asset. Text files are returned as text; binary files are returned as base64 blobs.',
+    mimeType: 'application/octet-stream',
+  }, async (_uri, variables) => {
+    const variable = variables.filename;
+    const fileName = Array.isArray(variable) ? variable[0] : variable;
+    if (!fileName) {
+      throw new Error('Resource URI is missing the asset filename.');
+    }
+
+    return {
+      contents: [runtime.readAsset(decodeURIComponent(fileName))],
+    };
+  });
 }
 
 function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
@@ -495,6 +561,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
     },
   }, async ({ slug }) => {
     const note = runtime.getNote(slug);
+    const linkedAsset = getLinkedAsset(note);
 
     return {
       description: `Refine ${note.slug} into a durable Granite note.`,
@@ -506,8 +573,9 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
             text: [
               'Refine the attached Granite note into a durable, well-structured note.',
               'Keep the meaning intact, avoid inventing facts, preserve useful wikilinks, and use Granite-style headings when appropriate.',
+              linkedAsset ? 'This note is linked to an imported document. Read that document resource before summarizing or extracting facts.' : '',
               'When you are ready to apply the result, use granite_revise_note rather than low-level CRUD operations.',
-            ].join(' '),
+            ].filter(Boolean).join(' '),
           },
         },
         {
@@ -521,6 +589,13 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
             },
           },
         },
+        ...(linkedAsset ? [{
+          role: 'user' as const,
+          content: {
+            type: 'resource' as const,
+            resource: runtime.readAsset(linkedAsset.file),
+          },
+        }] : []),
       ],
     };
   });
@@ -548,6 +623,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '4. **Archive** — If it\'s been processed or is no longer relevant, set status: archived.',
               '',
               'Use granite_understand_note before changing a note, granite_revise_note to apply precise edits, and granite_dispose_note to archive anything that should leave the active loop.',
+              'If granite_understand_note shows that a source note has an imported document attached, read the linked granite://assets resource before summarizing, extracting facts, or promoting it.',
               '',
               `Vault context: ${overview.note_count} notes total (${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}).`,
               '',
@@ -592,18 +668,15 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '',
               'Steps:',
               '1. Read the related notes below',
-              '2. Draft the synthesis body and create it with granite_capture_knowledge (set type: synthesis and provide an explicit title)',
-              '3. Write a body that connects the key ideas, with [[wikilinks]] to sources',
-              '4. Set derived_from to the source note slugs',
-              '5. Run granite_understand_note on the new synthesis to inspect how well it is connected',
+              '2. If a related source note has an imported document attached, read the linked granite://assets resource before summarizing or extracting facts from that source',
+              '3. Draft the synthesis body and create it with granite_capture_knowledge (set type: synthesis and provide an explicit title)',
+              '4. Write a body that connects the key ideas, with [[wikilinks]] to sources',
+              '5. Set derived_from to the source note slugs',
+              '6. Run granite_understand_note on the new synthesis to inspect how well it is connected',
               '',
               `Related notes (${noteDetails.length} found for "${topic}"):`,
               '',
-              ...noteDetails.map(n => n ? [
-                `### ${n.title} (${n.slug}, type: ${n.type})`,
-                n.body.slice(0, 500) + (n.body.length > 500 ? '...' : ''),
-                '',
-              ].join('\n') : ''),
+              ...noteDetails.map(n => n ? formatCompileTopicNote(n) : ''),
             ].join('\n'),
           },
         },
@@ -658,10 +731,11 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '',
               '1. Fix any structural errors reported by doctor',
               '2. For each orphan note, use granite_understand_note to inspect the note in context',
-              '3. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
-              '4. Look for clusters of notes that could be compiled into a synthesis',
-              '5. Check if any inbox notes need processing',
-              '6. Report a summary of what you found and what you fixed',
+              '3. If granite_understand_note reveals an imported document on a source note, read the linked granite://assets resource before summarizing or extracting facts',
+              '4. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
+              '5. Look for clusters of notes that could be compiled into a synthesis',
+              '6. Check if any inbox notes need processing',
+              '7. Report a summary of what you found and what you fixed',
             ].join('\n'),
           },
         },
@@ -685,6 +759,63 @@ function createNoteResourceLink(name: string, uri: string) {
     mimeType: 'text/markdown',
     description: 'Read the markdown resource for this note.',
   };
+}
+
+function createAssetResourceLink(name: string, uri: string, mimeType: string) {
+  return {
+    type: 'resource_link' as const,
+    name,
+    uri,
+    mimeType,
+    description: 'Read the imported source document linked to this note.',
+  };
+}
+
+function buildUnderstandNoteContent(result: {
+  note: { title: string; slug: string; resource_uri: string; frontmatter: Record<string, unknown> };
+  graph_role: { role: string };
+}) {
+  const content: Array<
+    { type: 'text'; text: string }
+    | ReturnType<typeof createNoteResourceLink>
+    | ReturnType<typeof createAssetResourceLink>
+  > = [
+    { type: 'text', text: `Understood "${result.note.title}" (${result.note.slug}) as a ${result.graph_role.role} note.` },
+    createNoteResourceLink(result.note.title, result.note.resource_uri),
+  ];
+
+  const linkedAsset = getLinkedAsset(result.note);
+  if (linkedAsset) {
+    content.push(createAssetResourceLink(linkedAsset.file, linkedAsset.resource_uri, linkedAsset.mime_type));
+  }
+
+  return content;
+}
+
+function getLinkedAsset(note: { frontmatter: Record<string, unknown> }) {
+  const file = typeof note.frontmatter.document_file === 'string' ? note.frontmatter.document_file : null;
+  const resourceUri = typeof note.frontmatter.document_resource_uri === 'string' ? note.frontmatter.document_resource_uri : null;
+  const mimeType = typeof note.frontmatter.document_mime === 'string' ? note.frontmatter.document_mime : 'application/octet-stream';
+
+  if (!file || !resourceUri) {
+    return null;
+  }
+
+  return {
+    file,
+    resource_uri: resourceUri,
+    mime_type: mimeType,
+  };
+}
+
+function formatCompileTopicNote(note: { title: string; slug: string; type: string; body: string; frontmatter: Record<string, unknown> }) {
+  const linkedAsset = getLinkedAsset(note);
+  return [
+    `### ${note.title} (${note.slug}, type: ${note.type})`,
+    ...(linkedAsset ? [`Imported document: ${linkedAsset.resource_uri} (${linkedAsset.mime_type})`] : []),
+    note.body.slice(0, 500) + (note.body.length > 500 ? '...' : ''),
+    '',
+  ].join('\n');
 }
 
 function buildWriteSummary(verb: string, result: { note: { title: string; slug: string; type: string }; recommendations: NoteRecommendations }, runtime: GraniteMcpRuntime): string {

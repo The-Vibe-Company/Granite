@@ -27,6 +27,28 @@ const DEFAULT_CONFIG: GraniteConfig = {
       line_limit: 400,
       warn_only: true,
       instructions: 'Keep the source close to the original. Capture provenance in frontmatter, summarize the essentials, and link to durable notes or syntheses.',
+      fields: {
+        document_file: {
+          type: 'text',
+          description: 'Attached document filename stored in the vault assets directory.',
+        },
+        document_path: {
+          type: 'text',
+          description: 'Vault-relative path to the attached document.',
+        },
+        document_mime: {
+          type: 'text',
+          description: 'MIME type of the attached document.',
+        },
+        document_sha256: {
+          type: 'text',
+          description: 'SHA-256 hash of the attached document.',
+        },
+        document_resource_uri: {
+          type: 'text',
+          description: 'Granite MCP resource URI for the attached document.',
+        },
+      },
       frontmatter_defaults: {
         durability: 'canonical',
       },

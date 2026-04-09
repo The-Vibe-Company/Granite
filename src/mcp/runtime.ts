@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
+import { attachAsset, assetResourceUri, completeAssetFiles, readAssetResource, type AttachedAsset } from '../core/assets.js';
 import { CONFIG_FILENAME, loadConfig } from '../core/config.js';
 import { runDoctor } from '../core/doctor.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
+import { importDocument as importDocumentToVault } from '../core/import-document.js';
 import { openDatabase, rebuildIndex, syncNoteInIndex } from '../core/index-db.js';
 import { findNoteBySlug, listNotes, createNote, readNote } from '../core/note.js';
 import { getRecommendations } from '../core/recommendations.js';
@@ -156,6 +158,29 @@ export interface ListNotesInput {
 
 export interface NoteMutationResult {
   note: NoteDetails;
+  recommendations: NoteRecommendations;
+}
+
+export interface ImportedDocumentAsset {
+  file: string;
+  path: string;
+  relative_path: string;
+  markdown: string;
+  mime_type: string;
+  sha256: string;
+  resource_uri: string;
+}
+
+export interface ImportDocumentInput {
+  file_path: string;
+  title?: string;
+  tags?: string[];
+  aliases?: string[];
+}
+
+export interface ImportDocumentResult {
+  note: NoteDetails;
+  document: ImportedDocumentAsset;
   recommendations: NoteRecommendations;
 }
 
@@ -451,32 +476,8 @@ export class GraniteMcpRuntime {
   }
 
   attach(filePath: string, slug?: string): { file: string; path: string; markdown: string; slug: string | null } {
-    const assetsDir = path.join(this.vaultRoot, 'assets');
-    fs.mkdirSync(assetsDir, { recursive: true });
-
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-
-    const fileName = path.basename(filePath);
-    let finalName = fileName;
-    const destPath = path.join(assetsDir, fileName);
-    if (fs.existsSync(destPath)) {
-      const ext = path.extname(fileName);
-      const base = path.basename(fileName, ext);
-      finalName = `${base}-${Date.now()}${ext}`;
-    }
-
-    const finalPath = path.join(assetsDir, finalName);
-    fs.copyFileSync(filePath, finalPath);
-
-    const ext = path.extname(finalName).toLowerCase();
-    const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
-    const markdown = imageExts.includes(ext)
-      ? `![${finalName}](assets/${finalName})`
-      : `[${finalName}](assets/${finalName})`;
-
-    return { file: finalName, path: finalPath, markdown, slug: slug ?? null };
+    const asset = attachAsset(this.vaultRoot, filePath);
+    return { file: asset.file, path: asset.path, markdown: asset.markdown, slug: slug ?? null };
   }
 
   createNote(input: CreateNoteInput): NoteMutationResult {
@@ -531,6 +532,21 @@ export class GraniteMcpRuntime {
       durability: input.durability,
       derived_from: input.derived_from,
     });
+  }
+
+  importDocument(input: ImportDocumentInput): ImportDocumentResult {
+    const imported = importDocumentToVault(this.vaultRoot, this.config, input.file_path, {
+      title: input.title,
+      tags: input.tags,
+      aliases: input.aliases,
+    });
+
+    const result = this.afterWrite(imported.note.slug, true);
+    return {
+      note: result.note,
+      recommendations: result.recommendations,
+      document: this.toImportedDocumentAsset(imported.asset),
+    };
   }
 
   updateNote(slug: string, input: UpdateNoteInput): NoteMutationResult {
@@ -689,6 +705,12 @@ export class GraniteMcpRuntime {
     return fs.readFileSync(note.filepath, 'utf-8');
   }
 
+  readAsset(fileName: string):
+    | { uri: string; mimeType: string; text: string }
+    | { uri: string; mimeType: string; blob: string } {
+    return readAssetResource(this.vaultRoot, fileName);
+  }
+
   completeSlugs(prefix = ''): string[] {
     const normalizedPrefix = prefix.toLowerCase();
 
@@ -699,12 +721,20 @@ export class GraniteMcpRuntime {
       .slice(0, 25);
   }
 
+  completeAssets(prefix = ''): string[] {
+    return completeAssetFiles(this.vaultRoot, prefix);
+  }
+
   getTypeInstructions(typeName: string): string | undefined {
     return this.config.note_types[typeName]?.instructions;
   }
 
   noteResourceUri(slug: string): string {
     return `granite://notes/${encodeURIComponent(slug)}`;
+  }
+
+  assetResourceUri(fileName: string): string {
+    return assetResourceUri(fileName);
   }
 
   private refreshIndex(force = false): void {
@@ -772,6 +802,18 @@ export class GraniteMcpRuntime {
       derived_from: note.frontmatter.derived_from,
       filepath: note.filepath,
       resource_uri: this.noteResourceUri(note.slug),
+    };
+  }
+
+  private toImportedDocumentAsset(asset: AttachedAsset): ImportedDocumentAsset {
+    return {
+      file: asset.file,
+      path: asset.path,
+      relative_path: asset.relative_path,
+      markdown: asset.markdown,
+      mime_type: asset.mime_type,
+      sha256: asset.sha256,
+      resource_uri: asset.resource_uri,
     };
   }
 

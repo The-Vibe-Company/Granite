@@ -51,12 +51,15 @@ describe('granite MCP server', () => {
     const prompts = await client.listPrompts();
 
     expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_import_document')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(false);
     expect(resources.resources.some(resource => resource.uri === 'granite://vault/types')).toBe(true);
     expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://notes/{slug}')).toBe(true);
+    expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://assets/{filename}')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_refine_note')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_compile_topic')).toBe(true);
+    expect(prompts.prompts.some(prompt => prompt.name === 'granite_garden_vault')).toBe(true);
     expect(client.getInstructions()).toContain('Knowledge Compilation System');
   });
 
@@ -118,6 +121,122 @@ describe('granite MCP server', () => {
 
     expect(disposedData.mode).toBe('archive');
     expect(disposedData.note?.status).toBe('archived');
+  });
+
+  it('imports documents and serves their asset resources through MCP', async () => {
+    const inputFile = path.join(tmpDir, 'mcp-source.pdf');
+    fs.writeFileSync(inputFile, '%PDF-1.4\nmcp source\n');
+
+    const imported = await client.callTool({
+      name: 'granite_import_document',
+      arguments: {
+        file_path: inputFile,
+      },
+    });
+
+    const importedData = extractStructuredContent(imported) as {
+      note: { slug: string; frontmatter: Record<string, unknown> };
+      document: { file: string; resource_uri: string; mime_type: string };
+    };
+
+    expect(importedData.note.slug).toBe('mcp-source');
+    expect(importedData.note.frontmatter.document_file).toBe(importedData.document.file);
+
+    const resource = await client.readResource({ uri: importedData.document.resource_uri });
+    const content = resource.contents[0];
+
+    expect(content && 'mimeType' in content ? content.mimeType : '').toBe('application/pdf');
+    expect(content && 'blob' in content).toBe(true);
+  });
+
+  it('exposes the vault garden prompt with actionable review instructions', async () => {
+    const prompt = await client.getPrompt({
+      name: 'granite_garden_vault',
+      arguments: {},
+    });
+
+    expect(prompt.messages).toHaveLength(1);
+    const message = prompt.messages[0];
+    expect(message.content.type).toBe('text');
+    if (message.content.type !== 'text') {
+      throw new Error('Expected text content for granite_garden_vault prompt.');
+    }
+
+    expect(message.content.text).toContain('Run a comprehensive health review of this Granite vault');
+    expect(message.content.text).toContain('Orphan Notes');
+    expect(message.content.text).toContain('mcp-note');
+    expect(message.content.text).toContain('Fix any structural errors reported by doctor');
+    expect(message.content.text).toContain('granite://assets');
+    expect(message.content.text).toContain('imported document');
+  });
+
+  it('makes inbox and garden workflows doc-aware for imported source notes', async () => {
+    const inputFile = path.join(tmpDir, 'workflow-source.pdf');
+    fs.writeFileSync(inputFile, '%PDF-1.4\nworkflow\n');
+
+    const imported = await client.callTool({
+      name: 'granite_import_document',
+      arguments: {
+        file_path: inputFile,
+      },
+    });
+
+    const importedData = extractStructuredContent(imported) as {
+      note: { slug: string };
+    };
+
+    const inboxPrompt = await client.getPrompt({
+      name: 'granite_process_inbox',
+      arguments: {},
+    });
+    const gardenPrompt = await client.getPrompt({
+      name: 'granite_garden_vault',
+      arguments: {},
+    });
+
+    const inboxMessage = inboxPrompt.messages[0];
+    const gardenMessage = gardenPrompt.messages[0];
+
+    expect(inboxMessage.content.type).toBe('text');
+    expect(gardenMessage.content.type).toBe('text');
+    if (inboxMessage.content.type !== 'text' || gardenMessage.content.type !== 'text') {
+      throw new Error('Expected text content for inbox/garden prompts.');
+    }
+
+    expect(inboxMessage.content.text).toContain(importedData.note.slug);
+    expect(inboxMessage.content.text).toContain('granite://assets');
+    expect(inboxMessage.content.text).toContain('imported document attached');
+    expect(gardenMessage.content.text).toContain('granite://assets');
+    expect(gardenMessage.content.text).toContain('imported document');
+  });
+
+  it('makes compile topic doc-aware for imported source notes', async () => {
+    const inputFile = path.join(tmpDir, 'workflow-source.pdf');
+    fs.writeFileSync(inputFile, '%PDF-1.4\nworkflow source\n');
+
+    await client.callTool({
+      name: 'granite_import_document',
+      arguments: {
+        file_path: inputFile,
+        title: 'Workflow Source',
+      },
+    });
+
+    const prompt = await client.getPrompt({
+      name: 'granite_compile_topic',
+      arguments: { topic: 'workflow' },
+    });
+
+    expect(prompt.messages).toHaveLength(1);
+    const message = prompt.messages[0];
+    expect(message.content.type).toBe('text');
+    if (message.content.type !== 'text') {
+      throw new Error('Expected text content for granite_compile_topic prompt.');
+    }
+
+    expect(message.content.text).toContain('granite://assets');
+    expect(message.content.text).toContain('Workflow Source');
+    expect(message.content.text).toContain('imported document attached');
   });
 
   it('closes cleanup hooks after an HTTP response body is consumed', async () => {

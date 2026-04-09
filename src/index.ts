@@ -17,6 +17,7 @@ import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
 import { wakeupCommand } from './commands/wakeup.js';
 import { attachCommand } from './commands/attach.js';
+import { importDocumentCommand } from './commands/import.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -183,6 +184,17 @@ program
   .option('--json', 'Output as JSON')
   .action((file: string, options: { slug?: string; json?: boolean }) => {
     attachCommand(file, options);
+  });
+
+program
+  .command('import <file>')
+  .description('Import a document as a source note plus linked asset, without extracting its content')
+  .option('--title <title>', 'Explicit note title. Defaults to a title derived from the filename')
+  .option('--tag <tags>', 'Add tags immediately (comma-separated)')
+  .option('--alias <aliases>', 'Add aliases immediately (comma-separated)')
+  .option('--json', 'Output as JSON')
+  .action((file: string, options: { title?: string; tag?: string; alias?: string; json?: boolean }) => {
+    importDocumentCommand(file, options);
   });
 
 program

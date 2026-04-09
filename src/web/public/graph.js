@@ -10,12 +10,14 @@ const GraphEngine = (() => {
     output: '#e4b65f',
   };
 
-  const WORLD_PADDING = 120;
-  const REPULSION = 5600;
-  const MAX_REPULSION_DISTANCE_SQ = 320000;
-  const ATTRACTION = 0.0032;
-  const GRAVITY = 0.0032;
-  const DAMPING = 0.89;
+  const WORLD_PADDING = 110;
+  const REPULSION = 3600;
+  const MAX_REPULSION_DISTANCE_SQ = 190000;
+  const LINK_DISTANCE = 74;
+  const LINK_STRENGTH = 0.0082;
+  const CENTER_FORCE = 0.0024;
+  const COLLISION_PADDING = 6;
+  const DAMPING = 0.9;
   const MIN_ALPHA = 0.0015;
   const VELOCITY_LIMIT = 10;
   const APPEAR_DURATION_MS = 220;
@@ -123,22 +125,24 @@ const GraphEngine = (() => {
       if (connectionDelta !== 0) return connectionDelta;
       return a.title.localeCompare(b.title);
     });
-    const baseSpread = Math.max(420, Math.sqrt(Math.max(rankedNodes.length, 1)) * 94);
+    const baseSpread = Math.max(300, Math.sqrt(Math.max(rankedNodes.length, 1)) * 72);
 
     nodes = rankedNodes.map((node, index) => {
       const connections = connectionCount[node.slug] || 0;
       const ratio = connections / maxConnections;
       const orbit = Math.sqrt(index + 1) / Math.sqrt(Math.max(rankedNodes.length, 1));
-      const distance = orbit * baseSpread * (0.64 + (1 - ratio) * 0.58);
+      const distance = orbit * baseSpread * (0.42 + (1 - ratio) * 0.46);
       const angle = index * Math.PI * (3 - Math.sqrt(5));
+      const radius = getNodeRadius(connections);
       return {
         ...node,
         x: Math.cos(angle) * distance,
-        y: Math.sin(angle) * distance * (0.86 + Math.random() * 0.2),
+        y: Math.sin(angle) * distance * (0.92 + Math.random() * 0.12),
         vx: 0,
         vy: 0,
-        radius: Math.max(4, Math.round(5 + ratio * 24)),
+        radius,
         connections,
+        weight: connections,
         color: TYPE_COLORS[node.type] || '#d37a57',
         visible: !progressiveReveal,
         appear: progressiveReveal ? 0 : 1,
@@ -244,7 +248,7 @@ const GraphEngine = (() => {
       centroid.x /= visibleNeighbors.length;
       centroid.y /= visibleNeighbors.length;
       const angle = (revealIndex + 1) * 0.73;
-      const offset = 24 + node.radius * 2.4;
+      const offset = 16 + node.radius * 1.85;
       node.x = centroid.x + Math.cos(angle) * offset;
       node.y = centroid.y + Math.sin(angle) * offset;
     } else if (visibleNodes.length > 0) {
@@ -454,13 +458,25 @@ const GraphEngine = (() => {
         const distanceSq = dx * dx + dy * dy || 1;
         if (distanceSq > MAX_REPULSION_DISTANCE_SQ) continue;
         const distance = Math.sqrt(distanceSq) || 1;
-        const force = (REPULSION * (a.radius + b.radius) * 0.15) / distanceSq * simulationAlpha;
+        const weightFactor = 0.72 + Math.sqrt(a.weight + b.weight + 2) * 0.12;
+        const force = (REPULSION * weightFactor) / distanceSq * simulationAlpha;
         const fx = (dx / distance) * force;
         const fy = (dy / distance) * force;
         a.vx -= fx;
         a.vy -= fy;
         b.vx += fx;
         b.vy += fy;
+
+        const minDistance = a.radius + b.radius + COLLISION_PADDING;
+        if (distance < minDistance) {
+          const push = (minDistance - distance) * 0.05 * simulationAlpha;
+          const px = (dx / distance) * push;
+          const py = (dy / distance) * push;
+          a.vx -= px;
+          a.vy -= py;
+          b.vx += px;
+          b.vy += py;
+        }
       }
     }
 
@@ -469,7 +485,8 @@ const GraphEngine = (() => {
       const dx = edge.target.x - edge.source.x;
       const dy = edge.target.y - edge.source.y;
       const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = distance * ATTRACTION * simulationAlpha;
+      const desiredDistance = LINK_DISTANCE + (edge.source.radius + edge.target.radius) * 0.9;
+      const force = (distance - desiredDistance) * LINK_STRENGTH * simulationAlpha;
       const fx = (dx / distance) * force;
       const fy = (dy / distance) * force;
       edge.source.vx += fx;
@@ -479,8 +496,9 @@ const GraphEngine = (() => {
     }
 
     for (const node of simulationNodes) {
-      node.vx -= node.x * GRAVITY * simulationAlpha;
-      node.vy -= node.y * GRAVITY * simulationAlpha;
+      const anchorBias = node.slug === activeSlug ? 1.1 : 0.9 + Math.min(node.connections, 18) * 0.012;
+      node.vx -= node.x * CENTER_FORCE * anchorBias * simulationAlpha;
+      node.vy -= node.y * CENTER_FORCE * anchorBias * simulationAlpha;
     }
 
     for (const node of simulationNodes) {
@@ -529,10 +547,12 @@ const GraphEngine = (() => {
       const edgeAlpha = Math.min(edge.source.appear, edge.target.appear);
       if (edgeAlpha <= 0) continue;
       const highlighted = hoveredNode && (edge.source === hoveredNode || edge.target === hoveredNode);
+      const edgeWeight = Math.min(edge.source.weight, edge.target.weight);
+      const thickness = highlighted ? 1.5 : 0.5 + Math.min(edgeWeight, 12) * 0.025;
       ctx.strokeStyle = highlighted
         ? `rgba(255, 236, 214, ${0.52 * edgeAlpha})`
-        : `rgba(255, 224, 198, ${0.1 * edgeAlpha})`;
-      ctx.lineWidth = highlighted ? 1.6 : 0.7;
+        : `rgba(255, 224, 198, ${(0.06 + Math.min(edgeWeight, 16) * 0.004) * edgeAlpha})`;
+      ctx.lineWidth = thickness;
       ctx.beginPath();
       ctx.moveTo(edge.source.x, edge.source.y);
       ctx.lineTo(edge.target.x, edge.target.y);
@@ -545,6 +565,8 @@ const GraphEngine = (() => {
       const hovered = node === hoveredNode;
       const appear = node.appear;
       const radius = node.radius * (0.72 + appear * 0.28);
+      const nodeImportance = Math.min(1, Math.sqrt(node.weight + 1) / 4.4);
+      const tint = mixHex(node.color, '#fff7ee', active ? 0.34 : hovered ? 0.22 : 0.14);
 
       if (active || hovered || appear < 1) {
         const glowRadius = radius * (appear < 1 ? 6.2 - appear * 2.2 : 5);
@@ -562,11 +584,29 @@ const GraphEngine = (() => {
         ctx.fill();
       }
 
+      const fill = ctx.createRadialGradient(
+        node.x - radius * 0.22,
+        node.y - radius * 0.28,
+        radius * 0.2,
+        node.x,
+        node.y,
+        radius * 1.12,
+      );
+      fill.addColorStop(0, hexToRgba(tint, (0.95 - nodeImportance * 0.12) * appear));
+      fill.addColorStop(1, dimmed
+        ? `rgba(255, 241, 226, ${0.1 * appear})`
+        : hexToRgba(node.color, (0.8 + nodeImportance * 0.08) * appear));
+
+      ctx.beginPath();
+      ctx.fillStyle = fill;
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.beginPath();
       ctx.fillStyle = dimmed
-        ? `rgba(255, 241, 226, ${0.1 * appear})`
-        : hexToRgba(node.color, (hovered ? 0.96 : 0.82) * appear);
-      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        ? `rgba(255, 244, 236, ${0.08 * appear})`
+        : `rgba(255, 247, 238, ${(0.14 + nodeImportance * 0.12 + (hovered ? 0.08 : 0)) * appear})`;
+      ctx.arc(node.x - radius * 0.18, node.y - radius * 0.22, radius * 0.42, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = active
@@ -575,18 +615,18 @@ const GraphEngine = (() => {
       ctx.lineWidth = active ? 2.2 : 1;
       ctx.stroke();
 
-      const showLabel = active
-        || hovered
-        || (node.connections >= 6 && appear > 0.82)
-        || (hoveredNode && neighbors.has(node) && node.connections >= 2);
-      if (!showLabel) continue;
+      let labelAlpha = active || hovered ? appear : getLabelAlpha(node, nodeImportance) * appear;
+      if (hoveredNode && neighbors.has(node)) {
+        labelAlpha = Math.max(labelAlpha, 0.42 * appear);
+      }
+      if (labelAlpha < 0.16) continue;
 
       ctx.font = `${Math.max(10, Math.min(13, Math.round(9 + node.radius * 0.12)))}px "Manrope", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = dimmed
-        ? `rgba(255, 236, 214, ${0.18 * appear})`
-        : `rgba(255, 242, 229, ${0.78 * appear})`;
+        ? `rgba(255, 236, 214, ${0.18 * labelAlpha})`
+        : `rgba(255, 242, 229, ${0.82 * labelAlpha})`;
       const label = truncate(node.title, active || hovered ? 30 : 22);
       ctx.fillText(label, node.x, node.y + radius + 8);
     }
@@ -799,6 +839,19 @@ const GraphEngine = (() => {
     return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
   }
 
+  function getNodeRadius(weight) {
+    return Math.max(4.8, Math.min(2.45 * Math.sqrt(weight + 1), 14));
+  }
+
+  function getLabelAlpha(node, importance) {
+    const zoomAlpha = clamp(Math.log2(Math.max(transform.scale, 0.01)) + 1.02, 0, 1);
+    return clamp(zoomAlpha * 0.74 + importance * 0.46 - 0.24, 0, 1);
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
   function hexToRgba(hex, alpha) {
     const clean = hex.replace('#', '');
     const value = Number.parseInt(clean, 16);
@@ -806,6 +859,22 @@ const GraphEngine = (() => {
     const g = (value >> 8) & 255;
     const b = value & 255;
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function mixHex(hexA, hexB, ratio) {
+    const blend = clamp(ratio, 0, 1);
+    const a = Number.parseInt(hexA.replace('#', ''), 16);
+    const b = Number.parseInt(hexB.replace('#', ''), 16);
+    const ar = (a >> 16) & 255;
+    const ag = (a >> 8) & 255;
+    const ab = a & 255;
+    const br = (b >> 16) & 255;
+    const bg = (b >> 8) & 255;
+    const bb = b & 255;
+    const r = Math.round(ar + (br - ar) * blend);
+    const g = Math.round(ag + (bg - ag) * blend);
+    const bMix = Math.round(ab + (bb - ab) * blend);
+    return `#${[r, g, bMix].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
   }
 
   return {

@@ -167,6 +167,21 @@ const gardenPlanNoteRefSchema = z.object({
   modified: z.string(),
 });
 
+const gardenAdjudicationReasonCodeSchema = z.enum([
+  'intentional-structure',
+  'already-current',
+  'blocked',
+  'low-value',
+]);
+
+const gardenOpportunityAdjudicationSchema = z.object({
+  decision: z.enum(['downrank']),
+  reason_code: gardenAdjudicationReasonCodeSchema,
+  rationale: z.string().optional(),
+  recorded_at: z.string(),
+  active: z.boolean(),
+});
+
 const gardenPlanOpportunitySchema = z.object({
   id: z.string(),
   kind: z.enum([
@@ -180,6 +195,8 @@ const gardenPlanOpportunitySchema = z.object({
     'missing-synthesis-cluster',
   ]),
   priority: z.number(),
+  priority_raw: z.number(),
+  priority_effective: z.number(),
   action_hint: z.enum(['revise', 'connect', 'merge', 'synthesize', 'review']),
   targets: z.array(gardenPlanNoteRefSchema),
   supporting: z.array(gardenPlanNoteRefSchema),
@@ -189,6 +206,7 @@ const gardenPlanOpportunitySchema = z.object({
     metrics: z.record(z.string(), z.number()),
   }),
   stop_when: z.string(),
+  adjudication: gardenOpportunityAdjudicationSchema.optional(),
 });
 
 const gardenPlanSchema = z.object({
@@ -201,6 +219,32 @@ const gardenPlanSchema = z.object({
   }),
   operator_hint: z.string(),
   opportunities: z.array(gardenPlanOpportunitySchema),
+});
+
+const gardenAdjudicationBaselineSchema = z.object({
+  target_modified_at: z.record(z.string(), z.string()),
+  supporting_modified_at: z.record(z.string(), z.string()).optional(),
+});
+
+const gardenAdjudicationSummarySchema = z.object({
+  opportunity_id: z.string(),
+  kind: z.string(),
+  target_slugs: z.array(z.string()),
+  decision: z.enum(['downrank']),
+  reason_code: gardenAdjudicationReasonCodeSchema,
+  rationale: z.string().optional(),
+  recorded_at: z.string(),
+  updated_at: z.string(),
+  recheck_after_days: z.number().int().positive().optional(),
+  baseline: gardenAdjudicationBaselineSchema,
+  active: z.boolean(),
+});
+
+const adjudicateGardenOpportunityResultSchema = z.object({
+  opportunity_id: z.string(),
+  decision: z.enum(['downrank', 'clear']),
+  adjudication: gardenAdjudicationSummarySchema.nullable(),
+  cleared: z.boolean(),
 });
 
 const disposeNoteSchema = z.object({
@@ -256,6 +300,8 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **granite_wakeup** — load the map of the vault before doing work',
         '- **granite_research_topic** — discover relevant notes for a topic',
         '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
+        '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
+        '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
         '- **granite_capture_knowledge** — capture new knowledge into the vault',
         '- **granite_extract_document** — read a local document into raw extracted text without importing it',
         '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
@@ -423,6 +469,61 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(
       result,
       `Planned ${result.opportunities.length} garden opportunit${result.opportunities.length === 1 ? 'y' : 'ies'} ${scopeLabel}. ${result.operator_hint}`,
+    );
+  });
+
+  server.registerTool('granite_adjudicate_garden_opportunity', {
+    title: 'Adjudicate Granite Garden Opportunity',
+    description: 'Record an explicit operator adjudication for a specific garden opportunity. Use this when a deterministic signal is real but should be downranked locally, or when an old adjudication should be cleared.',
+    inputSchema: {
+      opportunity_id: z.string().describe('Exact garden opportunity ID from granite_plan_garden.'),
+      decision: z.enum(['downrank', 'clear']).describe('Whether to downrank this opportunity or clear a prior adjudication.'),
+      reason_code: gardenAdjudicationReasonCodeSchema.optional().describe('Required when decision is downrank. Explains why the local operator is overriding the heuristic.'),
+      rationale: z.string().optional().describe('Optional operator rationale for auditability.'),
+      recheck_after_days: z.number().int().min(1).max(365).optional().describe('Optional recheck window. Only allowed with reason_code "blocked"; defaults to 14 days.'),
+    },
+    outputSchema: adjudicateGardenOpportunityResultSchema,
+    annotations: writeAnnotations,
+  }, async ({ opportunity_id, decision, reason_code, rationale, recheck_after_days }) => {
+    if (decision === 'downrank' && !reason_code) {
+      throw new Error('reason_code is required when decision is "downrank".');
+    }
+    if (decision === 'clear' && (reason_code !== undefined || rationale !== undefined || recheck_after_days !== undefined)) {
+      throw new Error('clear does not accept reason_code, rationale, or recheck_after_days.');
+    }
+    if (recheck_after_days !== undefined && reason_code !== 'blocked') {
+      throw new Error('recheck_after_days is only allowed when reason_code is "blocked".');
+    }
+
+    const result = runtime.adjudicateGardenOpportunity({
+      opportunity_id,
+      decision,
+      reason_code,
+      rationale,
+      recheck_after_days,
+    });
+    return toolResult(
+      result,
+      decision === 'clear'
+        ? `Cleared garden adjudication for "${opportunity_id}".`
+        : `Recorded garden adjudication for "${opportunity_id}".`,
+    );
+  });
+
+  server.registerTool('granite_list_garden_adjudications', {
+    title: 'List Granite Garden Adjudications',
+    description: 'Inspect the active operator adjudications that are currently influencing Granite garden planning.',
+    outputSchema: z.object({
+      adjudications: z.array(gardenAdjudicationSummarySchema),
+    }),
+    annotations: readOnlyAnnotations,
+  }, async () => {
+    const adjudications = runtime.listGardenAdjudications();
+    return toolResult(
+      { adjudications },
+      adjudications.length === 0
+        ? 'No active garden adjudications.'
+        : `Listed ${adjudications.length} active garden adjudication${adjudications.length === 1 ? '' : 's'}.`,
     );
   });
 

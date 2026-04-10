@@ -55,6 +55,8 @@ describe('granite MCP server', () => {
     expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_extract_document')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_import_document')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_adjudicate_garden_opportunity')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_list_garden_adjudications')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_plan_garden')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(false);
@@ -248,7 +250,14 @@ describe('granite MCP server', () => {
 
     const plannedData = extractStructuredContent(planned) as {
       scope: { kind: string; anchor_slug?: string };
-      opportunities: Array<{ kind: string; targets: Array<{ slug: string }> }>;
+      opportunities: Array<{
+        id: string;
+        kind: string;
+        priority_raw: number;
+        priority_effective: number;
+        adjudication?: { reason_code: string; active: boolean };
+        targets: Array<{ slug: string }>;
+      }>;
       operator_hint: string;
     };
 
@@ -256,7 +265,84 @@ describe('granite MCP server', () => {
     expect(plannedData.scope.anchor_slug).toBe(anchor.note.slug);
     expect(plannedData.operator_hint).toContain('Start with');
     expect(plannedData.opportunities.length).toBeGreaterThan(0);
+    expect(plannedData.opportunities[0]?.priority_raw).toBeGreaterThan(0);
+    expect(plannedData.opportunities[0]?.priority_effective).toBeGreaterThan(0);
     expect(plannedData.opportunities.some(item => item.kind === 'stale-synthesis' || item.kind === 'source-not-compiled')).toBe(true);
+  });
+
+  it('records and lists garden adjudications through MCP tools', async () => {
+    const topic = runtime.createNote({
+      title: 'Garden Topic Hub',
+      type: 'note',
+      body: 'Anchor note for a duplicated topic.\n',
+      tags: ['granite-vision'],
+    });
+    runtime.createNote({
+      title: 'Garden Update',
+      type: 'note',
+      body: 'Fresh update linked to [[Garden Topic Hub]].\n',
+      tags: ['granite-vision'],
+    });
+    const synthesis = runtime.createNote({
+      title: 'Garden Topic Hub synthesis',
+      type: 'synthesis',
+      body: 'Old synthesis for [[Garden Topic Hub]].\n',
+      tags: ['granite-vision'],
+      derived_from: [topic.note.slug],
+    });
+
+    rewriteNoteTimestamps(topic.note.filepath, { modified: isoDaysAgo(25) });
+    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
+
+    const initialPlan = await client.callTool({
+      name: 'granite_plan_garden',
+      arguments: { limit: 10 },
+    });
+    const initialData = extractStructuredContent(initialPlan) as {
+      opportunities: Array<{ id: string; kind: string }>;
+    };
+    const duplicate = initialData.opportunities.find(item => item.kind === 'duplicate-pair');
+    expect(duplicate).toBeTruthy();
+
+    const adjudicated = await client.callTool({
+      name: 'granite_adjudicate_garden_opportunity',
+      arguments: {
+        opportunity_id: duplicate!.id,
+        decision: 'downrank',
+        reason_code: 'intentional-structure',
+        rationale: 'Keep entity note and synthesis separate.',
+      },
+    });
+    const adjudicatedData = extractStructuredContent(adjudicated) as {
+      adjudication: { reason_code: string; active: boolean } | null;
+    };
+    expect(adjudicatedData.adjudication?.reason_code).toBe('intentional-structure');
+    expect(adjudicatedData.adjudication?.active).toBe(true);
+
+    const listed = await client.callTool({
+      name: 'granite_list_garden_adjudications',
+      arguments: {},
+    });
+    const listedData = extractStructuredContent(listed) as {
+      adjudications: Array<{ opportunity_id: string }>;
+    };
+    expect(listedData.adjudications.some(item => item.opportunity_id === duplicate!.id)).toBe(true);
+
+    const replanned = await client.callTool({
+      name: 'granite_plan_garden',
+      arguments: { limit: 10 },
+    });
+    const replannedData = extractStructuredContent(replanned) as {
+      opportunities: Array<{
+        id: string;
+        priority_raw: number;
+        priority_effective: number;
+        adjudication?: { reason_code: string };
+      }>;
+    };
+    const duplicateAfter = replannedData.opportunities.find(item => item.id === duplicate!.id);
+    expect(duplicateAfter?.priority_raw).toBeGreaterThan(duplicateAfter?.priority_effective ?? 0);
+    expect(duplicateAfter?.adjudication?.reason_code).toBe('intentional-structure');
   });
 
   it('makes inbox and garden workflows doc-aware for imported source notes', async () => {

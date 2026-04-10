@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { writeDefaultConfig } from '../../src/core/config.js';
-import { findVaultRoot, getDefaultVaultRoot, getIndexDbPath, requireVaultRoot } from '../../src/core/vault.js';
+import { findVaultRoot, getDefaultVaultRoot, getGraniteDir, getIndexDbPath, requireVaultRoot } from '../../src/core/vault.js';
 
 describe('vault', () => {
   let tmpHome: string;
@@ -57,6 +57,8 @@ describe('vault', () => {
 
     expect(getIndexDbPath(vaultRoot)).toBe(path.join(vaultRoot, 'index.db'));
     expect(getIndexDbPath(localVaultRoot)).toBe(path.join(localVaultRoot, '.granite', 'index.db'));
+    expect(getGraniteDir(vaultRoot)).toBe(vaultRoot);
+    expect(getGraniteDir(localVaultRoot)).toBe(path.join(localVaultRoot, '.granite'));
   });
 
   it('mentions the default vault path when no vault can be found', () => {

@@ -37,6 +37,9 @@ export function requireVaultRoot(from?: string): string {
 }
 
 export function getGraniteDir(vaultRoot: string): string {
+  if (path.basename(path.resolve(vaultRoot)) === DEFAULT_VAULT_DIRNAME) {
+    return path.resolve(vaultRoot);
+  }
   return path.join(vaultRoot, '.granite');
 }
 

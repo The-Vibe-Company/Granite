@@ -5,6 +5,14 @@ import { attachAsset, assetResourceUri, completeAssetFiles, readAssetResource, t
 import { CONFIG_FILENAME, loadConfig } from '../core/config.js';
 import { runDoctor } from '../core/doctor.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
+import {
+  GARDEN_ADJUDICATION_DEFAULT_BLOCKED_RECHECK_DAYS,
+  readGardenAdjudicationStore,
+  writeGardenAdjudicationStore,
+  type GardenAdjudicationDecision,
+  type GardenAdjudicationEntry,
+  type GardenAdjudicationReasonCode,
+} from '../core/garden-adjudications.js';
 import { extractDocument as extractDocumentFromFile, type ExtractDocumentResult } from '../core/extract-document.js';
 import { importDocument as importDocumentToVault } from '../core/import-document.js';
 import { openDatabase, rebuildIndex, syncNoteInIndex } from '../core/index-db.js';
@@ -121,6 +129,7 @@ export type GardenOpportunityKind =
   | 'missing-synthesis-cluster';
 
 export type GardenActionHint = 'revise' | 'connect' | 'merge' | 'synthesize' | 'review';
+export type GardenAdjudicationDecisionInput = GardenAdjudicationDecision | 'clear';
 
 export interface GardenPlanInput {
   anchor_slug?: string;
@@ -146,6 +155,8 @@ export interface GardenPlanOpportunity {
   id: string;
   kind: GardenOpportunityKind;
   priority: number;
+  priority_raw: number;
+  priority_effective: number;
   action_hint: GardenActionHint;
   targets: GardenPlanNoteRef[];
   supporting: GardenPlanNoteRef[];
@@ -155,12 +166,40 @@ export interface GardenPlanOpportunity {
     metrics: Record<string, number>;
   };
   stop_when: string;
+  adjudication?: GardenOpportunityAdjudication;
 }
 
 export interface GardenPlan {
   scope: GardenPlanScope;
   operator_hint: string;
   opportunities: GardenPlanOpportunity[];
+}
+
+export interface GardenOpportunityAdjudication {
+  decision: GardenAdjudicationDecision;
+  reason_code: GardenAdjudicationReasonCode;
+  rationale?: string;
+  recorded_at: string;
+  active: boolean;
+}
+
+export interface AdjudicateGardenOpportunityInput {
+  opportunity_id: string;
+  decision: GardenAdjudicationDecisionInput;
+  reason_code?: GardenAdjudicationReasonCode;
+  rationale?: string;
+  recheck_after_days?: number;
+}
+
+export interface GardenAdjudicationSummary extends GardenAdjudicationEntry {
+  active: boolean;
+}
+
+export interface AdjudicateGardenOpportunityResult {
+  opportunity_id: string;
+  decision: GardenAdjudicationDecisionInput;
+  adjudication: GardenAdjudicationSummary | null;
+  cleared: boolean;
 }
 
 export interface CreateNoteInput {
@@ -542,7 +581,76 @@ export class GraniteMcpRuntime {
 
   planGarden(input: GardenPlanInput = {}): GardenPlan {
     this.refreshIndex();
+    return this.buildGardenPlan(input);
+  }
 
+  adjudicateGardenOpportunity(input: AdjudicateGardenOpportunityInput): AdjudicateGardenOpportunityResult {
+    if (input.decision === 'clear') {
+      const store = readGardenAdjudicationStore(this.vaultRoot);
+      const cleared = store.entries[input.opportunity_id] !== undefined;
+
+      if (cleared) {
+        delete store.entries[input.opportunity_id];
+        writeGardenAdjudicationStore(this.vaultRoot, store);
+      }
+
+      return {
+        opportunity_id: input.opportunity_id,
+        decision: input.decision,
+        adjudication: null,
+        cleared,
+      };
+    }
+
+    const plan = this.buildGardenPlan({}, { applyLimit: false, applyAdjudications: false });
+    const opportunity = plan.opportunities.find(item => item.id === input.opportunity_id);
+    if (!opportunity) {
+      throw new Error(`Garden opportunity not found: ${input.opportunity_id}`);
+    }
+
+    const now = new Date().toISOString();
+    const store = readGardenAdjudicationStore(this.vaultRoot);
+    const existing = store.entries[input.opportunity_id];
+    const reasonCode = input.reason_code ?? existing?.reason_code ?? 'low-value';
+    const adjudication: GardenAdjudicationEntry = {
+      opportunity_id: opportunity.id,
+      kind: opportunity.kind,
+      target_slugs: opportunity.targets.map(target => target.slug),
+      decision: 'downrank',
+      reason_code: reasonCode,
+      rationale: input.rationale?.trim() || existing?.rationale,
+      recorded_at: existing?.recorded_at ?? now,
+      updated_at: now,
+      recheck_after_days: resolveRecheckAfterDays(reasonCode, input.recheck_after_days),
+      baseline: {
+        target_modified_at: Object.fromEntries(opportunity.targets.map(target => [target.slug, target.modified])),
+        supporting_modified_at: opportunity.supporting.length > 0
+          ? Object.fromEntries(opportunity.supporting.map(target => [target.slug, target.modified]))
+          : undefined,
+      },
+    };
+
+    store.entries[opportunity.id] = adjudication;
+    writeGardenAdjudicationStore(this.vaultRoot, store);
+
+    return {
+      opportunity_id: opportunity.id,
+      decision: 'downrank',
+      adjudication: this.toGardenAdjudicationSummary(adjudication),
+      cleared: false,
+    };
+  }
+
+  listGardenAdjudications(): GardenAdjudicationSummary[] {
+    const notes = this.readAllNotes().filter(note => note.frontmatter.status !== 'archived');
+    const noteBySlug = new Map(notes.map(note => [note.slug, note]));
+    return this.getActiveGardenAdjudications(noteBySlug).map(entry => this.toGardenAdjudicationSummary(entry));
+  }
+
+  private buildGardenPlan(
+    input: GardenPlanInput = {},
+    options: { applyLimit?: boolean; applyAdjudications?: boolean } = {},
+  ): GardenPlan {
     const generatedAt = new Date().toISOString();
     const notes = this.readAllNotes().filter(note => note.frontmatter.status !== 'archived');
     const noteBySlug = new Map(notes.map(note => [note.slug, note]));
@@ -574,6 +682,12 @@ export class GraniteMcpRuntime {
       : wakeup.clusters.filter(cluster => cluster.slugs.some(slug => scopeSlugs.has(slug)));
     const limit = clampLimit(input.limit ?? 5, 20);
 
+    const adjudicationById = options.applyAdjudications === false
+      ? new Map<string, GardenAdjudicationEntry>()
+      : new Map(
+        this.getActiveGardenAdjudications(noteBySlug).map(entry => [entry.opportunity_id, entry] as const),
+      );
+
     const opportunities = dedupeGardenOpportunities([
       ...this.buildDuplicatePairOpportunities(scopeNotes, graph),
       ...this.buildMissingSynthesisClusterOpportunities(scopeClusters, noteBySlug, graph),
@@ -583,7 +697,8 @@ export class GraniteMcpRuntime {
       ...this.buildDraftDebtOpportunities(scopeNotes),
       ...this.buildOrphanWithCandidatesOpportunities(scopeNotes, noteBySlug, graph),
       ...this.buildThinImportantNoteOpportunities(scopeNotes, noteBySlug, graph),
-    ]).slice(0, limit);
+    ].map(opportunity => applyGardenAdjudication(opportunity, adjudicationById.get(opportunity.id))));
+    const limitedOpportunities = options.applyLimit === false ? opportunities : opportunities.slice(0, limit);
 
     return {
       scope: {
@@ -593,8 +708,8 @@ export class GraniteMcpRuntime {
         notes_considered: scopeNotes.length,
         clusters_considered: scopeClusters.length,
       },
-      operator_hint: buildGardenOperatorHint(opportunities, input.anchor_slug),
-      opportunities,
+      operator_hint: buildGardenOperatorHint(limitedOpportunities, input.anchor_slug),
+      opportunities: limitedOpportunities,
     };
   }
 
@@ -1536,6 +1651,36 @@ export class GraniteMcpRuntime {
     const row = this.db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number };
     return row.count;
   }
+
+  private getActiveGardenAdjudications(noteBySlug: Map<string, Note>): GardenAdjudicationEntry[] {
+    const store = readGardenAdjudicationStore(this.vaultRoot);
+    const activeEntries: GardenAdjudicationEntry[] = [];
+    let changed = false;
+
+    for (const [opportunityId, entry] of Object.entries(store.entries)) {
+      if (isGardenAdjudicationActive(entry, noteBySlug)) {
+        activeEntries.push(entry);
+        continue;
+      }
+
+      delete store.entries[opportunityId];
+      changed = true;
+    }
+
+    if (changed) {
+      writeGardenAdjudicationStore(this.vaultRoot, store);
+    }
+
+    activeEntries.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    return activeEntries;
+  }
+
+  private toGardenAdjudicationSummary(entry: GardenAdjudicationEntry): GardenAdjudicationSummary {
+    return {
+      ...entry,
+      active: true,
+    };
+  }
 }
 
 function ensureTrailingNewline(value: string): string {
@@ -1620,6 +1765,8 @@ function createGardenOpportunity(input: {
     id: `${input.kind}:${targets.map(target => target.slug).sort().join('+')}`,
     kind: input.kind,
     priority: input.priority,
+    priority_raw: input.priority,
+    priority_effective: input.priority,
     action_hint: input.action_hint,
     targets,
     supporting: dedupeNoteRefs(input.supporting.map(toGardenNoteRef)).slice(0, 3),
@@ -1645,7 +1792,11 @@ function buildGardenOperatorHint(opportunities: GardenPlanOpportunity[], anchorS
 }
 
 function dedupeGardenOpportunities(opportunities: GardenPlanOpportunity[]): GardenPlanOpportunity[] {
-  const sorted = [...opportunities].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  const sorted = [...opportunities].sort((a, b) =>
+    b.priority_effective - a.priority_effective
+    || b.priority_raw - a.priority_raw
+    || a.id.localeCompare(b.id),
+  );
   const claimed = new Set<string>();
   const seenIds = new Set<string>();
   const out: GardenPlanOpportunity[] = [];
@@ -1656,7 +1807,7 @@ function dedupeGardenOpportunities(opportunities: GardenPlanOpportunity[]): Gard
     }
 
     const targetSlugs = opportunity.targets.map(target => target.slug);
-    if (targetSlugs.every(slug => claimed.has(slug))) {
+    if (targetSlugs.every(slug => claimed.has(slug)) && !opportunity.adjudication) {
       continue;
     }
 
@@ -1692,6 +1843,74 @@ function dedupeNoteRefs(refs: GardenPlanNoteRef[]): GardenPlanNoteRef[] {
   }
 
   return out;
+}
+
+function applyGardenAdjudication(
+  opportunity: GardenPlanOpportunity,
+  adjudication?: GardenAdjudicationEntry,
+): GardenPlanOpportunity {
+  if (!adjudication) {
+    return opportunity;
+  }
+
+  const priorityEffective = Math.min(opportunity.priority_raw, 15);
+  return {
+    ...opportunity,
+    priority: priorityEffective,
+    priority_effective: priorityEffective,
+    adjudication: {
+      decision: adjudication.decision,
+      reason_code: adjudication.reason_code,
+      rationale: adjudication.rationale,
+      recorded_at: adjudication.recorded_at,
+      active: true,
+    },
+  };
+}
+
+function isGardenAdjudicationActive(entry: GardenAdjudicationEntry, noteBySlug: Map<string, Note>): boolean {
+  if (entry.target_slugs.some(slug => !noteBySlug.has(slug))) {
+    return false;
+  }
+
+  switch (entry.reason_code) {
+    case 'intentional-structure':
+      return true;
+    case 'blocked': {
+      const recheckDays = entry.recheck_after_days ?? GARDEN_ADJUDICATION_DEFAULT_BLOCKED_RECHECK_DAYS;
+      const recheckAt = Date.parse(entry.updated_at) + recheckDays * 86400000;
+      return Number.isFinite(recheckAt) && recheckAt > Date.now();
+    }
+    case 'already-current':
+      return !hasBaselineDrift(entry.baseline.target_modified_at, noteBySlug)
+        && !hasBaselineDrift(entry.baseline.supporting_modified_at ?? {}, noteBySlug);
+    case 'low-value':
+      return !hasBaselineDrift(entry.baseline.target_modified_at, noteBySlug);
+  }
+}
+
+function hasBaselineDrift(
+  baseline: Record<string, string>,
+  noteBySlug: Map<string, Note>,
+): boolean {
+  for (const [slug, modifiedAt] of Object.entries(baseline)) {
+    const note = noteBySlug.get(slug);
+    if (!note || note.frontmatter.modified > modifiedAt) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function resolveRecheckAfterDays(
+  reasonCode: GardenAdjudicationReasonCode,
+  requested?: number,
+): number | undefined {
+  if (reasonCode !== 'blocked') {
+    return undefined;
+  }
+
+  return requested ?? GARDEN_ADJUDICATION_DEFAULT_BLOCKED_RECHECK_DAYS;
 }
 
 function getRelationCount(map: Map<string, Set<string>>, slug: string): number {

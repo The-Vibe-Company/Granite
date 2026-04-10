@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
 import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
+import { getGardenAdjudicationsPath } from '../../src/core/garden-adjudications.js';
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
@@ -283,6 +284,135 @@ describe('GraniteMcpRuntime', () => {
     expect(plan.opportunities.some(item =>
       item.targets.some(target => outOfScopeTargets.has(target.slug)),
     )).toBe(false);
+    runtime.close();
+  });
+
+  it('downranks adjudicated opportunities and persists them across runtime restarts', () => {
+    let runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const topic = runtime.createNote({
+      title: 'Garden Topic Hub',
+      type: 'note',
+      body: 'Anchor note for a duplicated topic.\n',
+      tags: ['granite-vision'],
+    });
+    const update = runtime.createNote({
+      title: 'Garden Update',
+      type: 'note',
+      body: 'Fresh update linked to [[Garden Topic Hub]].\n',
+      tags: ['granite-vision'],
+    });
+    const synthesis = runtime.createNote({
+      title: 'Garden Topic Hub synthesis',
+      type: 'synthesis',
+      body: 'Old synthesis for [[Garden Topic Hub]].\n',
+      tags: ['granite-vision'],
+      derived_from: [topic.note.slug],
+    });
+
+    rewriteNoteTimestamps(topic.note.filepath, { modified: isoDaysAgo(25) });
+    rewriteNoteTimestamps(update.note.filepath, { modified: isoDaysAgo(1) });
+    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
+
+    const before = runtime.planGarden({ limit: 10 });
+    expect(before.opportunities[0]?.kind).toBe('duplicate-pair');
+
+    const adjudicated = runtime.adjudicateGardenOpportunity({
+      opportunity_id: before.opportunities[0]!.id,
+      decision: 'downrank',
+      reason_code: 'intentional-structure',
+      rationale: 'Keep entity note and synthesis separate.',
+    });
+    expect(adjudicated.adjudication?.reason_code).toBe('intentional-structure');
+
+    const after = runtime.planGarden({ limit: 10 });
+    expect(after.opportunities[0]?.kind).toBe('stale-synthesis');
+    const duplicate = after.opportunities.find(item => item.id === before.opportunities[0]!.id);
+    expect(duplicate?.priority_raw).toBeGreaterThan(duplicate?.priority_effective ?? 0);
+    expect(duplicate?.adjudication?.reason_code).toBe('intentional-structure');
+    runtime.close();
+
+    runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const persisted = runtime.planGarden({ limit: 10 });
+    const persistedDuplicate = persisted.opportunities.find(item => item.id === before.opportunities[0]!.id);
+    expect(persisted.opportunities[0]?.kind).toBe('stale-synthesis');
+    expect(persistedDuplicate?.adjudication?.active).toBe(true);
+    expect(runtime.listGardenAdjudications()).toHaveLength(1);
+
+    const cleared = runtime.adjudicateGardenOpportunity({
+      opportunity_id: before.opportunities[0]!.id,
+      decision: 'clear',
+    });
+    expect(cleared.cleared).toBe(true);
+    const restored = runtime.planGarden({ limit: 10 });
+    expect(restored.opportunities[0]?.kind).toBe('duplicate-pair');
+    runtime.close();
+  });
+
+  it('expires already-current and blocked adjudications when their conditions change', () => {
+    let runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const anchor = runtime.createNote({
+      title: 'Garden Anchor',
+      type: 'note',
+      body: 'Anchor note for Granite planning.\n',
+      tags: ['granite-vision'],
+    });
+    const update = runtime.createNote({
+      title: 'Granite Update A',
+      type: 'note',
+      body: 'Fresh note that links [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+    });
+    const synthesis = runtime.createNote({
+      title: 'Garden Synthesis',
+      type: 'synthesis',
+      body: 'Old synthesis for [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+      derived_from: [anchor.note.slug],
+    });
+
+    rewriteNoteTimestamps(anchor.note.filepath, { modified: isoDaysAgo(25) });
+    rewriteNoteTimestamps(update.note.filepath, { modified: isoDaysAgo(1) });
+    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
+
+    const initialPlan = runtime.planGarden({ limit: 10 });
+    const stale = initialPlan.opportunities.find(item => item.kind === 'stale-synthesis');
+    expect(stale).toBeTruthy();
+
+    runtime.adjudicateGardenOpportunity({
+      opportunity_id: stale!.id,
+      decision: 'downrank',
+      reason_code: 'already-current',
+    });
+    expect(runtime.listGardenAdjudications()).toHaveLength(1);
+
+    rewriteNoteTimestamps(update.note.filepath, { modified: new Date().toISOString() });
+    runtime.close();
+
+    runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    expect(runtime.listGardenAdjudications()).toHaveLength(0);
+
+    const refreshedPlan = runtime.planGarden({ limit: 10 });
+    const refreshedStale = refreshedPlan.opportunities.find(item => item.id === stale!.id);
+    expect(refreshedStale?.adjudication).toBeUndefined();
+
+    runtime.adjudicateGardenOpportunity({
+      opportunity_id: stale!.id,
+      decision: 'downrank',
+      reason_code: 'blocked',
+      recheck_after_days: 1,
+    });
+
+    const storePath = getGardenAdjudicationsPath(tmpDir);
+    const rawStore = JSON.parse(fs.readFileSync(storePath, 'utf-8')) as {
+      version: number;
+      entries: Record<string, { updated_at: string }>;
+    };
+    rawStore.entries[stale!.id].updated_at = isoDaysAgo(2);
+    fs.writeFileSync(storePath, `${JSON.stringify(rawStore, null, 2)}\n`, 'utf-8');
+
+    runtime.close();
+    runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    expect(runtime.listGardenAdjudications()).toHaveLength(0);
     runtime.close();
   });
 });

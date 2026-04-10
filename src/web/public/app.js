@@ -19,11 +19,13 @@
   let commandIndex = -1;
   let commandResults = [];
   let releaseTrap = null;
-  const GRAPH_PREFERENCES_KEY = 'granite.graph.preferences.v1';
+  const GRAPH_PREFERENCES_KEY = 'granite.graph.preferences.v2';
+  const GRAPH_LEGACY_PREFERENCES_KEY = 'granite.graph.preferences.v1';
   const GRAPH_DEFAULT_PREFERENCES = {
     progressiveReveal: true,
     nodeScale: 1.1,
-    clusterTightness: 0.58,
+    clusterSpacing: 0.64,
+    localCompactness: 0.5,
     labelDensity: 0.48,
     edgeOpacity: 0.58,
   };
@@ -77,8 +79,10 @@
   const graphFocusMode = document.getElementById('graph-focus-mode');
   const graphNodeScaleSlider = document.getElementById('graph-node-scale');
   const graphNodeScaleValue = document.getElementById('graph-node-scale-value');
-  const graphClusterTightnessSlider = document.getElementById('graph-cluster-tightness');
-  const graphClusterTightnessValue = document.getElementById('graph-cluster-tightness-value');
+  const graphClusterSpacingSlider = document.getElementById('graph-cluster-spacing');
+  const graphClusterSpacingValue = document.getElementById('graph-cluster-spacing-value');
+  const graphLocalCompactnessSlider = document.getElementById('graph-local-compactness');
+  const graphLocalCompactnessValue = document.getElementById('graph-local-compactness-value');
   const graphLabelDensitySlider = document.getElementById('graph-label-density');
   const graphLabelDensityValue = document.getElementById('graph-label-density-value');
   const graphEdgeOpacitySlider = document.getElementById('graph-edge-opacity');
@@ -331,8 +335,12 @@
       graphPreferences.nodeScale = value / 100;
       applyGraphTuning();
     });
-    bindGraphSlider(graphClusterTightnessSlider, (value) => {
-      graphPreferences.clusterTightness = value / 100;
+    bindGraphSlider(graphClusterSpacingSlider, (value) => {
+      graphPreferences.clusterSpacing = value / 100;
+      applyGraphTuning();
+    });
+    bindGraphSlider(graphLocalCompactnessSlider, (value) => {
+      graphPreferences.localCompactness = value / 100;
       applyGraphTuning();
     });
     bindGraphSlider(graphLabelDensitySlider, (value) => {
@@ -345,7 +353,8 @@
     });
     graphTuningReset.addEventListener('click', () => {
       graphPreferences.nodeScale = GRAPH_DEFAULT_PREFERENCES.nodeScale;
-      graphPreferences.clusterTightness = GRAPH_DEFAULT_PREFERENCES.clusterTightness;
+      graphPreferences.clusterSpacing = GRAPH_DEFAULT_PREFERENCES.clusterSpacing;
+      graphPreferences.localCompactness = GRAPH_DEFAULT_PREFERENCES.localCompactness;
       graphPreferences.labelDensity = GRAPH_DEFAULT_PREFERENCES.labelDensity;
       graphPreferences.edgeOpacity = GRAPH_DEFAULT_PREFERENCES.edgeOpacity;
       applyGraphTuning();
@@ -862,11 +871,17 @@
   function loadGraphPreferences() {
     try {
       const raw = localStorage.getItem(GRAPH_PREFERENCES_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
+      const legacyRaw = localStorage.getItem(GRAPH_LEGACY_PREFERENCES_KEY);
+      const parsed = raw
+        ? JSON.parse(raw)
+        : legacyRaw
+          ? migrateLegacyGraphPreferences(JSON.parse(legacyRaw))
+          : {};
       return {
         progressiveReveal: parsed.progressiveReveal !== false,
         nodeScale: readGraphPreferenceNumber(parsed.nodeScale, GRAPH_DEFAULT_PREFERENCES.nodeScale, 0.72, 1.9),
-        clusterTightness: readGraphPreferenceNumber(parsed.clusterTightness, GRAPH_DEFAULT_PREFERENCES.clusterTightness, 0, 1),
+        clusterSpacing: readGraphPreferenceNumber(parsed.clusterSpacing, GRAPH_DEFAULT_PREFERENCES.clusterSpacing, 0, 1),
+        localCompactness: readGraphPreferenceNumber(parsed.localCompactness, GRAPH_DEFAULT_PREFERENCES.localCompactness, 0, 1),
         labelDensity: readGraphPreferenceNumber(parsed.labelDensity, GRAPH_DEFAULT_PREFERENCES.labelDensity, 0, 1),
         edgeOpacity: readGraphPreferenceNumber(parsed.edgeOpacity, GRAPH_DEFAULT_PREFERENCES.edgeOpacity, 0, 1),
       };
@@ -878,6 +893,7 @@
   function persistGraphPreferences() {
     try {
       localStorage.setItem(GRAPH_PREFERENCES_KEY, JSON.stringify(graphPreferences));
+      localStorage.removeItem(GRAPH_LEGACY_PREFERENCES_KEY);
     } catch {
       // Ignore localStorage write errors in ephemeral/private contexts.
     }
@@ -889,8 +905,10 @@
     graphProgressiveState.textContent = graphPreferences.progressiveReveal ? 'On' : 'Off';
     graphNodeScaleSlider.value = String(Math.round(graphPreferences.nodeScale * 100));
     graphNodeScaleValue.textContent = `${Math.round(graphPreferences.nodeScale * 100)}%`;
-    graphClusterTightnessSlider.value = String(Math.round(graphPreferences.clusterTightness * 100));
-    graphClusterTightnessValue.textContent = describeGraphTightness(graphPreferences.clusterTightness);
+    graphClusterSpacingSlider.value = String(Math.round(graphPreferences.clusterSpacing * 100));
+    graphClusterSpacingValue.textContent = describeGraphClusterSpacing(graphPreferences.clusterSpacing);
+    graphLocalCompactnessSlider.value = String(Math.round(graphPreferences.localCompactness * 100));
+    graphLocalCompactnessValue.textContent = describeGraphLocalCompactness(graphPreferences.localCompactness);
     graphLabelDensitySlider.value = String(Math.round(graphPreferences.labelDensity * 100));
     graphLabelDensityValue.textContent = describeGraphLabels(graphPreferences.labelDensity);
     graphEdgeOpacitySlider.value = String(Math.round(graphPreferences.edgeOpacity * 100));
@@ -913,9 +931,19 @@
   function getGraphTuningOptions() {
     return {
       nodeScale: graphPreferences.nodeScale,
-      clusterTightness: graphPreferences.clusterTightness,
+      clusterSpacing: graphPreferences.clusterSpacing,
+      localCompactness: graphPreferences.localCompactness,
       labelDensity: graphPreferences.labelDensity,
       edgeOpacity: graphPreferences.edgeOpacity,
+    };
+  }
+
+  function migrateLegacyGraphPreferences(parsed = {}) {
+    const legacyTightness = readGraphPreferenceNumber(parsed.clusterTightness, 0.58, 0, 1);
+    return {
+      ...parsed,
+      clusterSpacing: parsed.clusterSpacing ?? (1 - legacyTightness * 0.72),
+      localCompactness: parsed.localCompactness ?? clamp01(legacyTightness * 0.92),
     };
   }
 
@@ -925,10 +953,20 @@
     return Math.min(max, Math.max(min, numeric));
   }
 
-  function describeGraphTightness(value) {
-    if (value < 0.34) return 'Open';
+  function clamp01(value) {
+    return Math.min(1, Math.max(0, value));
+  }
+
+  function describeGraphClusterSpacing(value) {
+    if (value < 0.34) return 'Close';
     if (value < 0.67) return 'Balanced';
-    return 'Tight';
+    return 'Wide';
+  }
+
+  function describeGraphLocalCompactness(value) {
+    if (value < 0.34) return 'Airy';
+    if (value < 0.67) return 'Balanced';
+    return 'Dense';
   }
 
   function describeGraphLabels(value) {

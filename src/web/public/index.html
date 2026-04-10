@@ -273,13 +273,24 @@
               </label>
               <label class="graph-slider">
                 <div class="graph-slider-heading">
-                  <span class="graph-slider-label">Tightness</span>
-                  <output id="graph-cluster-tightness-value" class="graph-slider-value">Balanced</output>
+                  <span class="graph-slider-label">Cluster spacing</span>
+                  <output id="graph-cluster-spacing-value" class="graph-slider-value">Balanced</output>
                 </div>
-                <input id="graph-cluster-tightness" class="graph-slider-input" type="range" min="0" max="100" step="1" value="58">
+                <input id="graph-cluster-spacing" class="graph-slider-input" type="range" min="0" max="100" step="1" value="64">
                 <div class="graph-slider-legend">
-                  <span>Loose</span>
-                  <span>Tight</span>
+                  <span>Close</span>
+                  <span>Wide</span>
+                </div>
+              </label>
+              <label class="graph-slider">
+                <div class="graph-slider-heading">
+                  <span class="graph-slider-label">Local compactness</span>
+                  <output id="graph-local-compactness-value" class="graph-slider-value">Balanced</output>
+                </div>
+                <input id="graph-local-compactness" class="graph-slider-input" type="range" min="0" max="100" step="1" value="50">
+                <div class="graph-slider-legend">
+                  <span>Airy</span>
+                  <span>Dense</span>
                 </div>
               </label>
               <label class="graph-slider">

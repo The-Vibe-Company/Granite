@@ -44,4 +44,42 @@ describe('web note creation', () => {
 
     expect(searchPayload.results.some(result => result.slug === 'web-created-note')).toBe(true);
   });
+
+  it('serves graph nodes and resolved links from the graph API', async () => {
+    const app = createApp(tmpDir, config);
+
+    const firstResponse = await app.request('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'note',
+        title: 'Graph Seed',
+        body: 'Anchor note.\n',
+      }),
+    });
+    expect(firstResponse.status).toBe(200);
+
+    const secondResponse = await app.request('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'note',
+        title: 'Graph Leaf',
+        body: 'Connects to [[Graph Seed]].\n',
+      }),
+    });
+    expect(secondResponse.status).toBe(200);
+
+    const graphResponse = await app.request('/api/graph');
+    expect(graphResponse.status).toBe(200);
+
+    const graphPayload = await graphResponse.json() as {
+      nodes: Array<{ slug: string }>;
+      edges: Array<{ source: string; target: string }>;
+    };
+
+    expect(graphPayload.nodes.some(node => node.slug === 'graph-seed')).toBe(true);
+    expect(graphPayload.nodes.some(node => node.slug === 'graph-leaf')).toBe(true);
+    expect(graphPayload.edges).toContainEqual({ source: 'graph-leaf', target: 'graph-seed' });
+  });
 });

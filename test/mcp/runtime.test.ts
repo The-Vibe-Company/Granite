@@ -84,18 +84,23 @@ describe('GraniteMcpRuntime', () => {
     runtime.close();
   });
 
-  it('imports a document as a source stub and exposes the linked asset resource', () => {
+  it('imports a document with provided content and exposes the linked asset resource', () => {
     const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
     const inputFile = path.join(tmpDir, 'design-brief.pdf');
     fs.writeFileSync(inputFile, '%PDF-1.4\nbrief\n');
 
-    const imported = runtime.importDocument({ file_path: inputFile });
+    const imported = runtime.importDocument({
+      file_path: inputFile,
+      content: 'Design brief for the Q2 launch.\n- Audience: founders\n- Goal: clarify positioning',
+    });
 
     expect(imported.note.type).toBe('source');
     expect(imported.note.status).toBe('inbox');
     expect(imported.note.source).toBe('extraction');
     expect(imported.note.frontmatter.document_file).toBe(imported.document.file);
     expect(imported.document.resource_uri).toBe(`granite://assets/${encodeURIComponent(imported.document.file)}`);
+    expect(imported.note.body).toContain('## Content');
+    expect(imported.note.body).toContain('Design brief for the Q2 launch.');
 
     const asset = runtime.readAsset(imported.document.file);
     expect('blob' in asset).toBe(true);

@@ -173,6 +173,7 @@ export interface ImportedDocumentAsset {
 
 export interface ImportDocumentInput {
   file_path: string;
+  content: string;
   title?: string;
   tags?: string[];
   aliases?: string[];
@@ -536,6 +537,7 @@ export class GraniteMcpRuntime {
 
   importDocument(input: ImportDocumentInput): ImportDocumentResult {
     const imported = importDocumentToVault(this.vaultRoot, this.config, input.file_path, {
+      content: input.content,
       title: input.title,
       tags: input.tags,
       aliases: input.aliases,

@@ -6,6 +6,7 @@ import { recommendNote, formatRecommendations } from '../core/recommendations.js
 import { requireVaultRoot } from '../core/vault.js';
 
 interface ImportOptions {
+  content?: string;
   title?: string;
   tag?: string;
   alias?: string;
@@ -15,9 +16,17 @@ interface ImportOptions {
 export function importDocumentCommand(filePath: string, options: ImportOptions = {}): void {
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
+  const content = options.content?.trim();
+
+  if (!content) {
+    console.error('Import content cannot be empty. Pass --content with the extracted document text.');
+    process.exit(1);
+  }
+
   let imported: ReturnType<typeof importDocument>;
   try {
     imported = importDocument(vaultRoot, config, filePath, {
+      content,
       title: options.title,
       tags: splitCsv(options.tag),
       aliases: splitCsv(options.alias),

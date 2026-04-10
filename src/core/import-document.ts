@@ -9,6 +9,7 @@ export interface ImportDocumentOptions {
   title?: string;
   tags?: string[];
   aliases?: string[];
+  content?: string;
 }
 
 export interface ImportedDocument {
@@ -24,7 +25,7 @@ export function importDocument(
 ): ImportedDocument {
   const asset = attachAsset(vaultRoot, filePath);
   const title = normalizeTitle(options.title) ?? defaultImportedDocumentTitle(filePath);
-  const created = createNote(vaultRoot, config, 'source', title, buildImportedDocumentBody(asset));
+  const created = createNote(vaultRoot, config, 'source', title, buildImportedDocumentBody(asset, options.content));
 
   const raw = fs.readFileSync(created.filepath, 'utf-8');
   const { frontmatter, body } = parseFrontmatter(raw);
@@ -70,7 +71,23 @@ export function defaultImportedDocumentTitle(filePath: string): string {
   }).join(' ');
 }
 
-function buildImportedDocumentBody(asset: AttachedAsset): string {
+function buildImportedDocumentBody(asset: AttachedAsset, content?: string): string {
+  const normalizedContent = normalizeContent(content);
+  if (normalizedContent) {
+    return [
+      '## Document',
+      '',
+      `- File: [${asset.file}](${asset.relative_path})`,
+      '',
+      '## Content',
+      '',
+      normalizedContent,
+      '',
+      '## Links',
+      '',
+    ].join('\n');
+  }
+
   return [
     '## Document',
     '',
@@ -101,6 +118,11 @@ function mergeUnique(existing: string[], incoming: string[]): string[] {
 }
 
 function normalizeTitle(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeContent(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }

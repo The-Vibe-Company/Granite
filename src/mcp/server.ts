@@ -191,7 +191,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **granite_wakeup** — load the map of the vault before doing work',
         '- **granite_research_topic** — discover relevant notes for a topic',
         '- **granite_capture_knowledge** — capture new knowledge into the vault',
-        '- **granite_import_document** — attach a file and create a linked source note without extracting it',
+        '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
         '- **granite_understand_note** — inspect a note in context, not in isolation',
         '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
         '- **granite_dispose_note** — archive by default, delete only when intentional',
@@ -397,9 +397,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_import_document', {
     title: 'Import Granite Document',
-    description: 'Import a local document into the vault by attaching the file and creating a linked source note. This does not extract the document text; it creates a source stub that points to the file for later LLM or human reading.',
+    description: 'Import a local document into the vault by attaching the file, creating a linked source note, and storing caller-provided document content in that note.',
     inputSchema: {
       file_path: z.string().describe('Absolute or relative path to the local document file to import.'),
+      content: z.string().min(1).describe('Document text or extracted content to preserve in the source note body. Required.'),
       title: z.string().optional().describe('Optional explicit title for the source note. Defaults to a title derived from the filename.'),
       tags: z.array(z.string()).optional().describe('Tags to add immediately to the source note.'),
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately to the source note.'),
@@ -410,12 +411,12 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       recommendations: recommendationSchema,
     }),
     annotations: writeAnnotations,
-  }, async ({ file_path, title, tags, aliases }) => {
-    const result = runtime.importDocument({ file_path, title, tags, aliases });
+  }, async ({ file_path, content, title, tags, aliases }) => {
+    const result = runtime.importDocument({ file_path, content, title, tags, aliases });
     const summary = [
       `Imported "${result.document.file}" as source "${result.note.title}" (${result.note.slug}).`,
       '',
-      'The note is intentionally a stub. Read the linked document resource before summarizing or revising it.',
+      'Stored the provided document content in the note and attached the original file as a Granite asset.',
       '',
       `Recommendations: ${recommendationSummary(result.recommendations)}.`,
     ].join('\n');

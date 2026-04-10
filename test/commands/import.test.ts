@@ -31,13 +31,16 @@ describe('import command', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('imports a document as a source note stub and linked asset', () => {
+  it('imports a document as a source note with required content and linked asset', () => {
     const inputFile = path.join(tmpDir, 'attention-is-all-you-need.pdf');
     fs.writeFileSync(inputFile, '%PDF-1.4\nfake\n');
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    importDocumentCommand(inputFile, { json: true });
+    importDocumentCommand(inputFile, {
+      content: 'Transformer paper excerpt.\n\nKey idea: attention replaces recurrence.',
+      json: true,
+    });
 
     const output = logSpy.mock.calls.at(-1)?.[0];
     expect(typeof output).toBe('string');
@@ -73,6 +76,8 @@ describe('import command', () => {
     expect(typeof frontmatter.document_sha256).toBe('string');
     expect(frontmatter.document_resource_uri).toBe(payload.data.asset.resource_uri);
     expect(body).toContain('## Document');
+    expect(body).toContain('## Content');
+    expect(body).toContain('Transformer paper excerpt.');
     expect(body).toContain(`[${payload.data.asset.file}](assets/${payload.data.asset.file})`);
   });
 });

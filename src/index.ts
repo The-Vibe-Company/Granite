@@ -188,12 +188,13 @@ program
 
 program
   .command('import <file>')
-  .description('Import a document as a source note plus linked asset, without extracting its content')
+  .description('Import a document as a source note plus linked asset, with required caller-provided content')
+  .requiredOption('--content <content>', 'Extracted document text to store in the source note')
   .option('--title <title>', 'Explicit note title. Defaults to a title derived from the filename')
   .option('--tag <tags>', 'Add tags immediately (comma-separated)')
   .option('--alias <aliases>', 'Add aliases immediately (comma-separated)')
   .option('--json', 'Output as JSON')
-  .action((file: string, options: { title?: string; tag?: string; alias?: string; json?: boolean }) => {
+  .action((file: string, options: { content: string; title?: string; tag?: string; alias?: string; json?: boolean }) => {
     importDocumentCommand(file, options);
   });
 

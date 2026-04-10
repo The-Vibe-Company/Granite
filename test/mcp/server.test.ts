@@ -131,16 +131,18 @@ describe('granite MCP server', () => {
       name: 'granite_import_document',
       arguments: {
         file_path: inputFile,
+        content: 'MCP source content\n\nKey point: preserve the extracted text in the note.',
       },
     });
 
     const importedData = extractStructuredContent(imported) as {
-      note: { slug: string; frontmatter: Record<string, unknown> };
+      note: { slug: string; body: string; frontmatter: Record<string, unknown> };
       document: { file: string; resource_uri: string; mime_type: string };
     };
 
     expect(importedData.note.slug).toBe('mcp-source');
     expect(importedData.note.frontmatter.document_file).toBe(importedData.document.file);
+    expect(importedData.note.body).toContain('MCP source content');
 
     const resource = await client.readResource({ uri: importedData.document.resource_uri });
     const content = resource.contents[0];
@@ -178,6 +180,7 @@ describe('granite MCP server', () => {
       name: 'granite_import_document',
       arguments: {
         file_path: inputFile,
+        content: 'Workflow source content',
       },
     });
 
@@ -218,6 +221,7 @@ describe('granite MCP server', () => {
       name: 'granite_import_document',
       arguments: {
         file_path: inputFile,
+        content: 'Workflow source content',
         title: 'Workflow Source',
       },
     });

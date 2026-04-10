@@ -10,6 +10,7 @@ import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
 import { createGraniteMcpServer, withResponseCleanup } from '../../src/mcp/server.js';
+import { createDocxFixture } from '../helpers/document-fixtures.js';
 
 describe('granite MCP server', () => {
   let tmpDir: string;
@@ -52,6 +53,7 @@ describe('granite MCP server', () => {
     const prompts = await client.listPrompts();
 
     expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_extract_document')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_import_document')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_plan_garden')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
@@ -153,6 +155,30 @@ describe('granite MCP server', () => {
     expect(content && 'blob' in content).toBe(true);
   });
 
+  it('extracts documents through MCP without importing them', async () => {
+    const inputFile = path.join(tmpDir, 'mcp-source.docx');
+    createDocxFixture(inputFile, ['MCP extraction works']);
+
+    const extracted = await client.callTool({
+      name: 'granite_extract_document',
+      arguments: {
+        file_path: inputFile,
+      },
+    });
+
+    const extractedData = extractStructuredContent(extracted) as {
+      status: string;
+      doc_type: string;
+      extractor: string;
+      raw_text: string;
+    };
+
+    expect(extractedData.status).toBe('ready');
+    expect(extractedData.doc_type).toBe('docx');
+    expect(extractedData.extractor).toBe('mammoth');
+    expect(extractedData.raw_text).toContain('MCP extraction works');
+  });
+
   it('exposes the vault garden prompt with actionable review instructions', async () => {
     const prompt = await client.getPrompt({
       name: 'granite_garden_vault',
@@ -171,7 +197,7 @@ describe('granite MCP server', () => {
     expect(message.content.text).toContain('mcp-note');
     expect(message.content.text).toContain('granite_plan_garden');
     expect(message.content.text).toContain('Fix any structural errors reported by doctor');
-    expect(message.content.text).toContain('granite://assets');
+    expect(message.content.text).toContain('granite_extract_document');
     expect(message.content.text).toContain('imported document');
   });
 
@@ -268,9 +294,9 @@ describe('granite MCP server', () => {
     }
 
     expect(inboxMessage.content.text).toContain(importedData.note.slug);
-    expect(inboxMessage.content.text).toContain('granite://assets');
+    expect(inboxMessage.content.text).toContain('granite_extract_document');
     expect(inboxMessage.content.text).toContain('imported document attached');
-    expect(gardenMessage.content.text).toContain('granite://assets');
+    expect(gardenMessage.content.text).toContain('granite_extract_document');
     expect(gardenMessage.content.text).toContain('imported document');
   });
 
@@ -299,7 +325,7 @@ describe('granite MCP server', () => {
       throw new Error('Expected text content for granite_compile_topic prompt.');
     }
 
-    expect(message.content.text).toContain('granite://assets');
+    expect(message.content.text).toContain('granite_extract_document');
     expect(message.content.text).toContain('Workflow Source');
     expect(message.content.text).toContain('imported document attached');
   });

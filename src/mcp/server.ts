@@ -82,6 +82,28 @@ const importedDocumentAssetSchema = z.object({
   resource_uri: z.string(),
 });
 
+const installInstructionsSchema = z.object({
+  platform: z.enum(['macos-arm64', 'macos-x64']),
+  steps: z.array(z.string()),
+  notes: z.array(z.string()),
+});
+
+const extractedDocumentSchema = z.object({
+  doc_type: z.enum(['pdf', 'docx', 'xlsx', 'pptx']),
+  status: z.enum(['ready', 'needs_dependency', 'failed']),
+  extractor: z.enum(['ferrules', 'mammoth', 'sheetjs', 'ooxml-pptx']),
+  reading_basis: z.enum(['text', 'ocr']),
+  raw_text: z.string(),
+  confidence: z.number(),
+  limits: z.array(z.string()),
+  title_hint: z.string(),
+  missing_dependency: z.literal('ferrules').optional(),
+  install_source_url: z.string().optional(),
+  install_instructions: installInstructionsSchema.optional(),
+  verify_command: z.string().optional(),
+  user_prompt: z.string().optional(),
+});
+
 const searchResultSchema = z.object({
   slug: z.string(),
   title: z.string(),
@@ -235,6 +257,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **granite_research_topic** — discover relevant notes for a topic',
         '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
         '- **granite_capture_knowledge** — capture new knowledge into the vault',
+        '- **granite_extract_document** — read a local document into raw extracted text without importing it',
         '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
         '- **granite_understand_note** — inspect a note in context, not in isolation',
         '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
@@ -257,7 +280,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
         '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
         '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
-        '- **Prefer resources for raw reads.** Use granite://notes/{slug} for markdown, granite://assets/{filename} for imported documents, and granite://vault/types for type contracts.',
+        '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.',
       ].join('\n'),
     },
   );
@@ -461,10 +484,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
 
   server.registerTool('granite_import_document', {
     title: 'Import Granite Document',
-    description: 'Import a local document into the vault by attaching the file, creating a linked source note, and storing caller-provided document content in that note.',
+    description: 'Import a local document into the vault by attaching the file, creating a linked source note, and storing caller-provided document content in that note. This tool does not read, clean, or summarize the document for you.',
     inputSchema: {
       file_path: z.string().describe('Absolute or relative path to the local document file to import.'),
-      content: z.string().min(1).describe('Document text or extracted content to preserve in the source note body. Required.'),
+      content: z.string().min(1).describe('Caller-provided document text or cleaned extracted content to preserve in the source note body. Required.'),
       title: z.string().optional().describe('Optional explicit title for the source note. Defaults to a title derived from the filename.'),
       tags: z.array(z.string()).optional().describe('Tags to add immediately to the source note.'),
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately to the source note.'),
@@ -493,6 +516,26 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
         createAssetResourceLink(result.document.file, result.document.resource_uri, result.document.mime_type),
       ],
     };
+  });
+
+  server.registerTool('granite_extract_document', {
+    title: 'Extract Granite Document',
+    description: 'Read a local document into raw extracted text without importing it. Use this before LLM cleaning and before granite_import_document when you need actual document understanding.',
+    inputSchema: {
+      file_path: z.string().describe('Absolute path, or vault-relative path, to the local document file to extract.'),
+    },
+    outputSchema: extractedDocumentSchema,
+    annotations: readOnlyAnnotations,
+  }, async ({ file_path }) => {
+    const result = await runtime.extractDocument({ file_path });
+    const summary = [
+      `Extraction status: ${result.status}.`,
+      `Document type: ${result.doc_type}.`,
+      `Extractor: ${result.extractor}.`,
+      result.status === 'needs_dependency' && result.user_prompt ? result.user_prompt : '',
+    ].filter(Boolean).join(' ');
+
+    return toolResult(result, summary);
   });
 
   server.registerTool('granite_understand_note', {
@@ -638,7 +681,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
             text: [
               'Refine the attached Granite note into a durable, well-structured note.',
               'Keep the meaning intact, avoid inventing facts, preserve useful wikilinks, and use Granite-style headings when appropriate.',
-              linkedAsset ? 'This note is linked to an imported document. Read that document resource before summarizing or extracting facts.' : '',
+              linkedAsset ? 'This note is linked to an imported document. If you need to understand that document, call granite_extract_document with the note frontmatter document_path before summarizing or extracting facts.' : '',
               'When you are ready to apply the result, use granite_revise_note rather than low-level CRUD operations.',
             ].filter(Boolean).join(' '),
           },
@@ -654,13 +697,6 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
             },
           },
         },
-        ...(linkedAsset ? [{
-          role: 'user' as const,
-          content: {
-            type: 'resource' as const,
-            resource: runtime.readAsset(linkedAsset.file),
-          },
-        }] : []),
       ],
     };
   });
@@ -688,7 +724,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '4. **Archive** — If it\'s been processed or is no longer relevant, set status: archived.',
               '',
               'Use granite_understand_note before changing a note, granite_revise_note to apply precise edits, and granite_dispose_note to archive anything that should leave the active loop.',
-              'If granite_understand_note shows that a source note has an imported document attached, read the linked granite://assets resource before summarizing, extracting facts, or promoting it.',
+              'If granite_understand_note shows that a source note has an imported document attached, call granite_extract_document with the note frontmatter document_path before summarizing, extracting facts, or promoting it.',
               '',
               `Vault context: ${overview.note_count} notes total (${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}).`,
               '',
@@ -733,7 +769,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '',
               'Steps:',
               '1. Read the related notes below',
-              '2. If a related source note has an imported document attached, read the linked granite://assets resource before summarizing or extracting facts from that source',
+              '2. If a related source note has an imported document attached, call granite_extract_document with that note\'s document_path before summarizing or extracting facts from that source',
               '3. Draft the synthesis body and create it with granite_capture_knowledge (set type: synthesis and provide an explicit title)',
               '4. Write a body that connects the key ideas, with [[wikilinks]] to sources',
               '5. Set derived_from to the source note slugs',
@@ -797,7 +833,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '1. Call granite_plan_garden first and work from the highest-leverage opportunities',
               '2. Fix any structural errors reported by doctor',
               '3. For each orphan or stale note, use granite_understand_note to inspect the note in context',
-              '4. If granite_understand_note reveals an imported document on a source note, read the linked granite://assets resource before summarizing or extracting facts',
+              '4. If granite_understand_note reveals an imported document on a source note, call granite_extract_document with the note frontmatter document_path before summarizing or extracting facts',
               '5. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
               '6. Look for clusters of notes that could be compiled into a synthesis',
               '7. Check if any inbox notes need processing',

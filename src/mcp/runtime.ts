@@ -5,6 +5,7 @@ import { attachAsset, assetResourceUri, completeAssetFiles, readAssetResource, t
 import { CONFIG_FILENAME, loadConfig } from '../core/config.js';
 import { runDoctor } from '../core/doctor.js';
 import { parseFrontmatter, serializeFrontmatter } from '../core/frontmatter.js';
+import { extractDocument as extractDocumentFromFile, type ExtractDocumentResult } from '../core/extract-document.js';
 import { importDocument as importDocumentToVault } from '../core/import-document.js';
 import { openDatabase, rebuildIndex, syncNoteInIndex } from '../core/index-db.js';
 import { findNoteBySlug, listNotes, createNote, readNote } from '../core/note.js';
@@ -236,6 +237,10 @@ export interface ImportDocumentResult {
   note: NoteDetails;
   document: ImportedDocumentAsset;
   recommendations: NoteRecommendations;
+}
+
+export interface ExtractDocumentInput {
+  file_path: string;
 }
 
 export interface DisposeNoteResult {
@@ -666,6 +671,14 @@ export class GraniteMcpRuntime {
       recommendations: result.recommendations,
       document: this.toImportedDocumentAsset(imported.asset),
     };
+  }
+
+  async extractDocument(input: ExtractDocumentInput): Promise<ExtractDocumentResult> {
+    const resolvedPath = path.isAbsolute(input.file_path)
+      ? input.file_path
+      : path.join(this.vaultRoot, input.file_path);
+
+    return extractDocumentFromFile(resolvedPath);
   }
 
   updateNote(slug: string, input: UpdateNoteInput): NoteMutationResult {

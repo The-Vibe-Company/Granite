@@ -17,6 +17,7 @@ import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
 import { wakeupCommand } from './commands/wakeup.js';
 import { attachCommand } from './commands/attach.js';
+import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
 import { GRANITE_VERSION } from './version.js';
 
@@ -187,9 +188,17 @@ program
   });
 
 program
+  .command('extract <file>')
+  .description('Extract raw text from a local document without importing it. Does not clean or summarize the document.')
+  .option('--json', 'Output as JSON')
+  .action(async (file: string, options: { json?: boolean }) => {
+    await extractDocumentCommand(file, options);
+  });
+
+program
   .command('import <file>')
-  .description('Import a document as a source note plus linked asset, with required caller-provided content')
-  .requiredOption('--content <content>', 'Extracted document text to store in the source note')
+  .description('Import a document as a source note plus linked asset, with required caller-provided content. Does not read or clean the document.')
+  .requiredOption('--content <content>', 'Caller-provided document text to store in the source note')
   .option('--title <title>', 'Explicit note title. Defaults to a title derived from the filename')
   .option('--tag <tags>', 'Add tags immediately (comma-separated)')
   .option('--alias <aliases>', 'Add aliases immediately (comma-separated)')

@@ -19,7 +19,7 @@ export function importDocumentCommand(filePath: string, options: ImportOptions =
   const content = options.content?.trim();
 
   if (!content) {
-    console.error('Import content cannot be empty. Pass --content with the extracted document text.');
+    console.error('Import content cannot be empty. Pass --content with caller-provided or externally cleaned document text.');
     process.exit(1);
   }
 

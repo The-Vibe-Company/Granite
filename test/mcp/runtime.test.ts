@@ -7,6 +7,7 @@ import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatt
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
+import { createDocxFixture } from '../helpers/document-fixtures.js';
 
 describe('GraniteMcpRuntime', () => {
   let tmpDir: string;
@@ -106,6 +107,22 @@ describe('GraniteMcpRuntime', () => {
     const asset = runtime.readAsset(imported.document.file);
     expect('blob' in asset).toBe(true);
     expect(asset.mimeType).toBe('application/pdf');
+    runtime.close();
+  });
+
+  it('extracts a DOCX through the runtime without creating notes', async () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const inputFile = path.join(tmpDir, 'runtime.docx');
+    createDocxFixture(inputFile, ['Runtime extraction works']);
+
+    const before = runtime.listNotes({ limit: 20 }).length;
+    const extracted = await runtime.extractDocument({ file_path: inputFile });
+    const after = runtime.listNotes({ limit: 20 }).length;
+
+    expect(extracted.status).toBe('ready');
+    expect(extracted.doc_type).toBe('docx');
+    expect(extracted.raw_text).toContain('Runtime extraction works');
+    expect(after).toBe(before);
     runtime.close();
   });
 

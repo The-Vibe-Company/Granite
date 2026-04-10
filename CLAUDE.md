@@ -6,6 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Granite (`granite` CLI) is a local-first markdown memory system for humans and agents. Notes are plain markdown files with YAML frontmatter, organized by configurable note types. The default model is knowledge-first: `note`, `source`, `synthesis`, and `output`. Configuration lives in `granite.yml` at the vault root. A SQLite index (`.granite/index.db`) provides full-text search and wikilink resolution.
 
+## Product Boundaries
+
+- Granite must remain a deterministic markdown knowledge engine.
+- Never add embedded LLM features, prompt execution inside Granite, embeddings, vector search, autonomous agent loops, or an internal scheduler.
+- All intelligence lives in the external client or agent. Granite only exposes markdown storage, index/graph operations, and deterministic workflow rules.
+- Keep the CLI and MCP surfaces small, explicit, and MECE. Avoid overlapping commands/tools that solve the same layer of the workflow in slightly different ways.
+- Before adding a new CLI command, MCP tool, or prompt:
+  - First check whether the behavior can be expressed by composing existing primitives.
+  - Prefer improving tool descriptions, prompts, and deterministic planning logic over adding another endpoint.
+  - If a new endpoint is necessary, it must have one clear role in the workflow and no ambiguous overlap with existing endpoints.
+
+Preferred workflow layers:
+- orient
+- research
+- inspect
+- plan
+- mutate
+
 ## Commands
 
 ```bash

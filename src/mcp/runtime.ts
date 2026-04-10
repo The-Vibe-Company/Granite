@@ -109,6 +109,59 @@ export interface NoteUnderstanding {
   };
 }
 
+export type GardenOpportunityKind =
+  | 'hot-cluster-cold-hub'
+  | 'stale-synthesis'
+  | 'source-not-compiled'
+  | 'draft-debt'
+  | 'orphan-with-candidates'
+  | 'thin-important-note'
+  | 'duplicate-pair'
+  | 'missing-synthesis-cluster';
+
+export type GardenActionHint = 'revise' | 'connect' | 'merge' | 'synthesize' | 'review';
+
+export interface GardenPlanInput {
+  anchor_slug?: string;
+  limit?: number;
+}
+
+export interface GardenPlanNoteRef {
+  slug: string;
+  title: string;
+  type: string;
+  modified: string;
+}
+
+export interface GardenPlanScope {
+  kind: 'vault' | 'anchor';
+  anchor_slug?: string;
+  generated_at: string;
+  notes_considered: number;
+  clusters_considered: number;
+}
+
+export interface GardenPlanOpportunity {
+  id: string;
+  kind: GardenOpportunityKind;
+  priority: number;
+  action_hint: GardenActionHint;
+  targets: GardenPlanNoteRef[];
+  supporting: GardenPlanNoteRef[];
+  why_now: string;
+  evidence: {
+    signals: string[];
+    metrics: Record<string, number>;
+  };
+  stop_when: string;
+}
+
+export interface GardenPlan {
+  scope: GardenPlanScope;
+  operator_hint: string;
+  opportunities: GardenPlanOpportunity[];
+}
+
 export interface CreateNoteInput {
   title: string;
   type?: string;
@@ -191,6 +244,12 @@ export interface DisposeNoteResult {
   backlinks_removed: number;
   derived_children: number;
   note: NoteDetails | null;
+}
+
+interface GraphState {
+  inbound: Map<string, Set<string>>;
+  outbound: Map<string, Set<string>>;
+  derivedChildren: Map<string, Set<string>>;
 }
 
 export class GraniteMcpRuntime {
@@ -476,6 +535,64 @@ export class GraniteMcpRuntime {
     return { total: notes.length, by_type: byType, modified: sorted[0]?.frontmatter.modified ?? '', clusters, people, recent, stale, aaak };
   }
 
+  planGarden(input: GardenPlanInput = {}): GardenPlan {
+    this.refreshIndex();
+
+    const generatedAt = new Date().toISOString();
+    const notes = this.readAllNotes().filter(note => note.frontmatter.status !== 'archived');
+    const noteBySlug = new Map(notes.map(note => [note.slug, note]));
+    const wakeup = this.wakeup();
+    const graph = this.buildGraphState(notes);
+
+    if (input.anchor_slug) {
+      this.requireNote(input.anchor_slug);
+      if (!noteBySlug.has(input.anchor_slug)) {
+        throw new Error(`Cannot plan around archived note: ${input.anchor_slug}`);
+      }
+    }
+
+    const clusterBySlug = new Map<string, { tag: string; slugs: string[]; hub: string | null }>();
+    for (const cluster of wakeup.clusters) {
+      for (const slug of cluster.slugs) {
+        if (!clusterBySlug.has(slug)) {
+          clusterBySlug.set(slug, cluster);
+        }
+      }
+    }
+
+    const scopeSlugs = input.anchor_slug
+      ? buildAnchorScopeSlugs(input.anchor_slug, graph, wakeup.clusters)
+      : new Set(notes.map(note => note.slug));
+    const scopeNotes = notes.filter(note => scopeSlugs.has(note.slug));
+    const scopeClusters = input.anchor_slug
+      ? wakeup.clusters.filter(cluster => cluster.slugs.includes(input.anchor_slug!))
+      : wakeup.clusters.filter(cluster => cluster.slugs.some(slug => scopeSlugs.has(slug)));
+    const limit = clampLimit(input.limit ?? 5, 20);
+
+    const opportunities = dedupeGardenOpportunities([
+      ...this.buildDuplicatePairOpportunities(scopeNotes, graph),
+      ...this.buildMissingSynthesisClusterOpportunities(scopeClusters, noteBySlug, graph),
+      ...this.buildStaleSynthesisOpportunities(scopeNotes, noteBySlug, graph, clusterBySlug),
+      ...this.buildHotClusterColdHubOpportunities(scopeClusters, noteBySlug, graph),
+      ...this.buildSourceNotCompiledOpportunities(scopeNotes, notes, noteBySlug, graph),
+      ...this.buildDraftDebtOpportunities(scopeNotes),
+      ...this.buildOrphanWithCandidatesOpportunities(scopeNotes, noteBySlug, graph),
+      ...this.buildThinImportantNoteOpportunities(scopeNotes, noteBySlug, graph),
+    ]).slice(0, limit);
+
+    return {
+      scope: {
+        kind: input.anchor_slug ? 'anchor' : 'vault',
+        anchor_slug: input.anchor_slug,
+        generated_at: generatedAt,
+        notes_considered: scopeNotes.length,
+        clusters_considered: scopeClusters.length,
+      },
+      operator_hint: buildGardenOperatorHint(opportunities, input.anchor_slug),
+      opportunities,
+    };
+  }
+
   attach(filePath: string, slug?: string): { file: string; path: string; markdown: string; slug: string | null } {
     const asset = attachAsset(this.vaultRoot, filePath);
     return { file: asset.file, path: asset.path, markdown: asset.markdown, slug: slug ?? null };
@@ -739,6 +856,468 @@ export class GraniteMcpRuntime {
     return assetResourceUri(fileName);
   }
 
+  private buildGraphState(notes: Note[]): GraphState {
+    const noteBySlug = new Set(notes.map(note => note.slug));
+    const inbound = new Map<string, Set<string>>();
+    const outbound = new Map<string, Set<string>>();
+    const derivedChildren = new Map<string, Set<string>>();
+    const linkRows = this.db.prepare(
+      'SELECT source_slug, target_slug FROM links WHERE target_slug IS NOT NULL',
+    ).all() as Array<{ source_slug: string; target_slug: string }>;
+
+    for (const row of linkRows) {
+      if (!noteBySlug.has(row.source_slug) || !noteBySlug.has(row.target_slug)) {
+        continue;
+      }
+      if (!outbound.has(row.source_slug)) outbound.set(row.source_slug, new Set());
+      if (!inbound.has(row.target_slug)) inbound.set(row.target_slug, new Set());
+      outbound.get(row.source_slug)?.add(row.target_slug);
+      inbound.get(row.target_slug)?.add(row.source_slug);
+    }
+
+    for (const note of notes) {
+      for (const parent of note.frontmatter.derived_from) {
+        if (!noteBySlug.has(parent)) {
+          continue;
+        }
+        if (!derivedChildren.has(parent)) derivedChildren.set(parent, new Set());
+        derivedChildren.get(parent)?.add(note.slug);
+      }
+    }
+
+    return { inbound, outbound, derivedChildren };
+  }
+
+  private buildStaleSynthesisOpportunities(
+    scopeNotes: Note[],
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+    clusterBySlug: Map<string, { tag: string; slugs: string[]; hub: string | null }>,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const note of scopeNotes) {
+      if (note.frontmatter.type !== 'synthesis' || note.frontmatter.review_state === 'locked') {
+        continue;
+      }
+
+      const cluster = clusterBySlug.get(note.slug);
+      const related = new Map<string, Note>();
+      for (const slug of note.frontmatter.derived_from) {
+        const parent = noteBySlug.get(slug);
+        if (parent) related.set(parent.slug, parent);
+      }
+      for (const slug of cluster?.slugs ?? []) {
+        if (slug === note.slug) continue;
+        const sibling = noteBySlug.get(slug);
+        if (sibling) related.set(sibling.slug, sibling);
+      }
+
+      const newerRelated = [...related.values()]
+        .filter(candidate => candidate.frontmatter.modified > note.frontmatter.modified)
+        .sort((a, b) => b.frontmatter.modified.localeCompare(a.frontmatter.modified));
+      if (newerRelated.length === 0) {
+        continue;
+      }
+
+      const inboundLinks = getRelationCount(graph.inbound, note.slug);
+      const outboundLinks = getRelationCount(graph.outbound, note.slug);
+      const priority = 55
+        + Math.min(18, newerRelated.length * 6)
+        + Math.min(10, inboundLinks)
+        + (daysSinceIso(note.frontmatter.modified) >= 21 ? 5 : 0)
+        + (cluster ? 4 : 0);
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'stale-synthesis',
+        priority,
+        action_hint: 'revise',
+        targets: [note],
+        supporting: newerRelated.slice(0, 3),
+        why_now: 'This synthesis is older than related notes in the same knowledge area.',
+        signals: [
+          `${newerRelated.length} related note(s) are newer than the synthesis`,
+          inboundLinks > 0 ? `the synthesis already has ${inboundLinks} backlink(s)` : 'the synthesis has low graph reinforcement',
+          cluster ? `it belongs to the "${cluster.tag}" cluster` : 'it is supported by explicit derived_from links',
+        ],
+        metrics: {
+          days_since_target_modified: daysSinceIso(note.frontmatter.modified),
+          newer_related_notes: newerRelated.length,
+          backlinks: inboundLinks,
+          outgoing_links: outboundLinks,
+        },
+        stop_when: 'The synthesis reflects newer adjacent notes and its key links are up to date.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildHotClusterColdHubOpportunities(
+    clusters: Array<{ tag: string; slugs: string[]; hub: string | null }>,
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const cluster of clusters) {
+      if (!cluster.hub || cluster.slugs.length < 3) {
+        continue;
+      }
+
+      const hub = noteBySlug.get(cluster.hub);
+      if (!hub || hub.frontmatter.review_state === 'locked' || hub.frontmatter.type === 'synthesis') {
+        continue;
+      }
+
+      const members = cluster.slugs
+        .map(slug => noteBySlug.get(slug))
+        .filter((note): note is Note => Boolean(note));
+      const recentPeers = members.filter(note => note.slug !== hub.slug && daysSinceIso(note.frontmatter.modified) <= 14);
+      const newerPeers = recentPeers.filter(note => note.frontmatter.modified > hub.frontmatter.modified);
+
+      if (recentPeers.length < 2 || newerPeers.length < 2) {
+        continue;
+      }
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'hot-cluster-cold-hub',
+        priority: 58 + Math.min(16, recentPeers.length * 4) + Math.min(10, cluster.slugs.length),
+        action_hint: 'revise',
+        targets: [hub],
+        supporting: newerPeers
+          .sort((a, b) => b.frontmatter.modified.localeCompare(a.frontmatter.modified))
+          .slice(0, 3),
+        why_now: 'The surrounding cluster changed recently, but the hub note has not caught up.',
+        signals: [
+          `${recentPeers.length} peer note(s) changed in the last 14 days`,
+          `${newerPeers.length} peer note(s) are newer than the hub`,
+          `the hub anchors the "${cluster.tag}" cluster`,
+        ],
+        metrics: {
+          cluster_size: cluster.slugs.length,
+          recent_peers: recentPeers.length,
+          newer_peers: newerPeers.length,
+          days_since_target_modified: daysSinceIso(hub.frontmatter.modified),
+          backlinks: getRelationCount(graph.inbound, hub.slug),
+        },
+        stop_when: 'The hub note reflects recent peer changes and reconnects the cluster coherently.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildSourceNotCompiledOpportunities(
+    scopeNotes: Note[],
+    allNotes: Note[],
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const note of scopeNotes) {
+      if (note.frontmatter.type !== 'source' || note.frontmatter.review_state === 'locked') {
+        continue;
+      }
+
+      const ageDays = daysSinceIso(note.frontmatter.modified);
+      const backlinks = getRelationCount(graph.inbound, note.slug);
+      const outgoing = getRelationCount(graph.outbound, note.slug);
+      const children = getRelationCount(graph.derivedChildren, note.slug);
+      const synthesisChildren = [...(graph.derivedChildren.get(note.slug) ?? new Set())]
+        .map(slug => noteBySlug.get(slug))
+        .filter((candidate): candidate is Note => Boolean(candidate))
+        .filter(candidate => candidate.frontmatter.type === 'synthesis');
+
+      if (ageDays < 7 || children > 0 || synthesisChildren.length > 0 || backlinks + outgoing > 2) {
+        continue;
+      }
+
+      const related = allNotes
+        .filter(candidate => candidate.slug !== note.slug && shareTags(note, candidate))
+        .sort((a, b) => b.frontmatter.modified.localeCompare(a.frontmatter.modified))
+        .slice(0, 3);
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'source-not-compiled',
+        priority: 50 + Math.min(15, Math.floor(ageDays / 7) * 3) + (hasImportedDocument(note) ? 5 : 0),
+        action_hint: 'review',
+        targets: [note],
+        supporting: related,
+        why_now: 'This source has been sitting in the vault without being distilled into durable knowledge.',
+        signals: [
+          `the source is ${ageDays} day(s) old`,
+          children === 0 ? 'no note derives from it yet' : `${children} note(s) derive from it`,
+          hasImportedDocument(note) ? 'an imported document is attached' : 'it has no imported document attachment',
+        ],
+        metrics: {
+          days_since_target_modified: ageDays,
+          backlinks,
+          outgoing_links: outgoing,
+          derived_children: children,
+          synthesis_children: synthesisChildren.length,
+        },
+        stop_when: 'The source is summarized into durable notes or linked into a synthesis.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildDraftDebtOpportunities(scopeNotes: Note[]): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const note of scopeNotes) {
+      if (note.frontmatter.review_state !== 'draft' || note.frontmatter.status !== 'active') {
+        continue;
+      }
+
+      const ageDays = daysSinceIso(note.frontmatter.modified);
+      if (ageDays < 7) {
+        continue;
+      }
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'draft-debt',
+        priority: 45 + Math.min(18, Math.floor(ageDays / 7) * 4),
+        action_hint: 'review',
+        targets: [note],
+        supporting: [],
+        why_now: 'This draft has been left active for a while and should be promoted, merged, or archived.',
+        signals: [
+          `the draft has been untouched for ${ageDays} day(s)`,
+          `its status is still ${note.frontmatter.status}`,
+        ],
+        metrics: {
+          days_since_target_modified: ageDays,
+          title_length: note.frontmatter.title.length,
+        },
+        stop_when: 'The draft is either promoted with confidence, merged into another note, or archived.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildOrphanWithCandidatesOpportunities(
+    scopeNotes: Note[],
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const note of scopeNotes) {
+      if (note.frontmatter.review_state === 'locked') {
+        continue;
+      }
+
+      const backlinks = getRelationCount(graph.inbound, note.slug);
+      const outgoing = getRelationCount(graph.outbound, note.slug);
+      if (backlinks > 0 || outgoing > 1) {
+        continue;
+      }
+
+      const suggestions = this.suggestLinks(note.slug).slice(0, 3)
+        .map(suggestion => noteBySlug.get(suggestion.target_slug))
+        .filter((candidate): candidate is Note => Boolean(candidate));
+      if (suggestions.length === 0) {
+        continue;
+      }
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'orphan-with-candidates',
+        priority: 42 + Math.min(15, suggestions.length * 5) + Math.min(8, daysSinceIso(note.frontmatter.modified)),
+        action_hint: 'connect',
+        targets: [note],
+        supporting: suggestions,
+        why_now: 'This note is isolated, but Granite can already see plausible connection targets.',
+        signals: [
+          'the note has no backlinks',
+          `${suggestions.length} candidate link target(s) were found`,
+        ],
+        metrics: {
+          backlinks,
+          outgoing_links: outgoing,
+          candidate_links: suggestions.length,
+          days_since_target_modified: daysSinceIso(note.frontmatter.modified),
+        },
+        stop_when: 'The note is connected to the graph through justified wikilinks.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildThinImportantNoteOpportunities(
+    scopeNotes: Note[],
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const note of scopeNotes) {
+      if (note.frontmatter.review_state === 'locked' || note.frontmatter.type !== 'note') {
+        continue;
+      }
+
+      const backlinks = getRelationCount(graph.inbound, note.slug);
+      const outgoing = getRelationCount(graph.outbound, note.slug);
+      if (outgoing >= 2 || backlinks < 2) {
+        continue;
+      }
+
+      const supporting = [...(graph.inbound.get(note.slug) ?? new Set())]
+        .map(slug => noteBySlug.get(slug))
+        .filter((candidate): candidate is Note => Boolean(candidate))
+        .slice(0, 3);
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'thin-important-note',
+        priority: 38 + Math.min(18, backlinks * 4) - outgoing,
+        action_hint: 'connect',
+        targets: [note],
+        supporting,
+        why_now: 'Other notes already rely on this note, but it is still under-connected outward.',
+        signals: [
+          `${backlinks} note(s) already link here`,
+          `the note only links out to ${outgoing} note(s)`,
+        ],
+        metrics: {
+          backlinks,
+          outgoing_links: outgoing,
+          supporting_notes: supporting.length,
+        },
+        stop_when: 'The note links back into the graph with enough context to act as a bridge, not a dead end.',
+      }));
+    }
+
+    return opportunities;
+  }
+
+  private buildDuplicatePairOpportunities(scopeNotes: Note[], graph: GraphState): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (let i = 0; i < scopeNotes.length; i += 1) {
+      const left = scopeNotes[i];
+      if (left.frontmatter.review_state === 'locked') {
+        continue;
+      }
+
+      for (let j = i + 1; j < scopeNotes.length; j += 1) {
+        const right = scopeNotes[j];
+        if (right.frontmatter.review_state === 'locked') {
+          continue;
+        }
+
+        const leftTitleTokens = gardenTitleTokens(left.frontmatter.title);
+        const rightTitleTokens = gardenTitleTokens(right.frontmatter.title);
+        const titleOverlap = jaccard(leftTitleTokens, rightTitleTokens);
+        const sharedTags = sharedCount(left.frontmatter.tags, right.frontmatter.tags);
+        const sharedNeighbors = sharedCount(
+          getNeighborSlugs(left.slug, graph),
+          getNeighborSlugs(right.slug, graph),
+        );
+        const normalizedLeft = normalizeGardenText(left.frontmatter.title);
+        const normalizedRight = normalizeGardenText(right.frontmatter.title);
+        const exactTitleMatch = normalizedLeft === normalizedRight;
+        const contains = normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+        const shorterTokenCount = Math.min(leftTitleTokens.size, rightTitleTokens.size);
+        const strongContainment = contains && shorterTokenCount >= 3;
+
+        if (!exactTitleMatch && titleOverlap < 0.75 && !strongContainment) {
+          continue;
+        }
+        if (!exactTitleMatch && titleOverlap < 0.75 && (sharedTags < 2 || sharedNeighbors < 2)) {
+          continue;
+        }
+        if (sharedTags === 0 && sharedNeighbors === 0) {
+          continue;
+        }
+
+        const priority = 68
+          + Math.round(titleOverlap * 15)
+          + Math.min(8, sharedTags * 3)
+          + Math.min(6, sharedNeighbors * 2);
+        opportunities.push(createGardenOpportunity({
+          kind: 'duplicate-pair',
+          priority,
+          action_hint: 'merge',
+          targets: [left, right],
+          supporting: [],
+          why_now: 'These notes appear to cover overlapping ground and may be splitting context.',
+          signals: [
+            `title overlap is ${Math.round(titleOverlap * 100)}%`,
+            `${sharedTags} shared tag(s)`,
+            `${sharedNeighbors} shared neighbor(s)`,
+          ],
+          metrics: {
+            title_overlap_pct: Math.round(titleOverlap * 100),
+            shared_tags: sharedTags,
+            shared_neighbors: sharedNeighbors,
+          },
+          stop_when: 'The overlap is resolved by merging, clarifying scope, or archiving one side.',
+        }));
+      }
+    }
+
+    return opportunities;
+  }
+
+  private buildMissingSynthesisClusterOpportunities(
+    clusters: Array<{ tag: string; slugs: string[]; hub: string | null }>,
+    noteBySlug: Map<string, Note>,
+    graph: GraphState,
+  ): GardenPlanOpportunity[] {
+    const opportunities: GardenPlanOpportunity[] = [];
+
+    for (const cluster of clusters) {
+      if (cluster.tag === 'misc') {
+        continue;
+      }
+
+      if (cluster.slugs.length < 4) {
+        continue;
+      }
+
+      const members = cluster.slugs
+        .map(slug => noteBySlug.get(slug))
+        .filter((note): note is Note => Boolean(note));
+      if (members.some(note => note.frontmatter.type === 'synthesis')) {
+        continue;
+      }
+
+      const recentMembers = members.filter(note => daysSinceIso(note.frontmatter.modified) <= 30);
+      const ranked = [...members]
+        .sort((a, b) => connectionCount(graph, b.slug) - connectionCount(graph, a.slug))
+        .slice(0, 3);
+
+      opportunities.push(createGardenOpportunity({
+        kind: 'missing-synthesis-cluster',
+        priority: 57 + Math.min(14, cluster.slugs.length * 2) + Math.min(9, recentMembers.length * 3),
+        action_hint: 'synthesize',
+        targets: ranked,
+        supporting: members
+          .filter(note => !ranked.some(target => target.slug === note.slug))
+          .slice(0, 3),
+        why_now: 'This cluster has enough connected material to justify a durable synthesis, but none exists yet.',
+        signals: [
+          `the cluster contains ${cluster.slugs.length} note(s)`,
+          `${recentMembers.length} member(s) changed in the last 30 days`,
+          `no synthesis note is present in the "${cluster.tag}" cluster`,
+        ],
+        metrics: {
+          cluster_size: cluster.slugs.length,
+          recent_members: recentMembers.length,
+          ranked_targets: ranked.length,
+        },
+        stop_when: 'A synthesis exists with clear scope and links back to the cluster.',
+      }));
+    }
+
+    return opportunities;
+  }
+
   private refreshIndex(force = false): void {
     const now = Date.now();
     if (!force && now - this.lastIndexCheckAt < this.indexCheckIntervalMs) {
@@ -977,4 +1556,201 @@ function hasMetadataMutations(
     input.durability !== undefined ||
     (input.derived_from?.length ?? 0) > 0
   );
+}
+
+function buildAnchorScopeSlugs(
+  anchorSlug: string,
+  graph: GraphState,
+  clusters: Array<{ tag: string; slugs: string[]; hub: string | null }>,
+): Set<string> {
+  const scope = new Set<string>([anchorSlug]);
+
+  for (const cluster of clusters) {
+    if (cluster.slugs.includes(anchorSlug)) {
+      for (const slug of cluster.slugs) {
+        scope.add(slug);
+      }
+    }
+  }
+
+  for (const slug of graph.inbound.get(anchorSlug) ?? []) {
+    scope.add(slug);
+  }
+  for (const slug of graph.outbound.get(anchorSlug) ?? []) {
+    scope.add(slug);
+  }
+  for (const slug of graph.derivedChildren.get(anchorSlug) ?? []) {
+    scope.add(slug);
+  }
+  for (const [parentSlug, children] of graph.derivedChildren.entries()) {
+    if (children.has(anchorSlug)) {
+      scope.add(parentSlug);
+    }
+  }
+
+  return scope;
+}
+
+function createGardenOpportunity(input: {
+  kind: GardenOpportunityKind;
+  priority: number;
+  action_hint: GardenActionHint;
+  targets: Note[];
+  supporting: Note[];
+  why_now: string;
+  signals: string[];
+  metrics: Record<string, number>;
+  stop_when: string;
+}): GardenPlanOpportunity {
+  const targets = input.targets.map(toGardenNoteRef);
+  return {
+    id: `${input.kind}:${targets.map(target => target.slug).sort().join('+')}`,
+    kind: input.kind,
+    priority: input.priority,
+    action_hint: input.action_hint,
+    targets,
+    supporting: dedupeNoteRefs(input.supporting.map(toGardenNoteRef)).slice(0, 3),
+    why_now: input.why_now,
+    evidence: {
+      signals: input.signals,
+      metrics: input.metrics,
+    },
+    stop_when: input.stop_when,
+  };
+}
+
+function buildGardenOperatorHint(opportunities: GardenPlanOpportunity[], anchorSlug?: string): string {
+  if (opportunities.length === 0) {
+    return anchorSlug
+      ? `No high-leverage garden opportunities were found around "${anchorSlug}".`
+      : 'No high-leverage garden opportunities were found in the vault.';
+  }
+
+  const top = opportunities[0];
+  const targetTitles = top.targets.map(target => target.title).join(' + ');
+  return `Start with ${targetTitles}: ${top.why_now}`;
+}
+
+function dedupeGardenOpportunities(opportunities: GardenPlanOpportunity[]): GardenPlanOpportunity[] {
+  const sorted = [...opportunities].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  const claimed = new Set<string>();
+  const seenIds = new Set<string>();
+  const out: GardenPlanOpportunity[] = [];
+
+  for (const opportunity of sorted) {
+    if (seenIds.has(opportunity.id)) {
+      continue;
+    }
+
+    const targetSlugs = opportunity.targets.map(target => target.slug);
+    if (targetSlugs.every(slug => claimed.has(slug))) {
+      continue;
+    }
+
+    out.push(opportunity);
+    seenIds.add(opportunity.id);
+    for (const slug of targetSlugs) {
+      claimed.add(slug);
+    }
+  }
+
+  return out;
+}
+
+function toGardenNoteRef(note: Note): GardenPlanNoteRef {
+  return {
+    slug: note.slug,
+    title: note.frontmatter.title,
+    type: note.frontmatter.type,
+    modified: note.frontmatter.modified,
+  };
+}
+
+function dedupeNoteRefs(refs: GardenPlanNoteRef[]): GardenPlanNoteRef[] {
+  const seen = new Set<string>();
+  const out: GardenPlanNoteRef[] = [];
+
+  for (const ref of refs) {
+    if (seen.has(ref.slug)) {
+      continue;
+    }
+    seen.add(ref.slug);
+    out.push(ref);
+  }
+
+  return out;
+}
+
+function getRelationCount(map: Map<string, Set<string>>, slug: string): number {
+  return map.get(slug)?.size ?? 0;
+}
+
+function connectionCount(graph: GraphState, slug: string): number {
+  return getRelationCount(graph.inbound, slug) + getRelationCount(graph.outbound, slug);
+}
+
+function daysSinceIso(value: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
+}
+
+function hasImportedDocument(note: Note): boolean {
+  return typeof note.frontmatter.document_file === 'string' && note.frontmatter.document_file.length > 0;
+}
+
+function shareTags(left: Note, right: Note): boolean {
+  return sharedCount(left.frontmatter.tags, right.frontmatter.tags) > 0;
+}
+
+function sharedCount(left: Iterable<string>, right: Iterable<string>): number {
+  const rightSet = new Set(Array.from(right, value => value.toLowerCase()));
+  let count = 0;
+  for (const value of left) {
+    if (rightSet.has(value.toLowerCase())) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function getNeighborSlugs(slug: string, graph: GraphState): Set<string> {
+  const neighbors = new Set<string>();
+  for (const value of graph.inbound.get(slug) ?? []) neighbors.add(value);
+  for (const value of graph.outbound.get(slug) ?? []) neighbors.add(value);
+  for (const value of graph.derivedChildren.get(slug) ?? []) neighbors.add(value);
+  for (const [parentSlug, children] of graph.derivedChildren.entries()) {
+    if (children.has(slug)) {
+      neighbors.add(parentSlug);
+    }
+  }
+  return neighbors;
+}
+
+function gardenTitleTokens(title: string): Set<string> {
+  return new Set(
+    normalizeGardenText(title)
+      .split(/\s+/)
+      .filter(token => token.length >= 3),
+  );
+}
+
+function normalizeGardenText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function jaccard(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+  for (const value of left) {
+    if (right.has(value)) {
+      intersection += 1;
+    }
+  }
+  const union = new Set([...left, ...right]).size;
+  return union === 0 ? 0 : intersection / union;
 }

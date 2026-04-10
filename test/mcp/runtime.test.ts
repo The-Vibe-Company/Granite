@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
+import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
@@ -107,4 +108,175 @@ describe('GraniteMcpRuntime', () => {
     expect(asset.mimeType).toBe('application/pdf');
     runtime.close();
   });
+
+  it('plans garden opportunities globally and around an anchor note', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const anchor = runtime.createNote({
+      title: 'Garden Anchor',
+      type: 'note',
+      body: 'Anchor note for Granite planning.\n',
+      tags: ['granite-vision'],
+    });
+    const updateA = runtime.createNote({
+      title: 'Granite Update A',
+      type: 'note',
+      body: 'Fresh note that links [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+    });
+    const updateB = runtime.createNote({
+      title: 'Granite Update B',
+      type: 'note',
+      body: 'Another fresh note about Granite.\n',
+      tags: ['granite-vision'],
+    });
+    const synthesis = runtime.createNote({
+      title: 'Garden Synthesis',
+      type: 'synthesis',
+      body: 'Old synthesis for [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+      derived_from: [anchor.note.slug],
+    });
+    const source = runtime.createNote({
+      title: 'Uncompiled Source',
+      type: 'source',
+      body: 'Raw source material waiting to be distilled.\n',
+      tags: ['granite-vision'],
+    });
+
+    rewriteNoteTimestamps(anchor.note.filepath, { modified: isoDaysAgo(25) });
+    rewriteNoteTimestamps(updateA.note.filepath, { modified: isoDaysAgo(1) });
+    rewriteNoteTimestamps(updateB.note.filepath, { modified: isoDaysAgo(2) });
+    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
+    rewriteNoteTimestamps(source.note.filepath, { modified: isoDaysAgo(20) });
+
+    const globalPlan = runtime.planGarden({ limit: 10 });
+    expect(globalPlan.scope.kind).toBe('vault');
+    expect(globalPlan.opportunities.some(item => item.kind === 'stale-synthesis')).toBe(true);
+    expect(globalPlan.opportunities.some(item => item.kind === 'source-not-compiled')).toBe(true);
+
+    const anchorPlan = runtime.planGarden({
+      anchor_slug: anchor.note.slug,
+      limit: 3,
+    });
+    expect(anchorPlan.scope.kind).toBe('anchor');
+    expect(anchorPlan.scope.anchor_slug).toBe(anchor.note.slug);
+    expect(anchorPlan.scope.notes_considered).toBeGreaterThan(1);
+    expect(anchorPlan.opportunities.length).toBeLessThanOrEqual(3);
+    expect(anchorPlan.opportunities.some(item => item.targets.some(target => target.slug === synthesis.note.slug || target.slug === source.note.slug))).toBe(true);
+    runtime.close();
+  });
+
+  it('does not mark scoped child notes as duplicates based on title containment alone', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const hub = runtime.createNote({
+      title: 'Granite',
+      type: 'note',
+      body: 'Hub note for Granite.\n',
+      tags: ['granite-vision'],
+    });
+    const child = runtime.createNote({
+      title: "Granite as Karpathy's knowledge compiler",
+      type: 'note',
+      body: 'A scoped elaboration of the Granite idea.\n',
+      tags: ['granite-vision'],
+    });
+
+    const plan = runtime.planGarden({ limit: 10 });
+
+    expect(plan.opportunities.some(item =>
+      item.kind === 'duplicate-pair'
+      && item.targets.some(target => target.slug === hub.note.slug)
+      && item.targets.some(target => target.slug === child.note.slug),
+    )).toBe(false);
+    runtime.close();
+  });
+
+  it('does not propose a synthesis for the synthetic misc cluster', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    runtime.createNote({
+      title: 'Warehouse Lease',
+      type: 'note',
+      body: 'Lease terms for the warehouse.\n',
+    });
+    runtime.createNote({
+      title: 'Founder Coffee Notes',
+      type: 'note',
+      body: 'Notes from coffee with a founder.\n',
+    });
+    runtime.createNote({
+      title: 'Launch Checklist',
+      type: 'note',
+      body: 'Checklist for the product launch.\n',
+    });
+    runtime.createNote({
+      title: 'Tax Reminder',
+      type: 'note',
+      body: 'Remember the quarterly tax filing.\n',
+    });
+
+    const plan = runtime.planGarden({ limit: 10 });
+
+    expect(plan.opportunities.some(item => item.kind === 'missing-synthesis-cluster')).toBe(false);
+    runtime.close();
+  });
+
+  it('keeps anchor-scoped garden plans from pulling in foreign cluster work', () => {
+    const runtime = new GraniteMcpRuntime(tmpDir, { indexCheckIntervalMs: 0 });
+    const anchor = runtime.createNote({
+      title: 'Anchor Note',
+      type: 'note',
+      body: 'Track follow-up with [[Foreign Cluster A]].\n',
+      tags: ['alpha'],
+    });
+    runtime.createNote({
+      title: 'Foreign Cluster A',
+      type: 'note',
+      body: 'Part of a separate beta cluster.\n',
+      tags: ['beta'],
+    });
+    runtime.createNote({
+      title: 'Foreign Cluster B',
+      type: 'note',
+      body: 'Another beta cluster note.\n',
+      tags: ['beta'],
+    });
+    runtime.createNote({
+      title: 'Foreign Cluster C',
+      type: 'note',
+      body: 'Another beta cluster note.\n',
+      tags: ['beta'],
+    });
+    runtime.createNote({
+      title: 'Foreign Cluster D',
+      type: 'note',
+      body: 'Another beta cluster note.\n',
+      tags: ['beta'],
+    });
+
+    const plan = runtime.planGarden({
+      anchor_slug: anchor.note.slug,
+      limit: 10,
+    });
+    const outOfScopeTargets = new Set([
+      'foreign-cluster-b',
+      'foreign-cluster-c',
+      'foreign-cluster-d',
+    ]);
+
+    expect(plan.opportunities.some(item =>
+      item.targets.some(target => outOfScopeTargets.has(target.slug)),
+    )).toBe(false);
+    runtime.close();
+  });
 });
+
+function rewriteNoteTimestamps(filepath: string, updates: { modified: string }) {
+  const raw = fs.readFileSync(filepath, 'utf-8');
+  const { frontmatter, body } = parseFrontmatter(raw);
+  frontmatter.modified = updates.modified;
+  fs.writeFileSync(filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+}
+
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 86400000).toISOString();
+}

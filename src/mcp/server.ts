@@ -138,6 +138,49 @@ const noteUnderstandingSchema = z.object({
   graph_role: graphRoleSchema,
 });
 
+const gardenPlanNoteRefSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  type: z.string(),
+  modified: z.string(),
+});
+
+const gardenPlanOpportunitySchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    'hot-cluster-cold-hub',
+    'stale-synthesis',
+    'source-not-compiled',
+    'draft-debt',
+    'orphan-with-candidates',
+    'thin-important-note',
+    'duplicate-pair',
+    'missing-synthesis-cluster',
+  ]),
+  priority: z.number(),
+  action_hint: z.enum(['revise', 'connect', 'merge', 'synthesize', 'review']),
+  targets: z.array(gardenPlanNoteRefSchema),
+  supporting: z.array(gardenPlanNoteRefSchema),
+  why_now: z.string(),
+  evidence: z.object({
+    signals: z.array(z.string()),
+    metrics: z.record(z.string(), z.number()),
+  }),
+  stop_when: z.string(),
+});
+
+const gardenPlanSchema = z.object({
+  scope: z.object({
+    kind: z.enum(['vault', 'anchor']),
+    anchor_slug: z.string().optional(),
+    generated_at: z.string(),
+    notes_considered: z.number(),
+    clusters_considered: z.number(),
+  }),
+  operator_hint: z.string(),
+  opportunities: z.array(gardenPlanOpportunitySchema),
+});
+
 const disposeNoteSchema = z.object({
   slug: z.string(),
   mode: z.enum(['archive', 'delete']),
@@ -190,6 +233,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '',
         '- **granite_wakeup** — load the map of the vault before doing work',
         '- **granite_research_topic** — discover relevant notes for a topic',
+        '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
         '- **granite_capture_knowledge** — capture new knowledge into the vault',
         '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
         '- **granite_understand_note** — inspect a note in context, not in isolation',
@@ -337,6 +381,26 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   }, async ({ query, limit }) => {
     const results = runtime.search(query, limit ?? 10);
     return toolResult({ query, results }, `Found ${results.length} result(s) for "${query}".`);
+  });
+
+  server.registerTool('granite_plan_garden', {
+    title: 'Plan Granite Garden',
+    description: 'Compute a deterministic, prioritized garden work list. Use this to decide what in the whole vault, or around one anchor note, should be refreshed, connected, deduplicated, or synthesized next.',
+    inputSchema: {
+      anchor_slug: z.string().optional().describe('Optional note slug. When provided, the plan focuses on the anchor note, its local graph neighborhood, and its cluster.'),
+      limit: z.number().int().min(1).max(20).optional().describe('Maximum number of opportunities to return. Defaults to 5.'),
+    },
+    outputSchema: gardenPlanSchema,
+    annotations: readOnlyAnnotations,
+  }, async ({ anchor_slug, limit }) => {
+    const result = runtime.planGarden({ anchor_slug, limit });
+    const scopeLabel = result.scope.kind === 'anchor'
+      ? `around "${result.scope.anchor_slug}"`
+      : 'for the vault';
+    return toolResult(
+      result,
+      `Planned ${result.opportunities.length} garden opportunit${result.opportunities.length === 1 ? 'y' : 'ies'} ${scopeLabel}. ${result.operator_hint}`,
+    );
   });
 
   server.registerTool('granite_capture_knowledge', {
@@ -730,13 +794,14 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '',
               '## Actions to Take',
               '',
-              '1. Fix any structural errors reported by doctor',
-              '2. For each orphan note, use granite_understand_note to inspect the note in context',
-              '3. If granite_understand_note reveals an imported document on a source note, read the linked granite://assets resource before summarizing or extracting facts',
-              '4. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
-              '5. Look for clusters of notes that could be compiled into a synthesis',
-              '6. Check if any inbox notes need processing',
-              '7. Report a summary of what you found and what you fixed',
+              '1. Call granite_plan_garden first and work from the highest-leverage opportunities',
+              '2. Fix any structural errors reported by doctor',
+              '3. For each orphan or stale note, use granite_understand_note to inspect the note in context',
+              '4. If granite_understand_note reveals an imported document on a source note, read the linked granite://assets resource before summarizing or extracting facts',
+              '5. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
+              '6. Look for clusters of notes that could be compiled into a synthesis',
+              '7. Check if any inbox notes need processing',
+              '8. Report a summary of what you found and what you fixed',
             ].join('\n'),
           },
         },

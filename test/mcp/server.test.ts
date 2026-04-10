@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
+import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
@@ -52,6 +53,7 @@ describe('granite MCP server', () => {
 
     expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_import_document')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_plan_garden')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(false);
     expect(resources.resources.some(resource => resource.uri === 'granite://vault/types')).toBe(true);
@@ -167,9 +169,68 @@ describe('granite MCP server', () => {
     expect(message.content.text).toContain('Run a comprehensive health review of this Granite vault');
     expect(message.content.text).toContain('Orphan Notes');
     expect(message.content.text).toContain('mcp-note');
+    expect(message.content.text).toContain('granite_plan_garden');
     expect(message.content.text).toContain('Fix any structural errors reported by doctor');
     expect(message.content.text).toContain('granite://assets');
     expect(message.content.text).toContain('imported document');
+  });
+
+  it('plans garden opportunities through the public MCP tool', async () => {
+    const anchor = runtime.createNote({
+      title: 'Garden Anchor',
+      type: 'note',
+      body: 'Anchor note for Granite planning.\n',
+      tags: ['granite-vision'],
+    });
+    runtime.createNote({
+      title: 'Granite Update A',
+      type: 'note',
+      body: 'Fresh note that links [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+    });
+    runtime.createNote({
+      title: 'Granite Update B',
+      type: 'note',
+      body: 'Another fresh note about Granite.\n',
+      tags: ['granite-vision'],
+    });
+    const synthesis = runtime.createNote({
+      title: 'Garden Synthesis',
+      type: 'synthesis',
+      body: 'Old synthesis for [[Garden Anchor]].\n',
+      tags: ['granite-vision'],
+      derived_from: [anchor.note.slug],
+    });
+    const source = runtime.createNote({
+      title: 'Uncompiled Source',
+      type: 'source',
+      body: 'Raw source material waiting to be distilled.\n',
+      tags: ['granite-vision'],
+    });
+
+    rewriteNoteTimestamps(anchor.note.filepath, { modified: isoDaysAgo(25) });
+    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
+    rewriteNoteTimestamps(source.note.filepath, { modified: isoDaysAgo(20) });
+
+    const planned = await client.callTool({
+      name: 'granite_plan_garden',
+      arguments: {
+        anchor_slug: anchor.note.slug,
+        limit: 5,
+      },
+    });
+
+    const plannedData = extractStructuredContent(planned) as {
+      scope: { kind: string; anchor_slug?: string };
+      opportunities: Array<{ kind: string; targets: Array<{ slug: string }> }>;
+      operator_hint: string;
+    };
+
+    expect(plannedData.scope.kind).toBe('anchor');
+    expect(plannedData.scope.anchor_slug).toBe(anchor.note.slug);
+    expect(plannedData.operator_hint).toContain('Start with');
+    expect(plannedData.opportunities.length).toBeGreaterThan(0);
+    expect(plannedData.opportunities.some(item => item.kind === 'stale-synthesis' || item.kind === 'source-not-compiled')).toBe(true);
   });
 
   it('makes inbox and garden workflows doc-aware for imported source notes', async () => {
@@ -261,4 +322,15 @@ function extractStructuredContent(result: Awaited<ReturnType<Client['callTool']>
     throw new Error('Tool result did not include structuredContent.');
   }
   return result.structuredContent;
+}
+
+function rewriteNoteTimestamps(filepath: string, updates: { modified: string }) {
+  const raw = fs.readFileSync(filepath, 'utf-8');
+  const { frontmatter, body } = parseFrontmatter(raw);
+  frontmatter.modified = updates.modified;
+  fs.writeFileSync(filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+}
+
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 86400000).toISOString();
 }

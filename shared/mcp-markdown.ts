@@ -54,6 +54,18 @@ interface RecommendationLike {
   next_steps: Array<{ type: string; title_hint?: string; reason: string }>;
 }
 
+interface ValidationIssueLike {
+  code: string;
+  field?: string;
+  message: string;
+}
+
+interface ValidationLike {
+  passed: boolean;
+  errors: ValidationIssueLike[];
+  warnings: ValidationIssueLike[];
+}
+
 interface NoteTypeLike {
   name: string;
   description: string;
@@ -70,6 +82,10 @@ interface NoteTypeLike {
     default?: string;
     description?: string;
   }>;
+  template?: string;
+  body_sections?: string[];
+  example_slug?: string;
+  frontmatter_defaults?: Record<string, unknown>;
 }
 
 interface VaultOverviewLike {
@@ -241,7 +257,24 @@ export function renderNoteTypesMarkdown(noteTypes: NoteTypeLike[], defaultType?:
       ['Line limit', noteType.line_limit === undefined ? undefined : String(noteType.line_limit)],
       ['Warn only', noteType.warn_only === undefined ? undefined : yesNo(noteType.warn_only)],
       ['Instructions', noteType.instructions],
+      ['Example', noteType.example_slug ? `\`${noteType.example_slug}\` (granite://notes/${noteType.example_slug})` : undefined],
     ]);
+
+    if (noteType.body_sections && noteType.body_sections.length > 0) {
+      lines.push('', `### Body sections`);
+      lines.push(noteType.body_sections.map(s => `\`${escapeCell(s)}\``).join(' → '));
+    }
+
+    if (noteType.template && noteType.template.trim().length > 0) {
+      lines.push('', '### Body template', '```markdown', noteType.template.replace(/\n+$/, ''), '```');
+    }
+
+    if (noteType.frontmatter_defaults && Object.keys(noteType.frontmatter_defaults).length > 0) {
+      lines.push('', '### Frontmatter defaults');
+      for (const [key, value] of Object.entries(noteType.frontmatter_defaults)) {
+        lines.push(`- ${key}: ${formatUnknown(value)}`);
+      }
+    }
 
     if (noteType.fields && Object.keys(noteType.fields).length > 0) {
       lines.push('', '### Fields');
@@ -343,11 +376,36 @@ export function renderNoteDetailsMarkdown(note: NoteDetailsLike): string {
   return lines.join('\n');
 }
 
-export function renderMutationResultMarkdown(action: string, note: NoteDetailsLike, recommendations: RecommendationLike): string {
+export function renderMutationResultMarkdown(
+  action: string,
+  note: NoteDetailsLike,
+  recommendations: RecommendationLike,
+  validation?: ValidationLike,
+): string {
   const lines = [`# ${action} Note`];
   pushNoteMetadata(lines, note);
+  appendValidation(lines, validation);
   appendRecommendations(lines, recommendations);
   return lines.join('\n');
+}
+
+function appendValidation(lines: string[], validation?: ValidationLike): void {
+  if (!validation) return;
+  if (validation.passed && validation.warnings.length === 0) return;
+  lines.push('', '## Type Validation');
+  lines.push(`- Passed: ${yesNo(validation.passed)}`);
+  if (validation.errors.length > 0) {
+    lines.push('- Errors:');
+    for (const e of validation.errors) {
+      lines.push(`  - \`${e.code}\`${e.field ? ` (${e.field})` : ''}: ${e.message}`);
+    }
+  }
+  if (validation.warnings.length > 0) {
+    lines.push('- Warnings:');
+    for (const w of validation.warnings) {
+      lines.push(`  - \`${w.code}\`${w.field ? ` (${w.field})` : ''}: ${w.message}`);
+    }
+  }
 }
 
 export function renderUnderstandNoteMarkdown(result: NoteUnderstandingLike): string {

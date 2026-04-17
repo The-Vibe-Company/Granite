@@ -22,6 +22,7 @@ export interface NoteTypeConfig {
   fields?: Record<string, FieldDefinition>;
   frontmatter_defaults?: NoteFrontmatterDefaults;
   body_sections?: string[];
+  example_slug?: string;
   on_create?: Hook[];
   on_update?: Hook[];
   indexed_fields?: string[];

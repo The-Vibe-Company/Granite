@@ -127,13 +127,13 @@ note_types:
     line_limit: 300
     warn_only: true
     instructions: >-
-      One note per organization. Track kind (client, prospect, partner, tool, employer) and status
-      in frontmatter. Link to key people and meetings.
+      One note per organization. Track kind (client, prospect, partner, tool, employer) and the
+      relationship stage in frontmatter. Link to key people and meetings.
     fields:
       kind: { type: enum, options: [client, prospect, partner, tool, employer, other], description: Type of relationship }
-      status: { type: enum, options: [active, paused, archived], default: active, description: Current relationship status }
+      relationship_stage: { type: enum, options: [active, paused, archived], default: active, description: Current relationship stage }
       website: { type: url, description: Primary website URL }
-    indexed_fields: [kind, status]
+    indexed_fields: [kind, relationship_stage]
     lifecycle:
       states: [active, paused, archived]
       transitions:

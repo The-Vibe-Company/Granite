@@ -186,8 +186,17 @@ export function validateConfig(config: GraniteConfig): void {
         }
       }
       if (hook.action === 'hash_source' || hook.action === 'set_default') {
-        if (!fieldNames.has(hook.field) && hook.field !== 'document_sha256') {
-          // allow well-known fields too
+        if (!isKnownHookField(hook.field, fieldNames)) {
+          throw new Error(
+            `Invalid config: type "${typeName}" on_create ${hook.action} references undefined field "${hook.field}"`,
+          );
+        }
+      }
+      if (hook.action === 'hash_source') {
+        if (!isKnownHookField(hook.target, fieldNames)) {
+          throw new Error(
+            `Invalid config: type "${typeName}" on_create hash_source references undefined target field "${hook.target}"`,
+          );
         }
       }
     }
@@ -203,6 +212,18 @@ export function validateConfig(config: GraniteConfig): void {
       }
     }
   }
+}
+
+const WELL_KNOWN_HOOK_FIELDS = new Set([
+  'document_file',
+  'document_path',
+  'document_mime',
+  'document_sha256',
+  'document_resource_uri',
+]);
+
+function isKnownHookField(field: string, declared: Set<string>): boolean {
+  return declared.has(field) || WELL_KNOWN_HOOK_FIELDS.has(field);
 }
 
 export { CONFIG_FILENAME };

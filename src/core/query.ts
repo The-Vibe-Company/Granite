@@ -76,7 +76,10 @@ export function runQuery(
 
   let orderBy = 'n.modified DESC';
   if (query.sort) {
-    const dir = query.sort.dir.toUpperCase();
+    if (query.sort.dir !== 'asc' && query.sort.dir !== 'desc') {
+      throw new Error(`Invalid sort direction "${String(query.sort.dir)}". Use "asc" or "desc".`);
+    }
+    const dir = query.sort.dir === 'asc' ? 'ASC' : 'DESC';
     if (query.sort.field === 'modified' || query.sort.field === 'created' || query.sort.field === 'title') {
       orderBy = `n.${query.sort.field} ${dir}`;
     } else if (indexed.has(query.sort.field)) {
@@ -140,7 +143,10 @@ function renderFilter(column: string, filter: QueryFilter): { sql: string; p: un
   if (filter.eq !== undefined) {
     return { sql: `${column} = ?`, p: [filter.eq] };
   }
-  if (filter.in !== undefined && filter.in.length > 0) {
+  if (filter.in !== undefined) {
+    if (filter.in.length === 0) {
+      return { sql: '0', p: [] };
+    }
     const placeholders = filter.in.map(() => '?').join(',');
     return { sql: `${column} IN (${placeholders})`, p: filter.in };
   }

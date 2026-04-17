@@ -187,4 +187,27 @@ describe('runQuery', () => {
 
     db.close();
   });
+
+  it('empty in filter matches nothing', () => {
+    createNote(tmpDir, config, 'meeting', 'E', '## Summary\n', {
+      extraFrontmatter: { date: '2026-03-01', organization: 'acme' },
+    });
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+    const results = runQuery(db, config, { type: 'meeting', where: { organization: { in: [] } } });
+    expect(results).toEqual([]);
+    db.close();
+  });
+
+  it('rejects invalid sort direction', () => {
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+    expect(() =>
+      runQuery(db, config, {
+        type: 'meeting',
+        sort: { field: 'date', dir: 'drop table notes' as unknown as 'asc' },
+      }),
+    ).toThrow(/Invalid sort direction/);
+    db.close();
+  });
 });

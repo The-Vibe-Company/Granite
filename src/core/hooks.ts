@@ -10,6 +10,7 @@ export interface HookContext {
   vaultRoot: string;
   config: GraniteConfig;
   db?: Database.Database;
+  reservedSlugs?: Set<string>;
 }
 
 export interface HookResult {
@@ -30,14 +31,6 @@ export function applyOnCreateHooks(
   return runHooks(frontmatter, typeConfig.on_create ?? [], ctx);
 }
 
-export function applyOnUpdateHooks(
-  frontmatter: NoteFrontmatter,
-  typeConfig: NoteTypeConfig,
-  ctx: HookContext,
-): HookResult {
-  return runHooks(frontmatter, typeConfig.on_update ?? [], ctx);
-}
-
 function runHooks(
   frontmatter: NoteFrontmatter,
   hooks: Hook[],
@@ -45,7 +38,9 @@ function runHooks(
 ): HookResult {
   const out: NoteFrontmatter = { ...frontmatter };
   const created_stubs: HookResult['created_stubs'] = [];
-  const reservedSlugs = new Set<string>();
+  const reservedSlugs = new Set<string>(ctx.reservedSlugs ?? []);
+  // Dedup auto-stubs created in a single hook run so repeated refs reuse the first slug.
+  const stubsByKey = new Map<string, string>();
 
   for (const hook of hooks) {
     switch (hook.action) {
@@ -55,24 +50,22 @@ function runHooks(
           if (value === undefined || value === null || value === '') continue;
           const typeConfig = findFieldTarget(ctx.config, out.type, fieldName);
           const targetType = typeConfig?.target_types?.[0];
-          if (Array.isArray(value)) {
-            const resolved: string[] = [];
-            for (const item of value) {
-              const r = resolveOneField(String(item), targetType, ctx, hook.auto_stub ?? false, reservedSlugs);
-              if (r.stub) {
-                created_stubs.push(r.stub);
-                reservedSlugs.add(r.stub.slug);
-              }
-              resolved.push(r.value);
-            }
-            out[fieldName] = resolved;
-          } else {
-            const r = resolveOneField(String(value), targetType, ctx, hook.auto_stub ?? false, reservedSlugs);
+          const resolveOne = (raw: string): string => {
+            const key = `${targetType ?? '*'}::${raw.trim().toLowerCase()}`;
+            const cached = stubsByKey.get(key);
+            if (cached !== undefined) return cached;
+            const r = resolveOneField(raw, targetType, ctx, hook.auto_stub ?? false, reservedSlugs);
             if (r.stub) {
               created_stubs.push(r.stub);
               reservedSlugs.add(r.stub.slug);
+              stubsByKey.set(key, r.value);
             }
-            out[fieldName] = r.value;
+            return r.value;
+          };
+          if (Array.isArray(value)) {
+            out[fieldName] = value.map(item => resolveOne(String(item)));
+          } else {
+            out[fieldName] = resolveOne(String(value));
           }
         }
         break;

@@ -58,6 +58,7 @@ export function createNote(
 
   const now = new Date().toISOString();
   const defaults = typeConfig.frontmatter_defaults ?? {};
+  const sanitizedExtra = stripReservedFields(options.extraFrontmatter ?? {});
   const frontmatter: NoteFrontmatter = {
     id: uuidv4(),
     title,
@@ -71,7 +72,7 @@ export function createNote(
     review_state: normalizeReviewState(defaults.review_state),
     durability: normalizeDurability(defaults.durability),
     derived_from: normalizeStringArray(defaults.derived_from),
-    ...(options.extraFrontmatter ?? {}),
+    ...sanitizedExtra,
   };
 
   const body = bodyOverride ?? typeConfig.template;
@@ -81,6 +82,7 @@ export function createNote(
     vaultRoot,
     config,
     db: options.db,
+    reservedSlugs: new Set([finalSlug]),
   });
 
   for (const stub of hookResult.created_stubs) {
@@ -120,6 +122,17 @@ export function createNote(
     body,
     outgoing_links: [],
   };
+}
+
+const RESERVED_IMMUTABLE_FIELDS = new Set(['id', 'type', 'title', 'created', 'modified']);
+
+function stripReservedFields(extra: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (RESERVED_IMMUTABLE_FIELDS.has(key)) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 export function readNote(filepath: string): Note {

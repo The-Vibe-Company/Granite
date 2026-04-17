@@ -169,6 +169,49 @@ describe('typed hooks', () => {
     db.close();
   });
 
+  it('auto_stub dedups repeated unresolved references in a single run', () => {
+    const cfgPath = path.join(tmpDir, 'granite.yml');
+    const raw = yaml.load(fs.readFileSync(cfgPath, 'utf-8')) as GraniteConfig;
+    raw.note_types.person = {
+      ...raw.note_types.person,
+      fields: {
+        organization: { type: 'wikilink', target_types: ['organization'] },
+        backup_organization: { type: 'wikilink', target_types: ['organization'] },
+      },
+      on_create: [
+        { action: 'resolve_wikilinks', fields: ['organization', 'backup_organization'], auto_stub: true },
+      ],
+      indexed_fields: ['organization', 'backup_organization'],
+    };
+    fs.writeFileSync(cfgPath, yaml.dump(raw));
+    const cfg2 = loadConfig(tmpDir);
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    createNote(tmpDir, cfg2, 'person', 'Dana', '## Context\n', {
+      db,
+      extraFrontmatter: { organization: 'Acme Corp', backup_organization: 'Acme Corp' },
+    });
+
+    const dana = findNoteBySlug(tmpDir, cfg2, 'dana');
+    expect(dana?.frontmatter.organization).toBe('acme-corp');
+    expect(dana?.frontmatter.backup_organization).toBe('acme-corp');
+
+    // Only one stub was created — no acme-corp-2.
+    const dup = findNoteBySlug(tmpDir, cfg2, 'acme-corp-2');
+    expect(dup).toBeNull();
+    db.close();
+  });
+
+  it('createNote ignores attempts to overwrite reserved immutable fields via extraFrontmatter', () => {
+    createNote(tmpDir, config, 'note', 'Guarded', 'body\n', {
+      extraFrontmatter: { id: 'forged', type: 'organization', created: 'never' },
+    });
+    const note = findNoteBySlug(tmpDir, config, 'guarded');
+    expect(note?.frontmatter.type).toBe('note');
+    expect(note?.frontmatter.id).not.toBe('forged');
+    expect(note?.frontmatter.created).not.toBe('never');
+  });
+
   it('indexed_fields are populated into note_fields table on rebuild', () => {
     createNote(tmpDir, config, 'organization', 'Acme', '## Identity\n', {
       extraFrontmatter: { kind: 'client' },

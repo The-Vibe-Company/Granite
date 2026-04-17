@@ -136,12 +136,12 @@ function compileForTopic(
   for (const t of orderedTypes) {
     const entries = byType.get(t);
     if (entries && entries.length > 0) {
-      sections.push({ heading: capitalize(t) + 's', entries });
+      sections.push({ heading: pluralizeTypeLabel(t), entries });
     }
   }
   for (const [t, entries] of byType.entries()) {
     if (orderedTypes.includes(t)) continue;
-    sections.push({ heading: capitalize(t) + 's', entries });
+    sections.push({ heading: pluralizeTypeLabel(t), entries });
   }
 
   return { mode: 'topic', title: topic, sections };
@@ -154,4 +154,16 @@ function lookupType(db: Database.Database, slug: string): string | undefined {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const TYPE_PLURAL_OVERRIDES: Record<string, string> = {
+  synthesis: 'Syntheses',
+  analysis: 'Analyses',
+  thesis: 'Theses',
+  person: 'People',
+};
+
+function pluralizeTypeLabel(type: string): string {
+  if (TYPE_PLURAL_OVERRIDES[type]) return TYPE_PLURAL_OVERRIDES[type];
+  return capitalize(type) + 's';
 }

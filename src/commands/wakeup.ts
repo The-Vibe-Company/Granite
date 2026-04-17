@@ -4,7 +4,8 @@ import { listNotes } from '../core/note.js';
 import { ensureIndex } from '../core/index-db.js';
 import { getBacklinks } from '../core/backlinks.js';
 import { jsonSuccess } from '../core/json-output.js';
-import type { Note } from '../core/types.js';
+import { computeTypeRegistrySignature } from '../core/validate.js';
+import type { Note, GraniteConfig } from '../core/types.js';
 
 interface Cluster {
   tag: string;
@@ -83,6 +84,7 @@ function generateAaak(
   connectionCounts: Map<string, number>,
   people: Array<{ slug: string; title: string }>,
   recent: Array<{ slug: string; age: string }>,
+  config: GraniteConfig,
 ): string {
   const lines: string[] = [];
 
@@ -93,6 +95,12 @@ function generateAaak(
   const lastModified = notes.reduce((max, n) =>
     n.frontmatter.modified > max ? n.frontmatter.modified : max, '');
   lines.push(`VAULT: ${notes.length}n (${typeBreakdown}) | modified:${lastModified.slice(0, 10)}`);
+
+  // Types registry pointer — agents MUST read granite://vault/types before
+  // writing to ensure frontmatter fields and body sections match the type contract.
+  const typeCount = Object.keys(config.note_types).length;
+  const typeSig = computeTypeRegistrySignature(config);
+  lines.push(`TYPES: ${typeCount} (sig=${typeSig}) -> granite://vault/types`);
 
   // Clusters
   lines.push('CLUSTERS:');
@@ -202,7 +210,7 @@ export function wakeupCommand(options: { json?: boolean } = {}): void {
     .map(n => ({ slug: n.slug, reason: 'working+stale+disconnected' }));
 
   // Generate AAAK
-  const aaak = generateAaak(notes, byType, clusters, connectionCounts, people, recent);
+  const aaak = generateAaak(notes, byType, clusters, connectionCounts, people, recent, config);
 
   db.close();
 

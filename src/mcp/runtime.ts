@@ -23,6 +23,14 @@ import { findNoteBySlug, listNotes, createNote, readNote } from '../core/note.js
 import { getRecommendations } from '../core/recommendations.js';
 import { searchNotes } from '../core/search.js';
 import { suggestLinks } from '../core/suggest.js';
+import {
+  computeTypeRegistrySignature,
+  getRequiredSections,
+  renderPreflightError,
+  RESERVED_FRONTMATTER_KEYS,
+  validateNoteAgainstType,
+  type NoteValidationResult,
+} from '../core/validate.js';
 import type {
   BacklinkEntry,
   DoctorIssue,
@@ -87,6 +95,10 @@ export interface NoteTypeInfo {
   slug_format: 'title' | 'date';
   instructions?: string;
   fields?: GraniteConfig['note_types'][string]['fields'];
+  template?: string;
+  body_sections?: string[];
+  example_slug?: string;
+  frontmatter_defaults?: Record<string, unknown>;
 }
 
 export interface VaultOverview {
@@ -229,6 +241,7 @@ export interface CaptureNoteInput {
   review_state?: ReviewState;
   durability?: Durability;
   derived_from?: string[];
+  fields?: Record<string, unknown>;
 }
 
 export interface UpdateNoteInput {
@@ -243,6 +256,7 @@ export interface UpdateNoteInput {
   review_state?: ReviewState;
   durability?: Durability;
   derived_from?: string[];
+  fields?: Record<string, unknown>;
 }
 
 export interface ListNotesInput {
@@ -256,6 +270,7 @@ export interface ListNotesInput {
 export interface NoteMutationResult {
   note: NoteDetails;
   recommendations: NoteRecommendations;
+  validation?: NoteValidationResult;
 }
 
 export interface ImportedDocumentAsset {
@@ -342,6 +357,7 @@ export class GraniteMcpRuntime {
   }
 
   listNoteTypes(): NoteTypeInfo[] {
+    const recentByType = this.recentSlugByType();
     return Object.entries(this.config.note_types).map(([name, typeConfig]) => ({
       name,
       description: typeConfig.description,
@@ -351,11 +367,47 @@ export class GraniteMcpRuntime {
       slug_format: typeConfig.slug_format ?? 'title',
       instructions: typeConfig.instructions,
       fields: typeConfig.fields,
+      template: typeConfig.template,
+      body_sections: getRequiredSections(typeConfig),
+      example_slug: typeConfig.example_slug ?? recentByType.get(name),
+      frontmatter_defaults: typeConfig.frontmatter_defaults as Record<string, unknown> | undefined,
     }));
+  }
+
+  listNoteTypeNames(): string[] {
+    return Object.keys(this.config.note_types);
+  }
+
+  getTypeRegistrySignature(): string {
+    return computeTypeRegistrySignature(this.config);
   }
 
   getDefaultNoteType(): string {
     return this.config.defaults.note_type;
+  }
+
+  private preflightValidate(
+    typeName: string,
+    extraFields: Record<string, unknown>,
+    body: string | undefined,
+  ): NoteValidationResult {
+    const bodyForCheck = body ?? this.config.note_types[typeName]?.template ?? '';
+    return validateNoteAgainstType(typeName, extraFields, bodyForCheck, this.config);
+  }
+
+  private recentSlugByType(): Map<string, string> {
+    const latest = new Map<string, { slug: string; modified: string }>();
+    for (const note of this.readAllNotes()) {
+      if (note.frontmatter.status === 'archived') continue;
+      const t = note.frontmatter.type;
+      const existing = latest.get(t);
+      if (!existing || note.frontmatter.modified > existing.modified) {
+        latest.set(t, { slug: note.slug, modified: note.frontmatter.modified });
+      }
+    }
+    const out = new Map<string, string>();
+    for (const [t, v] of latest) out.set(t, v.slug);
+    return out;
   }
 
   listNotes(input: ListNotesInput = {}): NoteSummary[] {
@@ -582,7 +634,13 @@ export class GraniteMcpRuntime {
     // AAAK
     const typeBreak = Object.entries(byType).map(([t, c]) => `${c}${t.slice(0, 3)}`).join(',');
     const lastMod = sorted[0]?.frontmatter.modified?.slice(0, 10) ?? '';
-    const lines = [`VAULT: ${notes.length}n (${typeBreak}) | modified:${lastMod}`, 'CLUSTERS:'];
+    const typeCount = Object.keys(this.config.note_types).length;
+    const typeSig = this.getTypeRegistrySignature();
+    const lines = [
+      `VAULT: ${notes.length}n (${typeBreak}) | modified:${lastMod}`,
+      `TYPES: ${typeCount} (sig=${typeSig}) -> granite://vault/types`,
+      'CLUSTERS:',
+    ];
     for (const cl of clusters) {
       const slugList = cl.slugs.map(s => {
         const c = cx.get(s) ?? 0;
@@ -748,7 +806,15 @@ export class GraniteMcpRuntime {
     const resolvedType = input.type ?? this.config.defaults.note_type;
     const typeConfig = this.config.note_types[resolvedType];
     if (!typeConfig) {
-      throw new Error(`Unknown note type: "${resolvedType}"`);
+      const valid = Object.keys(this.config.note_types).join(', ');
+      throw new Error(`Unknown note type "${resolvedType}". Valid types in this vault: ${valid}.`);
+    }
+
+    if (!typeConfig.warn_only) {
+      const preCheck = this.preflightValidate(resolvedType, input.fields ?? {}, input.body);
+      if (preCheck.errors.length > 0) {
+        throw new Error(renderPreflightError(resolvedType, preCheck.errors));
+      }
     }
 
     const bodyOverride = input.body !== undefined
@@ -798,6 +864,7 @@ export class GraniteMcpRuntime {
       review_state: input.review_state,
       durability: input.durability,
       derived_from: input.derived_from,
+      fields: input.fields,
     });
   }
 
@@ -861,7 +928,8 @@ export class GraniteMcpRuntime {
     if (input.type !== undefined) {
       const nextType = this.config.note_types[input.type];
       if (!nextType) {
-        throw new Error(`Unknown note type: "${input.type}"`);
+        const valid = Object.keys(this.config.note_types).join(', ');
+        throw new Error(`Unknown note type "${input.type}". Valid types in this vault: ${valid}.`);
       }
 
       if (frontmatter.type !== input.type) {
@@ -913,12 +981,28 @@ export class GraniteMcpRuntime {
       frontmatter.derived_from = [...input.derived_from];
     }
 
+    if (input.fields) {
+      for (const [key, value] of Object.entries(input.fields)) {
+        if (RESERVED_FRONTMATTER_KEYS.has(key)) continue;
+        (frontmatter as Record<string, unknown>)[key] = value;
+      }
+    }
+
     if (input.body !== undefined) {
       body = ensureTrailingNewline(input.body);
     }
 
     if (input.append !== undefined) {
       body = `${body.trimEnd()}\n${input.append}\n`;
+    }
+
+    const targetType = frontmatter.type;
+    const typeConfig = this.config.note_types[targetType];
+    if (typeConfig && !typeConfig.warn_only) {
+      const pre = validateNoteAgainstType(targetType, frontmatter, body, this.config);
+      if (pre.errors.length > 0) {
+        throw new Error(renderPreflightError(targetType, pre.errors));
+      }
     }
 
     frontmatter.modified = new Date().toISOString();
@@ -1619,10 +1703,17 @@ export class GraniteMcpRuntime {
     }
 
     const note = this.requireNote(slug);
+    const validation = validateNoteAgainstType(
+      note.frontmatter.type,
+      note.frontmatter,
+      note.body,
+      this.config,
+    );
 
     return {
       note: this.getNote(note.slug),
       recommendations: getRecommendations(this.db, note, this.config),
+      validation,
     };
   }
 

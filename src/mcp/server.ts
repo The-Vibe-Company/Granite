@@ -50,6 +50,22 @@ const noteTypeInfoSchema = z.object({
   slug_format: z.enum(['title', 'date']),
   instructions: z.string().optional(),
   fields: z.record(z.string(), fieldDefinitionSchema).optional(),
+  template: z.string().optional(),
+  body_sections: z.array(z.string()).optional(),
+  example_slug: z.string().optional(),
+  frontmatter_defaults: z.record(z.string(), z.unknown()).optional(),
+});
+
+const validationIssueSchema = z.object({
+  code: z.string(),
+  field: z.string().optional(),
+  message: z.string(),
+});
+
+const validationResultSchema = z.object({
+  passed: z.boolean(),
+  errors: z.array(validationIssueSchema),
+  warnings: z.array(validationIssueSchema),
 });
 
 const noteSummarySchema = z.object({
@@ -290,6 +306,73 @@ export interface GraniteMcpHttpServerOptions {
   jsonResponse?: boolean;
 }
 
+function buildServerInstructions(runtime: GraniteMcpRuntime): string {
+  const types = runtime.listNoteTypes();
+  const signature = runtime.getTypeRegistrySignature();
+  const defaultType = runtime.getDefaultNoteType();
+
+  const lines: string[] = [
+    '# Granite — Knowledge Compilation System',
+    '',
+    'You are operating a local-first markdown knowledge base. You are the primary writer and gardener of this vault — the human rarely edits notes directly.',
+    '',
+    '## Public Interface',
+    '',
+    'Granite exposes a small public MCP surface:',
+    '',
+    '- **granite_wakeup** — load the map of the vault before doing work',
+    '- **granite_research_topic** — discover relevant notes for a topic',
+    '- **granite_resolve** — deterministically resolve free text to a note slug before linking',
+    '- **granite_query** — run structured queries over typed notes and indexed fields',
+    '- **granite_compile_context** — compile a typed brief for a topic or slug using the graph',
+    '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
+    '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
+    '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
+    '- **granite_capture_knowledge** — capture new knowledge into the vault',
+    '- **granite_extract_document** — read a local document into raw extracted text without importing it',
+    '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
+    '- **granite_understand_note** — inspect a note in context, not in isolation',
+    '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
+    '- **granite_dispose_note** — archive by default, delete only when intentional',
+    '',
+    'Use prompts for the higher-level workflows: refine notes, compile topics, and process the inbox.',
+    '',
+    `## Note Types (vault registry, sig=${signature})`,
+    '',
+    `This vault declares ${types.length} type${types.length === 1 ? '' : 's'}. Default: \`${defaultType}\`. Full contracts (frontmatter fields, body sections, templates, canonical examples) are in the \`granite://vault/types\` resource — fetch it before writing if unsure.`,
+    '',
+  ];
+
+  for (const t of types) {
+    const requiredFields = Object.entries(t.fields ?? {})
+      .filter(([, f]) => f.required)
+      .map(([name]) => name);
+    const sectionList = (t.body_sections ?? []).join(' / ');
+    const headline = [
+      `- **${t.name}** (\`${t.folder}\`, max ${t.line_limit} lines${t.warn_only ? ', advisory' : ', strict'})`,
+      t.description ? `— ${t.description}` : '',
+    ].filter(Boolean).join(' ');
+    lines.push(headline);
+    if (sectionList) lines.push(`  - Body sections: ${sectionList}`);
+    if (requiredFields.length > 0) lines.push(`  - Required fields: ${requiredFields.join(', ')}`);
+    if (t.example_slug) lines.push(`  - Example: \`${t.example_slug}\` (granite://notes/${t.example_slug})`);
+  }
+
+  lines.push(
+    '',
+    '## Working Principles',
+    '',
+    '- **Read in context.** Prefer granite_understand_note over piecing together note, backlinks, and suggestions manually.',
+    '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
+    '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
+    '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
+    '- **Respect the type registry.** Every note\'s type must exist in the vault config; write tools reject unknown types and report validation issues in their response.',
+    '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.',
+  );
+
+  return lines.join('\n');
+}
+
 export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
   const server = new McpServer(
     {
@@ -299,49 +382,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
     },
     {
       capabilities: { logging: {} },
-      instructions: [
-        '# Granite — Knowledge Compilation System',
-        '',
-        'You are operating a local-first markdown knowledge base. You are the primary writer and gardener of this vault — the human rarely edits notes directly.',
-        '',
-        '## Public Interface',
-        '',
-        'Granite exposes a small public MCP surface:',
-        '',
-        '- **granite_wakeup** — load the map of the vault before doing work',
-        '- **granite_research_topic** — discover relevant notes for a topic',
-        '- **granite_resolve** — deterministically resolve free text to a note slug before linking',
-        '- **granite_query** — run structured queries over typed notes and indexed fields',
-        '- **granite_compile_context** — compile a typed brief for a topic or slug using the graph',
-        '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
-        '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
-        '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
-        '- **granite_capture_knowledge** — capture new knowledge into the vault',
-        '- **granite_extract_document** — read a local document into raw extracted text without importing it',
-        '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
-        '- **granite_understand_note** — inspect a note in context, not in isolation',
-        '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
-        '- **granite_dispose_note** — archive by default, delete only when intentional',
-        '',
-        'Use prompts for the higher-level workflows: refine notes, compile topics, and process the inbox.',
-        '',
-        '## Note Types',
-        '',
-        '- **note**: Atomic, durable ideas — one idea per note, well-linked. The backbone of the vault.',
-        '- **source**: Imported material kept close to the original. Capture provenance, summarize essentials.',
-        '- **synthesis**: Compiled knowledge connecting multiple notes or sources. The most valuable type.',
-        '- **output**: Situational deliverables (reports, briefs). Ephemeral by default, always derived_from something durable.',
-        '',
-        'The natural flow is: source → note → synthesis → output',
-        '',
-        '## Working Principles',
-        '',
-        '- **Read in context.** Prefer granite_understand_note over piecing together note, backlinks, and suggestions manually.',
-        '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
-        '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
-        '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
-        '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.',
-      ].join('\n'),
+      instructions: buildServerInstructions(runtime),
     },
   );
 
@@ -423,6 +464,16 @@ export async function withResponseCleanup(
     statusText: response.statusText,
     headers: response.headers,
   });
+}
+
+function buildTypeSchema(runtime: GraniteMcpRuntime, describe: string) {
+  const names = runtime.listNoteTypeNames();
+  if (names.length === 0) {
+    return z.string().optional().describe(describe);
+  }
+  return z.enum(names as [string, ...string[]]).optional().describe(
+    `${describe} Valid types in this vault: ${names.join(', ')}.`,
+  );
 }
 
 function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
@@ -548,7 +599,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       text: z.string().optional().describe('Raw text to capture. Required unless title and body are both provided.'),
       title: z.string().optional().describe('Optional explicit title when creating a more deliberate draft.'),
       body: z.string().optional().describe('Optional explicit body when creating a more deliberate draft.'),
-      type: z.string().optional().describe('Optional note type. Defaults to the vault default type.'),
+      type: buildTypeSchema(runtime, 'Optional note type. Defaults to the vault default type. Must be one of the vault-configured types (see granite://vault/types for each type\'s body sections and required fields).'),
       tags: z.array(z.string()).optional().describe('Tags to add immediately.'),
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately.'),
       status: z.enum(['inbox', 'active', 'archived']).optional().describe('Initial note status.'),
@@ -556,10 +607,12 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       review_state: z.enum(['draft', 'reviewed', 'locked']).optional().describe('Initial review state.'),
       durability: z.enum(['canonical', 'working', 'ephemeral']).optional().describe('Initial durability.'),
       derived_from: z.array(z.string()).optional().describe('Source note IDs or slugs this note derives from.'),
+      fields: z.record(z.string(), z.unknown()).optional().describe('Type-specific frontmatter fields (e.g. { date: "2026-04-17" } for meetings). Keys reserved by the system (id, title, type, created, modified, tags, aliases, status, source, review_state, durability, derived_from) are ignored here — use the dedicated inputs. See granite://vault/types for each type\'s required fields.'),
     },
     outputSchema: z.object({
       note: noteDetailsSchema,
       recommendations: recommendationSchema,
+      validation: validationResultSchema.optional(),
     }),
     annotations: writeAnnotations,
   }, async (args) => {
@@ -575,8 +628,9 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
         review_state: args.review_state,
         durability: args.durability,
         derived_from: args.derived_from,
+        fields: args.fields,
       });
-      return toolResult(result, renderMutationResultMarkdown('Created', result.note, result.recommendations));
+      return toolResult(result, renderMutationResultMarkdown('Created', result.note, result.recommendations, result.validation));
     }
 
     if (!args.text) {
@@ -593,8 +647,9 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       review_state: args.review_state,
       durability: args.durability,
       derived_from: args.derived_from,
+      fields: args.fields,
     });
-    return toolResult(result, renderMutationResultMarkdown('Captured', result.note, result.recommendations));
+    return toolResult(result, renderMutationResultMarkdown('Captured', result.note, result.recommendations, result.validation));
   });
 
   server.registerTool('granite_import_document', {
@@ -661,7 +716,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     description: 'Make a targeted revision to an existing note. Use this when a workflow prompt tells you exactly what to change, or when you need a precise manual intervention.',
     inputSchema: {
       slug: z.string().describe('Slug of the note to revise.'),
-      type: z.string().optional().describe('Optional new note type. Use this to promote a note into source, synthesis, or output.'),
+      type: buildTypeSchema(runtime, 'Optional new note type. Use this to promote a note between vault types (e.g. note → synthesis). Must be one of the vault-configured types.'),
       title: z.string().optional().describe('Replace the note title.'),
       body: z.string().optional().describe('Replace the entire note body.'),
       append: z.string().optional().describe('Append text to the existing note body.'),
@@ -672,15 +727,17 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       review_state: z.enum(['draft', 'reviewed', 'locked']).optional().describe('New review state.'),
       durability: z.enum(['canonical', 'working', 'ephemeral']).optional().describe('New durability.'),
       derived_from: z.array(z.string()).optional().describe('New derived_from references.'),
+      fields: z.record(z.string(), z.unknown()).optional().describe('Type-specific frontmatter fields to set or overwrite (e.g. { date: "2026-04-17" } when promoting to meeting). Keys reserved by the system are ignored — use the dedicated inputs for those. See granite://vault/types for each type\'s required fields.'),
     },
     outputSchema: z.object({
       note: noteDetailsSchema,
       recommendations: recommendationSchema,
+      validation: validationResultSchema.optional(),
     }),
     annotations: writeAnnotations,
   }, async ({ slug, ...updates }) => {
     const result = runtime.reviseNote(slug, updates);
-    return toolResult(result, renderMutationResultMarkdown('Revised', result.note, result.recommendations));
+    return toolResult(result, renderMutationResultMarkdown('Revised', result.note, result.recommendations, result.validation));
   });
 
   server.registerTool('granite_resolve', {

@@ -15,6 +15,9 @@ import {
 } from '../core/garden-adjudications.js';
 import { extractDocument as extractDocumentFromFile, type ExtractDocumentResult } from '../core/extract-document.js';
 import { importDocument as importDocumentToVault } from '../core/import-document.js';
+import { resolveText, suggestStub, type ResolveMatch } from '../core/resolve.js';
+import { runQuery, type Query, type QueryResult } from '../core/query.js';
+import { compileContext, type CompileContextInput, type CompileContextResult } from '../core/compile-context.js';
 import { openDatabase, rebuildIndex, syncNoteInIndex } from '../core/index-db.js';
 import { findNoteBySlug, listNotes, createNote, readNote } from '../core/note.js';
 import { getRecommendations } from '../core/recommendations.js';
@@ -213,6 +216,7 @@ export interface CreateNoteInput {
   review_state?: ReviewState;
   durability?: Durability;
   derived_from?: string[];
+  fields?: Record<string, unknown>;
 }
 
 export interface CaptureNoteInput {
@@ -397,6 +401,28 @@ export class GraniteMcpRuntime {
   search(query: string, limit = 10): SearchResult[] {
     this.refreshIndex();
     return searchNotes(this.db, query, clampLimit(limit, 50));
+  }
+
+  resolve(text: string, options: { target_type?: string; limit?: number } = {}): {
+    matches: ResolveMatch[];
+    suggested_stub?: { type: string; title: string; slug: string };
+  } {
+    this.refreshIndex();
+    const matches = resolveText(this.db, text, options);
+    if (matches.length === 0 && options.target_type) {
+      return { matches, suggested_stub: suggestStub(text, options.target_type) };
+    }
+    return { matches };
+  }
+
+  query(query: Query): { results: QueryResult[] } {
+    this.refreshIndex();
+    return { results: runQuery(this.db, this.config, query) };
+  }
+
+  compileContext(input: CompileContextInput): CompileContextResult {
+    this.refreshIndex();
+    return compileContext(this.db, this.config, input);
   }
 
   getBacklinks(slug: string): BacklinkEntry[] {
@@ -731,7 +757,10 @@ export class GraniteMcpRuntime {
         ? ensureTrailingNewline(input.title)
         : undefined;
 
-    const created = createNote(this.vaultRoot, this.config, resolvedType, input.title, bodyOverride);
+    const created = createNote(this.vaultRoot, this.config, resolvedType, input.title, bodyOverride, {
+      db: this.db,
+      extraFrontmatter: input.fields,
+    });
     const metadataMutations = {
       tags: input.tags,
       aliases: input.aliases,

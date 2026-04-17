@@ -1,0 +1,204 @@
+vault_name: My Vault
+version: 1
+note_types:
+  note:
+    folder: notes/notes
+    description: Refined, linked notes — one idea per note
+    template: |
+      ## Summary
+
+      ## Details
+
+      ## Links
+    line_limit: 200
+    warn_only: false
+    instructions: >-
+      One atomic idea per note. Write a clear summary, then expand in details.
+      Link to related notes with [[wikilinks]]. If the note grows too long, split it.
+    frontmatter_defaults:
+      durability: canonical
+
+  source:
+    folder: notes/sources
+    description: Imported or observed source material kept close to the original
+    template: |
+      ## Summary
+
+      ## Key Facts
+
+      -
+
+      ## Raw Content
+
+      ## Links
+    line_limit: 400
+    warn_only: true
+    instructions: >-
+      Keep the source close to the original. Capture provenance in frontmatter,
+      summarize the essentials, and link to durable notes or syntheses.
+    fields:
+      document_file: { type: text, description: Attached document filename }
+      document_path: { type: text, description: Vault-relative path to the attached document }
+      document_mime: { type: text, description: MIME type of the attached document }
+      document_sha256: { type: text, description: SHA-256 hash of the attached document }
+      document_resource_uri: { type: text, description: Granite MCP resource URI for the attached document }
+    on_create:
+      - { action: hash_source, field: document_path, target: document_sha256 }
+    indexed_fields: [document_sha256]
+    frontmatter_defaults:
+      durability: canonical
+
+  synthesis:
+    folder: notes/syntheses
+    description: Compiled knowledge that connects multiple notes or sources
+    template: |
+      ## Scope
+
+      ## Executive Summary
+
+      ## Main Themes
+
+      ## Open Questions
+
+      ## Links
+    line_limit: 300
+    warn_only: true
+    instructions: >-
+      Use syntheses for durable compiled knowledge. Keep the scope explicit,
+      summarize clearly, and point back to the notes or sources in derived_from.
+    frontmatter_defaults:
+      durability: canonical
+
+  output:
+    folder: notes/outputs
+    description: Audience-specific outputs such as briefs, reports, or slides
+    template: |
+      ## Goal
+
+      ## Audience
+
+      ## Output
+
+      ## References
+    line_limit: 300
+    warn_only: true
+    instructions: >-
+      Outputs are situational deliverables. Keep them readable, point back to the
+      durable knowledge they derive from, and make them easy to regenerate or archive.
+    frontmatter_defaults:
+      durability: ephemeral
+
+  person:
+    folder: notes/people
+    description: People you interact with — contacts, colleagues, collaborators
+    template: |
+      ## Context
+
+      ## Connections
+
+      ## History
+    line_limit: 200
+    warn_only: true
+    instructions: >-
+      One note per human. Keep the core identity in frontmatter (role, organization, email),
+      and context/history in the body. Link conversations, meetings, and decisions back to this note.
+    fields:
+      role: { type: text, description: Role or title }
+      organization: { type: wikilink, target_types: [organization], description: Primary affiliated organization }
+      email: { type: text, description: Primary email }
+      first_met: { type: date, description: First contact date }
+    on_create:
+      - { action: resolve_wikilinks, fields: [organization], auto_stub: true }
+    indexed_fields: [organization, role, email]
+    frontmatter_defaults:
+      durability: canonical
+
+  organization:
+    folder: notes/organizations
+    description: Companies, teams, or groups — clients, partners, tools, employers
+    template: |
+      ## Identity
+
+      ## Products
+
+      ## Mission
+
+      ## Relationship
+    line_limit: 300
+    warn_only: true
+    instructions: >-
+      One note per organization. Track kind (client, prospect, partner, tool, employer) and status
+      in frontmatter. Link to key people and meetings.
+    fields:
+      kind: { type: enum, options: [client, prospect, partner, tool, employer, other], description: Type of relationship }
+      status: { type: enum, options: [active, paused, archived], default: active, description: Current relationship status }
+      website: { type: url, description: Primary website URL }
+    indexed_fields: [kind, status]
+    lifecycle:
+      states: [active, paused, archived]
+      transitions:
+        - { from: active, to: paused, trigger: manual }
+        - { from: paused, to: active, trigger: manual }
+        - { from: paused, to: archived, trigger: stale_days, days: 180 }
+    frontmatter_defaults:
+      durability: canonical
+
+  meeting:
+    folder: notes/meetings
+    description: Discussions with decisions, blockers, and action items
+    template: |
+      ## Summary
+
+      ## Decisions
+
+      ## Blockers
+
+      ## Action items
+
+      ## Insights
+    line_limit: 300
+    warn_only: true
+    instructions: >-
+      One note per meeting. Always record date, attendees, and organization in frontmatter.
+      Structure the body with Summary / Decisions / Blockers / Action items / Insights.
+    fields:
+      date: { type: date, required: true, description: Date of the meeting }
+      attendees: { type: list, of: wikilink, target_types: [person], many: true, description: People who attended }
+      organization: { type: wikilink, target_types: [organization], description: Associated organization }
+    on_create:
+      - { action: resolve_wikilinks, fields: [attendees, organization], auto_stub: true }
+      - { action: set_default, field: date, value: "${today}" }
+    indexed_fields: [date, organization]
+    frontmatter_defaults:
+      durability: canonical
+
+  learning:
+    folder: notes/learnings
+    description: Concepts, techniques, and mental models you have internalized
+    template: |
+      ## Core idea
+
+      ## How it works
+
+      ## When to use
+
+      ## Connections
+    line_limit: 250
+    warn_only: true
+    instructions: >-
+      Capture durable ideas that change how you think or act. Always link to the source
+      that taught you the idea. Connect to other learnings.
+    fields:
+      topic: { type: text, description: Umbrella topic or domain }
+      source: { type: wikilink, target_types: [source], description: Source note that introduced this idea }
+    on_create:
+      - { action: resolve_wikilinks, fields: [source] }
+    indexed_fields: [topic]
+    frontmatter_defaults:
+      durability: canonical
+
+defaults:
+  note_type: note
+  editor: $EDITOR
+index:
+  auto_rebuild: true

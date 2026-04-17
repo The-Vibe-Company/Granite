@@ -33,8 +33,9 @@ program
 program
   .command('init')
   .description('Create a new vault and start the knowledge loop')
-  .action(() => {
-    initVault();
+  .option('--template <name>', 'Start from a template (e.g. founder-os)')
+  .action((options: { template?: string }) => {
+    initVault(undefined, { template: options.template });
   });
 
 program

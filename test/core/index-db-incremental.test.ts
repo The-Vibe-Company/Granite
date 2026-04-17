@@ -33,7 +33,7 @@ describe('index-db incremental flows', () => {
 
     const reopened = openDatabase(tmpDir);
     const version = reopened.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string };
-    expect(version.value).toBe('2');
+    expect(version.value).toBe('3');
     reopened.close();
   });
 

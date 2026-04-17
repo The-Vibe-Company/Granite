@@ -1,9 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { writeDefaultConfig, CONFIG_FILENAME, loadConfig } from '../core/config.js';
+import { writeDefaultConfig, writeTemplateConfig, CONFIG_FILENAME, loadConfig } from '../core/config.js';
 import { getDefaultVaultRoot, getIndexDbPath } from '../core/vault.js';
 
-export function initVault(dir = getDefaultVaultRoot()): void {
+export interface InitVaultOptions {
+  template?: string;
+}
+
+export function initVault(dir = getDefaultVaultRoot(), options: InitVaultOptions = {}): void {
   const targetDir = path.resolve(dir);
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -12,8 +16,11 @@ export function initVault(dir = getDefaultVaultRoot()): void {
     process.exit(1);
   }
 
-  // Write config
-  writeDefaultConfig(targetDir);
+  if (options.template) {
+    writeTemplateConfig(targetDir, options.template);
+  } else {
+    writeDefaultConfig(targetDir);
+  }
 
   fs.mkdirSync(path.dirname(getIndexDbPath(targetDir)), { recursive: true });
 

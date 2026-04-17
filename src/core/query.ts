@@ -83,7 +83,7 @@ export function runQuery(
     if (query.sort.field === 'modified' || query.sort.field === 'created' || query.sort.field === 'title') {
       orderBy = `n.${query.sort.field} ${dir}`;
     } else if (indexed.has(query.sort.field)) {
-      const sortAlias = `fs`;
+      const sortAlias = `fs_${whereEntries.length}`;
       joins.push(`LEFT JOIN note_fields ${sortAlias} ON ${sortAlias}.slug = n.slug AND ${sortAlias}.field_name = ?`);
       joinParams.push(query.sort.field);
       orderBy = `${sortAlias}.field_value ${dir}`;

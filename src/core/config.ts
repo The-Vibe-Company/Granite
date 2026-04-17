@@ -108,14 +108,6 @@ export function writeTemplateConfig(dir: string, templateName: string): void {
   fs.writeFileSync(configPath, raw, 'utf-8');
 }
 
-export function listTemplates(): string[] {
-  const dir = getTemplatesDir();
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir)
-    .filter(f => f.endsWith('.yml'))
-    .map(f => f.replace(/\.yml$/, ''));
-}
-
 function getTemplatesDir(): string {
   // Resolve relative to this file — works in both src (dev) and dist (built).
   const fileUrl = new URL('.', import.meta.url);
@@ -175,31 +167,8 @@ export function validateConfig(config: GraniteConfig): void {
       }
     }
 
-    for (const hook of typeConfig.on_create ?? []) {
-      if (hook.action === 'resolve_wikilinks') {
-        for (const f of hook.fields) {
-          if (!fieldNames.has(f)) {
-            throw new Error(
-              `Invalid config: type "${typeName}" on_create resolve_wikilinks references undefined field "${f}"`,
-            );
-          }
-        }
-      }
-      if (hook.action === 'hash_source' || hook.action === 'set_default') {
-        if (!isKnownHookField(hook.field, fieldNames)) {
-          throw new Error(
-            `Invalid config: type "${typeName}" on_create ${hook.action} references undefined field "${hook.field}"`,
-          );
-        }
-      }
-      if (hook.action === 'hash_source') {
-        if (!isKnownHookField(hook.target, fieldNames)) {
-          throw new Error(
-            `Invalid config: type "${typeName}" on_create hash_source references undefined target field "${hook.target}"`,
-          );
-        }
-      }
-    }
+    validateHooks(typeName, 'on_create', typeConfig.on_create ?? [], fieldNames);
+    validateHooks(typeName, 'on_update', typeConfig.on_update ?? [], fieldNames);
 
     if (typeConfig.lifecycle) {
       const states = new Set(typeConfig.lifecycle.states);
@@ -209,6 +178,39 @@ export function validateConfig(config: GraniteConfig): void {
             `Invalid config: type "${typeName}" lifecycle transition ${t.from}→${t.to} references undeclared state`,
           );
         }
+      }
+    }
+  }
+}
+
+function validateHooks(
+  typeName: string,
+  phase: 'on_create' | 'on_update',
+  hooks: import('./types.js').Hook[],
+  fieldNames: Set<string>,
+): void {
+  for (const hook of hooks) {
+    if (hook.action === 'resolve_wikilinks') {
+      for (const f of hook.fields) {
+        if (!fieldNames.has(f)) {
+          throw new Error(
+            `Invalid config: type "${typeName}" ${phase} resolve_wikilinks references undefined field "${f}"`,
+          );
+        }
+      }
+    }
+    if (hook.action === 'hash_source' || hook.action === 'set_default') {
+      if (!isKnownHookField(hook.field, fieldNames)) {
+        throw new Error(
+          `Invalid config: type "${typeName}" ${phase} ${hook.action} references undefined field "${hook.field}"`,
+        );
+      }
+    }
+    if (hook.action === 'hash_source') {
+      if (!isKnownHookField(hook.target, fieldNames)) {
+        throw new Error(
+          `Invalid config: type "${typeName}" ${phase} hash_source references undefined target field "${hook.target}"`,
+        );
       }
     }
   }

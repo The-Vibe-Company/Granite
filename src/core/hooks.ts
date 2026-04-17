@@ -39,8 +39,8 @@ function runHooks(
   const out: NoteFrontmatter = { ...frontmatter };
   const created_stubs: HookResult['created_stubs'] = [];
   const reservedSlugs = new Set<string>(ctx.reservedSlugs ?? []);
-  // Dedup auto-stubs created in a single hook run so repeated refs reuse the first slug.
-  const stubsByKey = new Map<string, string>();
+  // Dedup resolutions in a single hook run so repeated refs reuse the first result.
+  const resolvedByKey = new Map<string, string>();
 
   for (const hook of hooks) {
     switch (hook.action) {
@@ -52,14 +52,14 @@ function runHooks(
           const targetType = typeConfig?.target_types?.[0];
           const resolveOne = (raw: string): string => {
             const key = `${targetType ?? '*'}::${raw.trim().toLowerCase()}`;
-            const cached = stubsByKey.get(key);
+            const cached = resolvedByKey.get(key);
             if (cached !== undefined) return cached;
             const r = resolveOneField(raw, targetType, ctx, hook.auto_stub ?? false, reservedSlugs);
             if (r.stub) {
               created_stubs.push(r.stub);
               reservedSlugs.add(r.stub.slug);
-              stubsByKey.set(key, r.value);
             }
+            resolvedByKey.set(key, r.value);
             return r.value;
           };
           if (Array.isArray(value)) {

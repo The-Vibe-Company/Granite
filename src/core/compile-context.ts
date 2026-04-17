@@ -56,7 +56,7 @@ function compileForSlug(
 
   const sections: CompiledSection[] = [];
 
-  if (note.type === 'organization' && config.note_types.person) {
+  if (note.type === 'organization' && typeHasIndexedField(config, 'person', 'organization')) {
     const peopleResults = runQuery(db, config, {
       type: 'person',
       where: { organization: slug },
@@ -75,11 +75,12 @@ function compileForSlug(
     }
   }
 
-  if (note.type === 'organization' && config.note_types.meeting) {
+  if (note.type === 'organization' && typeHasIndexedField(config, 'meeting', 'organization')) {
+    const sortByDate = typeHasIndexedField(config, 'meeting', 'date');
     const meetings = runQuery(db, config, {
       type: 'meeting',
       where: { organization: slug },
-      sort: { field: 'date', dir: 'desc' },
+      ...(sortByDate ? { sort: { field: 'date', dir: 'desc' as const } } : {}),
       limit,
     });
     if (meetings.length > 0) {
@@ -150,6 +151,11 @@ function compileForTopic(
 function lookupType(db: Database.Database, slug: string): string | undefined {
   const row = db.prepare('SELECT type FROM notes WHERE slug = ?').get(slug) as { type: string } | undefined;
   return row?.type;
+}
+
+function typeHasIndexedField(config: Parameters<typeof runQuery>[1], typeName: string, field: string): boolean {
+  const t = config.note_types[typeName];
+  return !!t && !!t.indexed_fields && t.indexed_fields.includes(field);
 }
 
 function capitalize(s: string): string {

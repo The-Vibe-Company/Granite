@@ -1,292 +1,186 @@
 # Granite
 
-> A local-first knowledge compiler for humans and agents.
+> **The personal OS your agent runs on.**
+> Markdown files. One SQLite index. A contract your agent already knows how to operate.
 
-Karpathy described a system where LLMs don't just answer questions — they compile and maintain a knowledge base. Raw data in, structured wiki out, health checks to keep it clean. Then he said:
+<p align="center">
+  <img src="docs/screenshots/granite-note.png" alt="Granite note view" width="720">
+</p>
 
-> *"I think there is room here for an incredible new product instead of a hacky collection of scripts."*
+<p align="center">
+  <b>Install in one prompt.</b> Your agent does the rest.
+</p>
 
-Granite is that product.
+---
 
-Plain Markdown files. A CLI for humans. An MCP server that teaches AI agents how to be knowledge gardeners. One loop:
+## The wow moment
 
-**capture → compile → query → output → lint**
+Paste this into **Claude Code**, **Cursor**, or any MCP-capable agent:
 
-No scripts to maintain. No glue code. Your agent writes the notes, links them, and recommends what to write next. You never touch a file.
+````
+Install Granite as my personal OS.
 
-![Granite note view](docs/screenshots/granite-note.png)
+1. `npm install -g granite-mem`
+2. `granite init --template founder-os`  (vault at ~/.granite)
+3. `claude mcp add granite -- granite mcp --vault ~/.granite`
+4. Restart yourself so the MCP server loads.
+5. Call `granite_wakeup`, then propose three notes you would write
+   first based on what you know about me so far. Capture them as
+   drafts with --source agent.
+````
 
-## Why Granite
+Sixty seconds later you have a live vault, a connected agent that **knows how to use it**, and three starter notes in `~/.granite/notes/`. No system prompt. No config. No cloud.
 
-Most PKM tools give you a blank canvas. Granite gives you a working system:
+That's the thesis of this project.
 
-- Notes are plain Markdown files with YAML frontmatter
-- The index is derived state, not the source of truth
-- Four note types encode the knowledge lifecycle: `source → note → synthesis → output`
-- Custom note types are easy to add in `granite.yml`
-- The CLI is predictable for both humans and agents
-- The MCP server teaches methodology, not just CRUD — any LLM client that connects immediately knows how to operate the vault
-- The local web UI makes the vault browseable without cloud lock-in
+## What is Granite?
 
-Granite is opinionated where it matters and flexible where it should be.
+Granite is a **local-first operating substrate** for the human + agent duo:
 
-## What Makes It Different
+- **Files you own.** Plain markdown with YAML frontmatter in `~/.granite`. No database, no lock-in, `git` works.
+- **Typed contracts, not folders.** Note types declare fields, hooks, indexed queries, and lifecycles. Create a `meeting` and the org stub, date default, and backlinks all fall into place automatically — deterministically, no LLM involved.
+- **Agent-native MCP.** The server *teaches* methodology: tools organized along `orient → research → inspect → plan → mutate`. Drop any MCP-capable LLM onto the vault and it can operate it without a system prompt.
+- **Hard boundary.** **No LLM, no embeddings, no scheduler inside Granite.** All intelligence lives in your agent. Granite is the disk, the schema, and the rules — never the brain.
 
-### 1. Simple by default
+One loop: **capture → compile → query → output → lint**.
 
-Granite ships with a small working model instead of an empty workspace:
+## Install prompts (copy-paste)
 
-- `note` for durable ideas
-- `source` for imported or observed source material
-- `synthesis` for durable compiled knowledge
-- `output` for audience-specific deliverables
+### Claude Code / Claude Desktop
 
-`note -> synthesis -> output`
-
-This is enough structure to make your notes connect naturally, without forcing you into a heavyweight system.
-
-### 2. Custom types without losing the plot
-
-You can add your own note types in `granite.yml`, but Granite still works out of the box. The product stays simple because the core model is small and every type shares the same mechanics: folder, template, line limit, guidance, and slug strategy.
-
-### 3. Agent-native, not just agent-compatible
-
-Granite is designed so AI agents can operate the vault autonomously:
-
-- Notes are plain files with explicit metadata
-- Commands support `--json` for structured output
-- The MCP server exposes the full knowledge loop with rich instructions
-- Tool descriptions say *when and why*, not just *what*
-- Write responses return recommendations for what to do next
-- Three workflow prompts encode the compile and lint phases
-
-Connect Claude Code in one command:
-
-```bash
-claude mcp add granite -- granite mcp --vault ~/.granite
+```
+Install Granite for me:
+  npm install -g granite-mem
+  granite init --template founder-os
+  claude mcp add granite -- granite mcp --vault ~/.granite
+After restart, call granite_wakeup and tell me what the vault looks like.
 ```
 
-Your agent now has a knowledge base it knows how to operate. No system prompt needed — the methodology lives in the server.
+### Cursor
 
-## Quickstart
+```
+Run these commands, then add Granite to .cursor/mcp.json:
+  npm install -g granite-mem
+  granite init --template founder-os
 
-Clone the repo and install dependencies:
+Append to .cursor/mcp.json:
+  { "mcpServers": { "granite": { "command": "granite", "args": ["mcp", "--vault", "~/.granite"] } } }
 
-```bash
-git clone https://github.com/The-Vibe-Company/Granite
-cd Granite
-npm install
-npm run build
-npm link
+Reload Cursor. Then call granite_wakeup.
 ```
 
-Create the default vault in `~/.granite` and start capturing:
+### ChatGPT / any HTTP-MCP client
 
-```bash
-granite init
-granite add "Talked to Alice about local-first sync tradeoffs"
-granite new "Local-first sync tradeoffs" --type note
-granite list
-granite search "sync"
+```
+Start the Granite MCP over HTTP:
+  granite mcp --transport http --host 127.0.0.1 --port 3321
+Then register http://127.0.0.1:3321 as an MCP server in your client.
 ```
 
-Start one long-running interface when you need it:
+Every one of these leaves you with the same outcome: your agent owns the loop.
 
-```bash
-granite serve   # local web UI
-granite mcp     # MCP server for agent clients
-```
+## What your agent can do with it
 
-`granite new` does more than create a file. It can immediately suggest related links, tags, and the next note to create, which is the core of Granite's value loop.
+Once connected, these are real prompts that work **out of the box**:
 
-## Example Workflow
+> **"Process my inbox."**
+> The agent calls `granite_wakeup`, lists inbox notes, classifies each, rewrites them as durable `note`s, links them to existing people/orgs, and promotes `review_state: draft → reviewed`.
 
-Capture something quickly:
+> **"Summarize everything I know about [[acme-corp]] before the meeting at 3pm."**
+> `granite_compile_context` returns a typed brief: identity, recent meetings, people, open threads, links into related syntheses. One tool call. No fuzzy matching.
 
-```bash
-granite add "Users want fewer note types, but stronger defaults."
-```
+> **"I just talked to Alice from Acme about local-first sync."**
+> `granite_capture_knowledge` creates a `meeting`, fills `date: today` via a hook, resolves `organization: Acme` to a slug (creates a stub if missing), links `attendees: [[alice]]`, and suggests three follow-up notes.
 
-Turn it into a durable note:
+> **"Garden the vault."**
+> `granite_plan_garden` returns the highest-leverage clusters to revisit. The agent opens the top three, revises them, and flags lifecycle transitions (`stale_days`) for your review.
 
-```bash
-granite new "Strong defaults beat infinite flexibility" --type note
-```
+Every one of those is a single MCP round-trip, deterministic, auditable in `git log`.
 
-Find connections:
+## Types as active contracts
 
-```bash
-granite suggest-links strong-defaults-beat-infinite-flexibility
-granite recommend strong-defaults-beat-infinite-flexibility
-granite backlinks strong-defaults-beat-infinite-flexibility
-```
-
-Open the local UI:
-
-```bash
-granite serve
-```
-
-Then browse notes, search the vault, inspect backlinks, and explore the graph locally.
-
-![Granite graph view](docs/screenshots/granite-graph.png)
-
-## Custom Note Types
-
-Granite is intentionally small, but not rigid. Add a type in `granite.yml` when your workflow genuinely needs it:
+This is what makes the agent feel native rather than bolted-on.
 
 ```yaml
+# granite.yml — every note type is an executable contract
 note_types:
-  idea:
-    folder: notes/ideas
-    description: Early product ideas worth pressure-testing
-    template: |
-      ## Problem
-
-      ## Insight
-
-      ## Why now
-
-      ## Next step
-    line_limit: 120
-    warn_only: true
-    slug_format: title
-    instructions: Capture the idea clearly, then link it to a source, note, or synthesis.
+  meeting:
+    folder: notes/meetings
+    fields:
+      date:         { type: date,     required: true }
+      organization: { type: wikilink, target_types: [organization] }
+      attendees:    { type: wikilink, target_types: [person] }
+    on_create:
+      - { action: set_default,       field: date, value: "${today}" }
+      - { action: resolve_wikilinks, fields: [organization, attendees], auto_stub: true }
+    indexed_fields: [date, organization]
+    lifecycle:
+      states: [active, archived]
+      transitions:
+        - { from: active, to: archived, trigger: stale_days, days: 180 }
 ```
 
-The point is not to create 30 note types. The point is to add a type only when it makes your memory system sharper.
+- `set_default` — fills `${today}` automatically
+- `resolve_wikilinks + auto_stub` — turns `organization: Acme Corp` into the slug `acme-corp`, creating the org note if missing (with a globally-unique slug so nothing gets silently overwritten)
+- `indexed_fields` — makes `granite_query { type: meeting, where: { date: { gte: "2026-01-01" } } }` O(1) and deterministic
+- `lifecycle` — `granite doctor` surfaces stale notes so gardening never drifts
 
-## Protocol Fields
+Add a type when your life has a new shape. The core stays small.
 
-Granite keeps the core schema small, but now includes a few shared fields that help both humans and agents work safely in the same vault:
-
-- `status`: `inbox | active | archived`
-- `source`: `human | agent | extraction`
-- `review_state`: `draft | reviewed | locked`
-- `durability`: `canonical | working | ephemeral`
-- `derived_from`: list of note IDs or slugs used as provenance
-
-These fields are intentionally lightweight:
-
-- `review_state` is the editorial state
-- `durability` distinguishes durable knowledge from working material or situational outputs
-- `derived_from` is the minimal provenance hook for syntheses and outputs
-
-Granite does not impose a full agent workflow in the core. Richer conventions such as agent traces or synthesis policies are better handled in templates, skills, and team protocol.
-
-## Local-First Architecture
-
-Granite keeps the source of truth boring and durable:
-
-- notes are Markdown files
-- metadata lives in YAML frontmatter
-- the default vault lives in `~/.granite`
-- vault configuration lives in `~/.granite/granite.yml`
-- full-text search and link resolution are backed by a local SQLite index in `~/.granite/index.db`
-- the index can be rebuilt from the files at any time
-
-This keeps the system transparent, portable, and inspectable.
-
-## Agent-Friendly CLI
-
-Many commands support JSON output:
+## Templates
 
 ```bash
-granite new "Sync constraints" --type note --review-state reviewed --durability canonical --json
-granite list --json
-granite show sync-constraints --json
-granite search "constraints" --json
-granite backlinks sync-constraints --json
-granite recommend sync-constraints --json
+granite init                          # minimal: note / source / synthesis / output
+granite init --template founder-os    # + person / organization / meeting / learning
 ```
 
-That makes Granite a useful substrate for local workflows, scripts, and agent memory.
+`founder-os` is the full personal-OS starter: people you talk to, orgs you work with, meetings you had, things you learned. Nine types, already wired with hooks, indexed fields, and lifecycles. Open `templates/founder-os.yml` — it's 150 lines of pure YAML.
 
-## MCP Server
+## The hard boundary
 
-Granite ships with an MCP server so LLM clients can control the vault directly through tools, resources, and prompts.
+Granite will **never**:
 
-Start it over stdio for local MCP clients:
+- embed an LLM, run prompts, or hold an API key
+- compute embeddings or ship a vector store
+- run background agents or a scheduler
+- add overlapping CLI/MCP endpoints that blur the loop
 
-```bash
-granite mcp --vault /path/to/vault
-```
+This is why your agent can be trusted with write access. The vault is a **deterministic substrate**. The intelligence is yours (or Claude's, or GPT's, or whoever you pay this quarter).
 
-Start it over Streamable HTTP:
+## Protocol fields
 
-```bash
-granite mcp --transport http --host 127.0.0.1 --port 3321
-```
+Every note carries five shared fields so humans and agents share ground truth:
 
-The server exposes:
+| Field          | Values                                | Purpose                              |
+|----------------|---------------------------------------|--------------------------------------|
+| `status`       | `inbox` · `active` · `archived`       | operational state                    |
+| `source`       | `human` · `agent` · `extraction`      | who wrote it                         |
+| `review_state` | `draft` · `reviewed` · `locked`       | editorial state                      |
+| `durability`   | `canonical` · `working` · `ephemeral` | keep / may drift / throwaway         |
+| `derived_from` | `[slug, …]`                           | provenance for syntheses and outputs |
 
-- tools for wakeup, topic research, knowledge capture, note understanding, targeted revision, and note disposal
-- resources for note types and individual notes via `granite://vault/types` and `granite://notes/{slug}`
-- prompts for refining notes, compiling a topic, processing the inbox, and gardening the vault
+Your agent reads these before writing and sets them as it works. You inherit a fully auditable trail.
 
-The note payloads exposed through MCP include the shared protocol fields (`status`, `source`, `review_state`, `durability`, `derived_from`) so clients can make safer decisions without Granite embedding any model-specific logic.
+## Local-first, by design
 
-Example stdio client configuration:
+- Markdown files are the source of truth; the SQLite index in `~/.granite/index.db` is derived state and can be rebuilt at any time
+- no cloud, no telemetry, no account
+- `git init` your vault and you have versioning for free
+- `granite serve` gives you a local web UI — browse, search, explore the graph
 
-```json
-{
-  "command": "granite",
-  "args": ["mcp", "--vault", "/path/to/vault"]
-}
-```
-
-## Commands
-
-```bash
-granite init
-granite new <title> [--type <type>] [--source <source>] [--status <status>] [--review-state <state>] [--durability <durability>] [--derived-from <refs>] [--json]
-granite add [text] [--json]
-granite list [--type <type>] [--json]
-granite edit <slug> [--body <text>] [--append <text>] [--title <title>] [--tag <tags>] [--alias <aliases>] [--status <status>] [--source <source>] [--review-state <state>] [--durability <durability>] [--derived-from <refs>]
-granite open <slug>
-granite show <slug> [--json] [--body]
-granite search <query> [--json]
-granite backlinks <slug> [--json]
-granite suggest-links <slug> [--json]
-granite recommend <slug> [--json]
-granite types
-granite doctor
-granite serve [-p <port>]
-granite mcp [--vault <path>] [--transport <stdio|http>]
-```
-
-## Development
-
-```bash
-npm run build
-npm run dev
-npm run test
-npm run test:watch
-npm run lint
-```
-
-Run a single test file:
-
-```bash
-npx vitest run test/core/note.test.ts
-```
-
-Run the CLI without building:
-
-```bash
-npx tsx src/index.ts <command>
-```
+For the full CLI, run `granite --help`. For development, see [CLAUDE.md](CLAUDE.md).
 
 ## Philosophy
 
-Granite is built on a few beliefs:
-
 - local-first beats cloud dependence for personal memory
-- plain Markdown beats proprietary formats
-- strong defaults beat blank canvases
-- relationships between notes matter more than visual chrome
-- a good PKM should help you decide what to connect or write next
+- plain markdown beats proprietary formats
+- **types as active contracts** beat types as folders
 - tools for humans should also be legible to agents
-- protocol belongs in the core, agent policy belongs outside it
+- protocol belongs in the core; **agent policy belongs outside it**
+- a personal OS is a thing you own — not a thing you rent
 
-If that sounds right, Granite is the tool.
+---
+
+<p align="center">
+  <sub>Ship your agent a home. Then give it the keys.</sub>
+</p>

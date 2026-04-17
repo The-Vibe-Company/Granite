@@ -95,6 +95,41 @@ export function writeDefaultConfig(dir: string): void {
   fs.writeFileSync(configPath, content, 'utf-8');
 }
 
+export function writeTemplateConfig(dir: string, templateName: string): void {
+  const configPath = path.join(dir, CONFIG_FILENAME);
+  const templatePath = resolveTemplatePath(templateName);
+  if (!fs.existsSync(templatePath)) {
+    throw new Error(`Unknown template "${templateName}". Not found at ${templatePath}.`);
+  }
+  const raw = fs.readFileSync(templatePath, 'utf-8');
+  // Validate before writing to fail fast on malformed templates.
+  const parsed = yaml.load(raw) as GraniteConfig;
+  validateConfig(parsed);
+  fs.writeFileSync(configPath, raw, 'utf-8');
+}
+
+function getTemplatesDir(): string {
+  // Resolve relative to this file — works in both src (dev) and dist (built).
+  const fileUrl = new URL('.', import.meta.url);
+  const thisDir = decodeURIComponent(fileUrl.pathname);
+  // Prod (bundled): dist/index.js → dist/templates/
+  // Dev (tsx src/core/config.ts): src/core/ → ../../templates
+  const candidates = [
+    path.resolve(thisDir, 'templates'),
+    path.resolve(thisDir, '../templates'),
+    path.resolve(thisDir, '../../templates'),
+    path.resolve(process.cwd(), 'templates'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
+function resolveTemplatePath(name: string): string {
+  return path.join(getTemplatesDir(), `${name}.yml`);
+}
+
 export function loadConfig(vaultRoot: string): GraniteConfig {
   const configPath = path.join(vaultRoot, CONFIG_FILENAME);
   if (!fs.existsSync(configPath)) {
@@ -102,7 +137,95 @@ export function loadConfig(vaultRoot: string): GraniteConfig {
   }
   const raw = fs.readFileSync(configPath, 'utf-8');
   const parsed = yaml.load(raw) as GraniteConfig;
+  validateConfig(parsed);
   return parsed;
+}
+
+export function validateConfig(config: GraniteConfig): void {
+  const typeNames = new Set(Object.keys(config.note_types));
+
+  for (const [typeName, typeConfig] of Object.entries(config.note_types)) {
+    const fieldNames = new Set(Object.keys(typeConfig.fields ?? {}));
+
+    for (const [fieldName, fieldDef] of Object.entries(typeConfig.fields ?? {})) {
+      if (fieldDef.type === 'wikilink' && fieldDef.target_types) {
+        for (const target of fieldDef.target_types) {
+          if (!typeNames.has(target)) {
+            throw new Error(
+              `Invalid config: type "${typeName}" field "${fieldName}" references unknown target_type "${target}"`,
+            );
+          }
+        }
+      }
+    }
+
+    for (const indexed of typeConfig.indexed_fields ?? []) {
+      if (!fieldNames.has(indexed)) {
+        throw new Error(
+          `Invalid config: type "${typeName}" indexed_fields references undefined field "${indexed}"`,
+        );
+      }
+    }
+
+    validateHooks(typeName, 'on_create', typeConfig.on_create ?? [], fieldNames);
+    validateHooks(typeName, 'on_update', typeConfig.on_update ?? [], fieldNames);
+
+    if (typeConfig.lifecycle) {
+      const states = new Set(typeConfig.lifecycle.states);
+      for (const t of typeConfig.lifecycle.transitions) {
+        if (!states.has(t.from) || !states.has(t.to)) {
+          throw new Error(
+            `Invalid config: type "${typeName}" lifecycle transition ${t.from}→${t.to} references undeclared state`,
+          );
+        }
+      }
+    }
+  }
+}
+
+function validateHooks(
+  typeName: string,
+  phase: 'on_create' | 'on_update',
+  hooks: import('./types.js').Hook[],
+  fieldNames: Set<string>,
+): void {
+  for (const hook of hooks) {
+    if (hook.action === 'resolve_wikilinks') {
+      for (const f of hook.fields) {
+        if (!fieldNames.has(f)) {
+          throw new Error(
+            `Invalid config: type "${typeName}" ${phase} resolve_wikilinks references undefined field "${f}"`,
+          );
+        }
+      }
+    }
+    if (hook.action === 'hash_source' || hook.action === 'set_default') {
+      if (!isKnownHookField(hook.field, fieldNames)) {
+        throw new Error(
+          `Invalid config: type "${typeName}" ${phase} ${hook.action} references undefined field "${hook.field}"`,
+        );
+      }
+    }
+    if (hook.action === 'hash_source') {
+      if (!isKnownHookField(hook.target, fieldNames)) {
+        throw new Error(
+          `Invalid config: type "${typeName}" ${phase} hash_source references undefined target field "${hook.target}"`,
+        );
+      }
+    }
+  }
+}
+
+const WELL_KNOWN_HOOK_FIELDS = new Set([
+  'document_file',
+  'document_path',
+  'document_mime',
+  'document_sha256',
+  'document_resource_uri',
+]);
+
+function isKnownHookField(field: string, declared: Set<string>): boolean {
+  return declared.has(field) || WELL_KNOWN_HOOK_FIELDS.has(field);
 }
 
 export { CONFIG_FILENAME };

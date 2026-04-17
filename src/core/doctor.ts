@@ -5,6 +5,7 @@ import type { GraniteConfig, DoctorIssue } from './types.js';
 import { listNotes } from './note.js';
 import { validateDurability, validateReviewState } from './json-output.js';
 import { parseWikilinks, resolveWikilinks } from './wikilinks.js';
+import { suggestLifecycleTransitions } from './lifecycle.js';
 
 export function runDoctor(vaultRoot: string, config: GraniteConfig, db: Database.Database): DoctorIssue[] {
   const issues: DoctorIssue[] = [];
@@ -140,6 +141,35 @@ export function runDoctor(vaultRoot: string, config: GraniteConfig, db: Database
         level: 'info',
         file: note.filepath,
         message: 'Orphan note: no incoming or outgoing links',
+      });
+    }
+  }
+
+  // 8. Reclassement suggestions — notes typed as 'note' with tags matching a specialized type
+  const specializedTypes = Object.keys(config.note_types).filter(
+    t => t !== 'note' && t !== 'source' && t !== 'synthesis' && t !== 'output',
+  );
+  for (const note of notes) {
+    if (note.frontmatter.type !== 'note') continue;
+    for (const typeName of specializedTypes) {
+      if (note.frontmatter.tags?.includes(typeName)) {
+        issues.push({
+          level: 'info',
+          file: note.filepath,
+          message: `Reclassement suggestion: note tagged "${typeName}" could be promoted to type "${typeName}". Try: granite_revise_note slug=${note.slug} type=${typeName}`,
+        });
+        break;
+      }
+    }
+  }
+
+  // 9. Lifecycle transitions ready to fire
+  for (const note of notes) {
+    for (const suggestion of suggestLifecycleTransitions(note, config)) {
+      issues.push({
+        level: 'info',
+        file: note.filepath,
+        message: `Lifecycle suggestion: ${suggestion.from} → ${suggestion.to} (${suggestion.reason})`,
       });
     }
   }

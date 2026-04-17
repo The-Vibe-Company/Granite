@@ -5,9 +5,10 @@ import type { GraniteConfig, Note } from './types.js';
 import { listNotes } from './note.js';
 import { parseWikilinks } from './wikilinks.js';
 import { slugify } from './slugify.js';
+import { collectIndexedFieldValues } from './hooks.js';
 import { getIndexDbPath } from './vault.js';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS notes (
@@ -61,6 +62,16 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_slug);
 CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_slug);
 
+CREATE TABLE IF NOT EXISTS note_fields (
+  slug        TEXT NOT NULL,
+  field_name  TEXT NOT NULL,
+  field_value TEXT NOT NULL,
+  FOREIGN KEY (slug) REFERENCES notes(slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_fields_slug ON note_fields(slug);
+CREATE INDEX IF NOT EXISTS idx_note_fields_name_value ON note_fields(field_name, field_value);
+
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -111,8 +122,14 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
     VALUES (@source_slug, @target_slug, @target_raw, @context)
   `);
 
+  const insertField = db.prepare(`
+    INSERT INTO note_fields (slug, field_name, field_value)
+    VALUES (@slug, @field_name, @field_value)
+  `);
+
   const transaction = db.transaction(() => {
     db.exec('DELETE FROM links');
+    db.exec('DELETE FROM note_fields');
     db.exec('DELETE FROM notes');
     // Rebuild FTS after clearing the content table, but keep this inside
     // the transaction so concurrent readers/writers never observe a half-reset index.
@@ -150,6 +167,17 @@ export function rebuildIndex(vaultRoot: string, config: GraniteConfig, db: Datab
           context: contextLine.trim(),
         });
       }
+
+      const typeConfig = config.note_types[note.frontmatter.type];
+      if (typeConfig) {
+        for (const entry of collectIndexedFieldValues(note, typeConfig)) {
+          insertField.run({
+            slug: note.slug,
+            field_name: entry.field,
+            field_value: entry.value,
+          });
+        }
+      }
     }
 
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_rebuild', new Date().toISOString());
@@ -174,7 +202,7 @@ export function syncNoteInIndex(
     return;
   }
 
-  upsertNoteAndLinks(db, note);
+  upsertNoteAndLinks(db, note, config);
 }
 
 export function syncVaultIndexAfterNoteWrite(
@@ -221,7 +249,7 @@ function countNoteFiles(vaultRoot: string, config: GraniteConfig): number {
   return count;
 }
 
-function upsertNoteAndLinks(db: Database.Database, note: Note): void {
+function upsertNoteAndLinks(db: Database.Database, note: Note, config?: GraniteConfig): void {
   const upsertNote = db.prepare(`
     INSERT INTO notes (slug, id, title, type, created, modified, tags, aliases, body, filepath, status, source)
     VALUES (@slug, @id, @title, @type, @created, @modified, @tags, @aliases, @body, @filepath, @status, @source)
@@ -240,9 +268,14 @@ function upsertNoteAndLinks(db: Database.Database, note: Note): void {
   `);
 
   const deleteLinks = db.prepare('DELETE FROM links WHERE source_slug = ?');
+  const deleteFields = db.prepare('DELETE FROM note_fields WHERE slug = ?');
   const insertLink = db.prepare(`
     INSERT INTO links (source_slug, target_slug, target_raw, context)
     VALUES (@source_slug, @target_slug, @target_raw, @context)
+  `);
+  const insertField = db.prepare(`
+    INSERT INTO note_fields (slug, field_name, field_value)
+    VALUES (@slug, @field_name, @field_value)
   `);
 
   const transaction = db.transaction(() => {
@@ -262,6 +295,7 @@ function upsertNoteAndLinks(db: Database.Database, note: Note): void {
     });
 
     deleteLinks.run(note.slug);
+    deleteFields.run(note.slug);
 
     const links = parseWikilinks(note.body);
     for (const link of links) {
@@ -274,6 +308,19 @@ function upsertNoteAndLinks(db: Database.Database, note: Note): void {
         target_raw: link.target,
         context: contextLine.trim(),
       });
+    }
+
+    if (config) {
+      const typeConfig = config.note_types[note.frontmatter.type];
+      if (typeConfig) {
+        for (const entry of collectIndexedFieldValues(note, typeConfig)) {
+          insertField.run({
+            slug: note.slug,
+            field_name: entry.field,
+            field_value: entry.value,
+          });
+        }
+      }
     }
 
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_rebuild', new Date().toISOString());

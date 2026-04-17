@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
-import { parseFrontmatter, serializeFrontmatter } from '../../src/core/frontmatter.js';
 import { createNote } from '../../src/core/note.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 import { GraniteMcpRuntime } from '../../src/mcp/runtime.js';
@@ -55,30 +54,34 @@ describe('granite MCP server', () => {
     expect(tools.tools.some(tool => tool.name === 'granite_capture_knowledge')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_extract_document')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_import_document')).toBe(true);
-    expect(tools.tools.some(tool => tool.name === 'granite_adjudicate_garden_opportunity')).toBe(true);
-    expect(tools.tools.some(tool => tool.name === 'granite_list_garden_adjudications')).toBe(true);
-    expect(tools.tools.some(tool => tool.name === 'granite_plan_garden')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_understand_note')).toBe(true);
     expect(tools.tools.some(tool => tool.name === 'granite_create_note')).toBe(false);
+    expect(tools.tools.some(tool => tool.name === 'granite_plan_garden')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_adjudicate_garden_opportunity')).toBe(true);
+    expect(tools.tools.some(tool => tool.name === 'granite_list_garden_adjudications')).toBe(true);
     expect(resources.resources.some(resource => resource.uri === 'granite://vault/types')).toBe(true);
     expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://notes/{slug}')).toBe(true);
     expect(templates.resourceTemplates.some(template => template.uriTemplate === 'granite://assets/{filename}')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_refine_note')).toBe(true);
     expect(prompts.prompts.some(prompt => prompt.name === 'granite_compile_topic')).toBe(true);
-    expect(prompts.prompts.some(prompt => prompt.name === 'granite_garden_vault')).toBe(true);
+    expect(prompts.prompts.some(prompt => prompt.name === 'granite_garden_vault')).toBe(false);
     expect(client.getInstructions()).toContain('Knowledge Compilation System');
   });
 
   it('serves note resources and prompt templates', async () => {
     const resource = await client.readResource({ uri: 'granite://notes/mcp-note' });
+    const typeResource = await client.readResource({ uri: 'granite://vault/types' });
     const prompt = await client.getPrompt({
       name: 'granite_compile_topic',
       arguments: { topic: 'MCP' },
     });
 
     const noteText = resource.contents[0] && 'text' in resource.contents[0] ? resource.contents[0].text : '';
+    const typeText = typeResource.contents[0] && 'text' in typeResource.contents[0] ? typeResource.contents[0].text : '';
 
     expect(noteText).toContain('title: MCP Note');
+    expect(typeResource.contents[0] && 'mimeType' in typeResource.contents[0] ? typeResource.contents[0].mimeType : '').toBe('text/markdown');
+    expect(typeText).toContain('# Note Types');
     expect(prompt.messages).toHaveLength(1);
   });
 
@@ -99,6 +102,8 @@ describe('granite MCP server', () => {
 
     expect(createdData.note.slug).toBe('linked-result');
     expect(createdData.note.source).toBe('agent');
+    expect(extractTextContent(created)).toContain('# Created Note');
+    expect(extractTextContent(created).trim().startsWith('{')).toBe(false);
 
     const understood = await client.callTool({
       name: 'granite_understand_note',
@@ -112,6 +117,7 @@ describe('granite MCP server', () => {
 
     expect(understoodData.backlinks.some(link => link.source_slug === 'linked-result')).toBe(true);
     expect(typeof understoodData.graph_role.role).toBe('string');
+    expect(extractTextContent(understood)).toContain('# Note Context');
   });
 
   it('archives notes through granite_dispose_note', async () => {
@@ -179,173 +185,28 @@ describe('granite MCP server', () => {
     expect(extractedData.doc_type).toBe('docx');
     expect(extractedData.extractor).toBe('mammoth');
     expect(extractedData.raw_text).toContain('MCP extraction works');
+    expect(extractTextContent(extracted)).toContain('# Document Extraction');
+    expect(extractTextContent(extracted)).toContain('## Raw Text');
   });
 
-  it('exposes the vault garden prompt with actionable review instructions', async () => {
-    const prompt = await client.getPrompt({
-      name: 'granite_garden_vault',
+  it('returns wakeup as markdown while preserving structured content', async () => {
+    const wakeup = await client.callTool({
+      name: 'granite_wakeup',
       arguments: {},
     });
 
-    expect(prompt.messages).toHaveLength(1);
-    const message = prompt.messages[0];
-    expect(message.content.type).toBe('text');
-    if (message.content.type !== 'text') {
-      throw new Error('Expected text content for granite_garden_vault prompt.');
-    }
+    const wakeupData = extractStructuredContent(wakeup) as {
+      total: number;
+      aaak: string;
+    };
 
-    expect(message.content.text).toContain('Run a comprehensive health review of this Granite vault');
-    expect(message.content.text).toContain('Orphan Notes');
-    expect(message.content.text).toContain('mcp-note');
-    expect(message.content.text).toContain('granite_plan_garden');
-    expect(message.content.text).toContain('Fix any structural errors reported by doctor');
-    expect(message.content.text).toContain('granite_extract_document');
-    expect(message.content.text).toContain('imported document');
+    expect(wakeupData.total).toBeGreaterThan(0);
+    expect(wakeupData.aaak.length).toBeGreaterThan(0);
+    expect(extractTextContent(wakeup)).toContain('# Vault Wakeup');
+    expect(extractTextContent(wakeup)).toContain('## AAAK');
   });
 
-  it('plans garden opportunities through the public MCP tool', async () => {
-    const anchor = runtime.createNote({
-      title: 'Garden Anchor',
-      type: 'note',
-      body: 'Anchor note for Granite planning.\n',
-      tags: ['granite-vision'],
-    });
-    runtime.createNote({
-      title: 'Granite Update A',
-      type: 'note',
-      body: 'Fresh note that links [[Garden Anchor]].\n',
-      tags: ['granite-vision'],
-    });
-    runtime.createNote({
-      title: 'Granite Update B',
-      type: 'note',
-      body: 'Another fresh note about Granite.\n',
-      tags: ['granite-vision'],
-    });
-    const synthesis = runtime.createNote({
-      title: 'Garden Synthesis',
-      type: 'synthesis',
-      body: 'Old synthesis for [[Garden Anchor]].\n',
-      tags: ['granite-vision'],
-      derived_from: [anchor.note.slug],
-    });
-    const source = runtime.createNote({
-      title: 'Uncompiled Source',
-      type: 'source',
-      body: 'Raw source material waiting to be distilled.\n',
-      tags: ['granite-vision'],
-    });
-
-    rewriteNoteTimestamps(anchor.note.filepath, { modified: isoDaysAgo(25) });
-    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
-    rewriteNoteTimestamps(source.note.filepath, { modified: isoDaysAgo(20) });
-
-    const planned = await client.callTool({
-      name: 'granite_plan_garden',
-      arguments: {
-        anchor_slug: anchor.note.slug,
-        limit: 5,
-      },
-    });
-
-    const plannedData = extractStructuredContent(planned) as {
-      scope: { kind: string; anchor_slug?: string };
-      opportunities: Array<{
-        id: string;
-        kind: string;
-        priority_raw: number;
-        priority_effective: number;
-        adjudication?: { reason_code: string; active: boolean };
-        targets: Array<{ slug: string }>;
-      }>;
-      operator_hint: string;
-    };
-
-    expect(plannedData.scope.kind).toBe('anchor');
-    expect(plannedData.scope.anchor_slug).toBe(anchor.note.slug);
-    expect(plannedData.operator_hint).toContain('Start with');
-    expect(plannedData.opportunities.length).toBeGreaterThan(0);
-    expect(plannedData.opportunities[0]?.priority_raw).toBeGreaterThan(0);
-    expect(plannedData.opportunities[0]?.priority_effective).toBeGreaterThan(0);
-    expect(plannedData.opportunities.some(item => item.kind === 'stale-synthesis' || item.kind === 'source-not-compiled')).toBe(true);
-  });
-
-  it('records and lists garden adjudications through MCP tools', async () => {
-    const topic = runtime.createNote({
-      title: 'Garden Topic Hub',
-      type: 'note',
-      body: 'Anchor note for a duplicated topic.\n',
-      tags: ['granite-vision'],
-    });
-    runtime.createNote({
-      title: 'Garden Update',
-      type: 'note',
-      body: 'Fresh update linked to [[Garden Topic Hub]].\n',
-      tags: ['granite-vision'],
-    });
-    const synthesis = runtime.createNote({
-      title: 'Garden Topic Hub synthesis',
-      type: 'synthesis',
-      body: 'Old synthesis for [[Garden Topic Hub]].\n',
-      tags: ['granite-vision'],
-      derived_from: [topic.note.slug],
-    });
-
-    rewriteNoteTimestamps(topic.note.filepath, { modified: isoDaysAgo(25) });
-    rewriteNoteTimestamps(synthesis.note.filepath, { modified: isoDaysAgo(30) });
-
-    const initialPlan = await client.callTool({
-      name: 'granite_plan_garden',
-      arguments: { limit: 10 },
-    });
-    const initialData = extractStructuredContent(initialPlan) as {
-      opportunities: Array<{ id: string; kind: string }>;
-    };
-    const duplicate = initialData.opportunities.find(item => item.kind === 'duplicate-pair');
-    expect(duplicate).toBeTruthy();
-
-    const adjudicated = await client.callTool({
-      name: 'granite_adjudicate_garden_opportunity',
-      arguments: {
-        opportunity_id: duplicate!.id,
-        decision: 'downrank',
-        reason_code: 'intentional-structure',
-        rationale: 'Keep entity note and synthesis separate.',
-      },
-    });
-    const adjudicatedData = extractStructuredContent(adjudicated) as {
-      adjudication: { reason_code: string; active: boolean } | null;
-    };
-    expect(adjudicatedData.adjudication?.reason_code).toBe('intentional-structure');
-    expect(adjudicatedData.adjudication?.active).toBe(true);
-
-    const listed = await client.callTool({
-      name: 'granite_list_garden_adjudications',
-      arguments: {},
-    });
-    const listedData = extractStructuredContent(listed) as {
-      adjudications: Array<{ opportunity_id: string }>;
-    };
-    expect(listedData.adjudications.some(item => item.opportunity_id === duplicate!.id)).toBe(true);
-
-    const replanned = await client.callTool({
-      name: 'granite_plan_garden',
-      arguments: { limit: 10 },
-    });
-    const replannedData = extractStructuredContent(replanned) as {
-      opportunities: Array<{
-        id: string;
-        priority_raw: number;
-        priority_effective: number;
-        adjudication?: { reason_code: string };
-      }>;
-    };
-    const duplicateAfter = replannedData.opportunities.find(item => item.id === duplicate!.id);
-    expect(duplicateAfter?.priority_raw).toBeGreaterThan(duplicateAfter?.priority_effective ?? 0);
-    expect(duplicateAfter?.adjudication?.reason_code).toBe('intentional-structure');
-  });
-
-  it('makes inbox and garden workflows doc-aware for imported source notes', async () => {
+  it('makes the inbox workflow doc-aware for imported source notes', async () => {
     const inputFile = path.join(tmpDir, 'workflow-source.pdf');
     fs.writeFileSync(inputFile, '%PDF-1.4\nworkflow\n');
 
@@ -365,25 +226,17 @@ describe('granite MCP server', () => {
       name: 'granite_process_inbox',
       arguments: {},
     });
-    const gardenPrompt = await client.getPrompt({
-      name: 'granite_garden_vault',
-      arguments: {},
-    });
 
     const inboxMessage = inboxPrompt.messages[0];
-    const gardenMessage = gardenPrompt.messages[0];
 
     expect(inboxMessage.content.type).toBe('text');
-    expect(gardenMessage.content.type).toBe('text');
-    if (inboxMessage.content.type !== 'text' || gardenMessage.content.type !== 'text') {
-      throw new Error('Expected text content for inbox/garden prompts.');
+    if (inboxMessage.content.type !== 'text') {
+      throw new Error('Expected text content for inbox prompt.');
     }
 
     expect(inboxMessage.content.text).toContain(importedData.note.slug);
     expect(inboxMessage.content.text).toContain('granite_extract_document');
     expect(inboxMessage.content.text).toContain('imported document attached');
-    expect(gardenMessage.content.text).toContain('granite_extract_document');
-    expect(gardenMessage.content.text).toContain('imported document');
   });
 
   it('makes compile topic doc-aware for imported source notes', async () => {
@@ -436,13 +289,11 @@ function extractStructuredContent(result: Awaited<ReturnType<Client['callTool']>
   return result.structuredContent;
 }
 
-function rewriteNoteTimestamps(filepath: string, updates: { modified: string }) {
-  const raw = fs.readFileSync(filepath, 'utf-8');
-  const { frontmatter, body } = parseFrontmatter(raw);
-  frontmatter.modified = updates.modified;
-  fs.writeFileSync(filepath, serializeFrontmatter(frontmatter, body), 'utf-8');
+function extractTextContent(result: Awaited<ReturnType<Client['callTool']>>) {
+  const textContent = result.content.find(item => item.type === 'text');
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('Tool result did not include text content.');
+  }
+  return textContent.text;
 }
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 86400000).toISOString();
-}

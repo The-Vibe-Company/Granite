@@ -21,15 +21,47 @@ export interface NoteTypeConfig {
   slug_format?: 'title' | 'date';
   fields?: Record<string, FieldDefinition>;
   frontmatter_defaults?: NoteFrontmatterDefaults;
+  body_sections?: string[];
+  on_create?: Hook[];
+  on_update?: Hook[];
+  indexed_fields?: string[];
+  views?: Record<string, ViewSpec>;
+  lifecycle?: LifecycleSpec;
 }
 
 export interface FieldDefinition {
-  type: 'text' | 'date' | 'number' | 'boolean' | 'wikilink' | 'list' | 'enum';
+  type: 'text' | 'date' | 'number' | 'boolean' | 'wikilink' | 'list' | 'enum' | 'url';
   of?: string;
   options?: string[];
   required?: boolean;
   default?: string;
   description?: string;
+  target_types?: string[];
+  many?: boolean;
+}
+
+export type Hook =
+  | { action: 'resolve_wikilinks'; fields: string[]; auto_stub?: boolean }
+  | { action: 'hash_source'; field: string; target: string }
+  | { action: 'set_default'; field: string; value: string };
+
+export interface ViewSpec {
+  description?: string;
+  where?: Record<string, unknown>;
+  sort?: { field: string; dir: 'asc' | 'desc' };
+  limit?: number;
+}
+
+export interface LifecycleSpec {
+  states: string[];
+  transitions: LifecycleTransition[];
+}
+
+export interface LifecycleTransition {
+  from: string;
+  to: string;
+  trigger: 'manual' | 'stale_days';
+  days?: number;
 }
 
 export interface GraniteConfig {

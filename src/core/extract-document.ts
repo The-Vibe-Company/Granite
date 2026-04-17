@@ -166,13 +166,6 @@ async function extractPptx(filePath: string): Promise<ExtractDocumentResult> {
 
 async function extractPdfWithFerrules(filePath: string): Promise<ExtractDocumentResult> {
   const titleHint = defaultImportedDocumentTitle(filePath);
-
-  if (process.platform !== 'darwin') {
-    return failedResult('pdf', 'ferrules', titleHint, [
-      'Ferrules-based PDF extraction is only supported on macOS in this version of Granite.',
-    ]);
-  }
-
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'granite-ferrules-'));
 
   try {

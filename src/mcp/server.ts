@@ -4,8 +4,19 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import * as z from 'zod/v4';
+import {
+  renderDisposeNoteMarkdown,
+  renderExtractDocumentMarkdown,
+  renderImportDocumentMarkdown,
+  renderMutationResultMarkdown,
+  renderNoteTypesMarkdown,
+  renderSearchResultsMarkdown,
+  renderUnderstandNoteMarkdown,
+  renderWakeupMarkdown,
+} from '../../shared/mcp-markdown.js';
 import { GRANITE_VERSION } from '../version.js';
-import type { GraniteMcpRuntime, NoteRecommendations } from './runtime.js';
+import type { GraniteMcpRuntime } from './runtime.js';
+import type { Query } from '../core/query.js';
 
 const readOnlyAnnotations = {
   readOnlyHint: true,
@@ -299,6 +310,9 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '',
         '- **granite_wakeup** — load the map of the vault before doing work',
         '- **granite_research_topic** — discover relevant notes for a topic',
+        '- **granite_resolve** — deterministically resolve free text to a note slug before linking',
+        '- **granite_query** — run structured queries over typed notes and indexed fields',
+        '- **granite_compile_context** — compile a typed brief for a topic or slug using the graph',
         '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
         '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
         '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
@@ -309,7 +323,7 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
         '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
         '- **granite_dispose_note** — archive by default, delete only when intentional',
         '',
-        'Use prompts for the higher-level workflows: refine notes, compile topics, process the inbox, and garden the vault.',
+        'Use prompts for the higher-level workflows: refine notes, compile topics, and process the inbox.',
         '',
         '## Note Types',
         '',
@@ -432,7 +446,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: readOnlyAnnotations,
   }, async () => {
     const result = runtime.wakeup();
-    return toolResult(result, result.aaak);
+    return toolResult(result, renderWakeupMarkdown(result));
   });
 
   server.registerTool('granite_research_topic', {
@@ -449,7 +463,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: readOnlyAnnotations,
   }, async ({ query, limit }) => {
     const results = runtime.search(query, limit ?? 10);
-    return toolResult({ query, results }, `Found ${results.length} result(s) for "${query}".`);
+    return toolResult({ query, results }, renderSearchResultsMarkdown(query, results));
   });
 
   server.registerTool('granite_plan_garden', {
@@ -562,7 +576,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
         durability: args.durability,
         derived_from: args.derived_from,
       });
-      return toolResult(result, buildWriteSummary('Captured', result, runtime));
+      return toolResult(result, renderMutationResultMarkdown('Created', result.note, result.recommendations));
     }
 
     if (!args.text) {
@@ -580,7 +594,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       durability: args.durability,
       derived_from: args.derived_from,
     });
-    return toolResult(result, buildWriteSummary('Captured', result, runtime));
+    return toolResult(result, renderMutationResultMarkdown('Captured', result.note, result.recommendations));
   });
 
   server.registerTool('granite_import_document', {
@@ -601,13 +615,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async ({ file_path, content, title, tags, aliases }) => {
     const result = runtime.importDocument({ file_path, content, title, tags, aliases });
-    const summary = [
-      `Imported "${result.document.file}" as source "${result.note.title}" (${result.note.slug}).`,
-      '',
-      'Stored the provided document content in the note and attached the original file as a Granite asset.',
-      '',
-      `Recommendations: ${recommendationSummary(result.recommendations)}.`,
-    ].join('\n');
+    const summary = renderImportDocumentMarkdown(result);
 
     return {
       ...toolResult(result, summary),
@@ -629,14 +637,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: readOnlyAnnotations,
   }, async ({ file_path }) => {
     const result = await runtime.extractDocument({ file_path });
-    const summary = [
-      `Extraction status: ${result.status}.`,
-      `Document type: ${result.doc_type}.`,
-      `Extractor: ${result.extractor}.`,
-      result.status === 'needs_dependency' && result.user_prompt ? result.user_prompt : '',
-    ].filter(Boolean).join(' ');
-
-    return toolResult(result, summary);
+    return toolResult(result, renderExtractDocumentMarkdown(result));
   });
 
   server.registerTool('granite_understand_note', {
@@ -650,7 +651,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   }, async ({ slug }) => {
     const result = runtime.understandNote(slug);
     return {
-      ...toolResult(result, `Understood "${result.note.title}" (${result.note.slug}) as a ${result.graph_role.role} note.`),
+      ...toolResult(result, renderUnderstandNoteMarkdown(result)),
       content: buildUnderstandNoteContent(result),
     };
   });
@@ -679,7 +680,106 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async ({ slug, ...updates }) => {
     const result = runtime.reviseNote(slug, updates);
-    return toolResult(result, buildWriteSummary('Revised', result, runtime));
+    return toolResult(result, renderMutationResultMarkdown('Revised', result.note, result.recommendations));
+  });
+
+  server.registerTool('granite_resolve', {
+    title: 'Resolve Granite Reference',
+    description: 'Deterministically resolve free text (e.g. a name, title, or alias) into an existing note slug. Use this before writing wikilinks or typed fields to avoid creating duplicates. Returns ranked matches and, if nothing matches, an optional stub suggestion.',
+    inputSchema: {
+      text: z.string().describe('Free text to resolve — name, title, or alias.'),
+      target_type: z.string().optional().describe('Restrict matches to a given note type (e.g. "person", "organization").'),
+      limit: z.number().int().min(1).max(20).optional().describe('Maximum matches to return. Defaults to 5.'),
+    },
+    outputSchema: z.object({
+      matches: z.array(z.object({
+        slug: z.string(),
+        title: z.string(),
+        type: z.string(),
+        score: z.number(),
+        reason: z.enum(['slug', 'title', 'alias', 'fts']),
+      })),
+      suggested_stub: z.object({
+        type: z.string(),
+        title: z.string(),
+        slug: z.string(),
+      }).optional(),
+    }),
+    annotations: readOnlyAnnotations,
+  }, async ({ text, target_type, limit }) => {
+    const result = runtime.resolve(text, { target_type, limit });
+    const summary = result.matches.length > 0
+      ? `# Resolve Matches\n\n${result.matches.map(m => `- **${m.title}** (${m.slug}, ${m.type}) — ${m.reason} score=${m.score.toFixed(2)}`).join('\n')}`
+      : `# Resolve Matches\n\nNo matches for "${text}".${result.suggested_stub ? `\n\nSuggested stub: ${result.suggested_stub.type} "${result.suggested_stub.title}" → ${result.suggested_stub.slug}` : ''}`;
+    return toolResult(result, summary);
+  });
+
+  server.registerTool('granite_query', {
+    title: 'Query Granite Vault',
+    description: 'Run a structured query over notes by type and indexed fields. Use this when you want "all meetings with Monka Care since April" or "all people at organization X". Only fields declared in indexed_fields on the type are queryable.',
+    inputSchema: {
+      type: z.string().optional().describe('Restrict to a note type.'),
+      where: z.record(z.string(), z.any()).optional().describe('Equality filters or {eq,in,gte,lte} operators keyed by field name.'),
+      sort_field: z.string().optional().describe('Field to sort by (modified, created, title, or an indexed field).'),
+      sort_dir: z.enum(['asc', 'desc']).optional().describe('Sort direction. Defaults to desc.'),
+      limit: z.number().int().min(1).max(200).optional().describe('Maximum results. Defaults to 25.'),
+    },
+    outputSchema: z.object({
+      results: z.array(z.object({
+        slug: z.string(),
+        title: z.string(),
+        type: z.string(),
+        modified: z.string(),
+        fields: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+      })),
+    }),
+    annotations: readOnlyAnnotations,
+  }, async ({ type, where, sort_field, sort_dir, limit }) => {
+    const result = runtime.query({
+      type,
+      where: where as Query['where'],
+      sort: sort_field ? { field: sort_field, dir: sort_dir ?? 'desc' } : undefined,
+      limit,
+    });
+    const summary = `# Query Results (${result.results.length})\n\n${result.results.map(r => `- **${r.title}** (${r.slug}, ${r.type})`).join('\n')}`;
+    return toolResult(result, summary);
+  });
+
+  server.registerTool('granite_compile_context', {
+    title: 'Compile Granite Context',
+    description: 'Compile a typed brief around a topic or a specific note slug. Walks the graph and uses typed filters (people at an org, meetings for an org, sources on a topic). Deterministic — no LLM.',
+    inputSchema: {
+      topic: z.string().optional().describe('Topic to compile context around.'),
+      slug: z.string().optional().describe('Note slug to compile context for.'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max entries per section. Defaults to 20.'),
+    },
+    outputSchema: z.object({
+      mode: z.enum(['topic', 'slug']),
+      title: z.string(),
+      sections: z.array(z.object({
+        heading: z.string(),
+        entries: z.array(z.object({
+          slug: z.string(),
+          title: z.string(),
+          type: z.string(),
+          reason: z.string(),
+        })),
+      })),
+    }),
+    annotations: readOnlyAnnotations,
+  }, async ({ topic, slug, limit }) => {
+    const result = runtime.compileContext({ topic, slug, limit });
+    const summary = [
+      `# Context: ${result.title}`,
+      '',
+      ...result.sections.flatMap(s => [
+        `## ${s.heading}`,
+        '',
+        ...s.entries.map(e => `- **${e.title}** (${e.slug}, ${e.type}) — ${e.reason}`),
+        '',
+      ]),
+    ].join('\n');
+    return toolResult(result, summary);
   });
 
   server.registerTool('granite_dispose_note', {
@@ -693,7 +793,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     annotations: writeAnnotations,
   }, async ({ slug, mode }) => {
     const result = runtime.disposeNote(slug, mode ?? 'archive');
-    return toolResult(result, `${mode ?? 'archive'}d "${slug}".`);
+    return toolResult(result, renderDisposeNoteMarkdown(result));
   });
 }
 
@@ -701,12 +801,12 @@ function registerResources(server: McpServer, runtime: GraniteMcpRuntime): void 
   server.registerResource('granite-note-types', 'granite://vault/types', {
     title: 'Granite Note Types',
     description: 'Structured list of the note types configured in the current vault.',
-    mimeType: 'application/json',
+    mimeType: 'text/markdown',
   }, async () => ({
     contents: [{
       uri: 'granite://vault/types',
-      text: runtime.readVaultTypesJson(),
-      mimeType: 'application/json',
+      text: renderNoteTypesMarkdown(runtime.listNoteTypes(), runtime.getDefaultNoteType()),
+      mimeType: 'text/markdown',
     }],
   }));
 
@@ -886,65 +986,6 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
     };
   });
 
-  server.registerPrompt('granite_garden_vault', {
-    title: 'Garden Granite Vault',
-    description: 'Run a comprehensive vault review: structural health, content gaps, orphan notes, and suggestions for strengthening the knowledge graph. The lint phase of the knowledge loop.',
-  }, async () => {
-    const doctorResult = runtime.runDoctor();
-    const overview = runtime.getVaultOverview(10);
-    const notes = runtime.listNotes({ limit: 200 });
-
-    // Find notes with no backlinks (potential orphans)
-    const orphanCandidates: string[] = [];
-    for (const note of notes.slice(0, 50)) {
-      const backlinks = runtime.getBacklinks(note.slug);
-      if (backlinks.length === 0) {
-        orphanCandidates.push(`${note.slug} ("${note.title}", type: ${note.type})`);
-      }
-    }
-
-    return {
-      description: 'Comprehensive vault health review.',
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: [
-              'Run a comprehensive health review of this Granite vault and take action to improve it.',
-              '',
-              '## Structural Issues (from Granite diagnostics)',
-              '',
-              doctorResult.issues.length === 0
-                ? 'No structural issues found.'
-                : doctorResult.issues.map(i => `- [${i.level}] ${i.file}: ${i.message}`).join('\n'),
-              '',
-              '## Vault Overview',
-              '',
-              `${overview.note_count} notes: ${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}`,
-              '',
-              '## Orphan Notes (no backlinks)',
-              '',
-              orphanCandidates.length === 0
-                ? 'No orphans found in the first 50 notes.'
-                : orphanCandidates.map(o => `- ${o}`).join('\n'),
-              '',
-              '## Actions to Take',
-              '',
-              '1. Call granite_plan_garden first and work from the highest-leverage opportunities',
-              '2. Fix any structural errors reported by doctor',
-              '3. For each orphan or stale note, use granite_understand_note to inspect the note in context',
-              '4. If granite_understand_note reveals an imported document on a source note, call granite_extract_document with the note frontmatter document_path before summarizing or extracting facts',
-              '5. If orphan notes should be linked from other notes, revise those notes to add [[wikilinks]]',
-              '6. Look for clusters of notes that could be compiled into a synthesis',
-              '7. Check if any inbox notes need processing',
-              '8. Report a summary of what you found and what you fixed',
-            ].join('\n'),
-          },
-        },
-      ],
-    };
-  });
 }
 
 function toolResult<T>(structuredContent: T, summary: string) {
@@ -974,20 +1015,18 @@ function createAssetResourceLink(name: string, uri: string, mimeType: string) {
   };
 }
 
-function buildUnderstandNoteContent(result: {
-  note: { title: string; slug: string; resource_uri: string; frontmatter: Record<string, unknown> };
-  graph_role: { role: string };
-}) {
+function buildUnderstandNoteContent(result: Parameters<typeof renderUnderstandNoteMarkdown>[0]) {
   const content: Array<
     { type: 'text'; text: string }
     | ReturnType<typeof createNoteResourceLink>
     | ReturnType<typeof createAssetResourceLink>
-  > = [
-    { type: 'text', text: `Understood "${result.note.title}" (${result.note.slug}) as a ${result.graph_role.role} note.` },
-    createNoteResourceLink(result.note.title, result.note.resource_uri),
-  ];
+  > = [{ type: 'text', text: renderUnderstandNoteMarkdown(result) }];
 
-  const linkedAsset = getLinkedAsset(result.note);
+  if (result.note.resource_uri) {
+    content.push(createNoteResourceLink(result.note.title, result.note.resource_uri));
+  }
+
+  const linkedAsset = result.note.frontmatter ? getLinkedAsset({ frontmatter: result.note.frontmatter }) : null;
   if (linkedAsset) {
     content.push(createAssetResourceLink(linkedAsset.file, linkedAsset.resource_uri, linkedAsset.mime_type));
   }
@@ -1019,30 +1058,6 @@ function formatCompileTopicNote(note: { title: string; slug: string; type: strin
     note.body.slice(0, 500) + (note.body.length > 500 ? '...' : ''),
     '',
   ].join('\n');
-}
-
-function buildWriteSummary(verb: string, result: { note: { title: string; slug: string; type: string }; recommendations: NoteRecommendations }, runtime: GraniteMcpRuntime): string {
-  const lines = [`${verb} "${result.note.title}" (${result.note.slug}).`];
-
-  const instructions = runtime.getTypeInstructions(result.note.type);
-  if (instructions) {
-    lines.push('', `Type guidance for "${result.note.type}": ${instructions}`);
-  }
-
-  const recSummary = recommendationSummary(result.recommendations);
-  if (recSummary) {
-    lines.push('', `Recommendations: ${recSummary}. Act on these to strengthen the vault.`);
-  }
-
-  return lines.join('\n');
-}
-
-function recommendationSummary(recommendations: NoteRecommendations): string {
-  return [
-    `${recommendations.links.length} link suggestion(s)`,
-    `${recommendations.tags.length} tag suggestion(s)`,
-    `${recommendations.next_steps.length} next-step suggestion(s)`,
-  ].join(', ');
 }
 
 function asStructuredContent<T>(value: T): Record<string, unknown> {

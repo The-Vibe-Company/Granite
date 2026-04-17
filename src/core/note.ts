@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
+import type Database from 'better-sqlite3';
 import { slugify } from './slugify.js';
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js';
+import { applyOnCreateHooks } from './hooks.js';
 import {
   normalizeDurability,
   normalizeReviewState,
@@ -12,12 +14,18 @@ import {
 } from './json-output.js';
 import type { GraniteConfig, Note, NoteFrontmatter } from './types.js';
 
+export interface CreateNoteOptions {
+  db?: Database.Database;
+  extraFrontmatter?: Record<string, unknown>;
+}
+
 export function createNote(
   vaultRoot: string,
   config: GraniteConfig,
   typeName: string,
   title: string,
   bodyOverride?: string,
+  options: CreateNoteOptions = {},
 ): Note {
   const typeConfig = config.note_types[typeName];
   if (!typeConfig) {
@@ -50,6 +58,7 @@ export function createNote(
 
   const now = new Date().toISOString();
   const defaults = typeConfig.frontmatter_defaults ?? {};
+  const sanitizedExtra = stripReservedFields(options.extraFrontmatter ?? {});
   const frontmatter: NoteFrontmatter = {
     id: uuidv4(),
     title,
@@ -63,11 +72,45 @@ export function createNote(
     review_state: normalizeReviewState(defaults.review_state),
     durability: normalizeDurability(defaults.durability),
     derived_from: normalizeStringArray(defaults.derived_from),
+    ...sanitizedExtra,
   };
 
   const body = bodyOverride ?? typeConfig.template;
-  const content = serializeFrontmatter(frontmatter, body);
   const filepath = path.join(folder, `${finalSlug}.md`);
+
+  const hookResult = applyOnCreateHooks(frontmatter, typeConfig, {
+    vaultRoot,
+    config,
+    db: options.db,
+    reservedSlugs: new Set([finalSlug]),
+  });
+
+  for (const stub of hookResult.created_stubs) {
+    const stubType = config.note_types[stub.type];
+    if (!stubType) continue;
+    if (findNoteBySlug(vaultRoot, config, stub.slug)) continue;
+    const stubFolder = path.join(vaultRoot, stubType.folder);
+    const stubPath = path.join(stubFolder, `${stub.slug}.md`);
+    fs.mkdirSync(stubFolder, { recursive: true });
+    const stubNow = new Date().toISOString();
+    const stubFrontmatter: NoteFrontmatter = {
+      id: uuidv4(),
+      title: stub.title,
+      type: stub.type,
+      created: stubNow,
+      modified: stubNow,
+      tags: ['stub'],
+      aliases: [],
+      status: 'inbox',
+      source: 'agent',
+      review_state: 'draft',
+      durability: normalizeDurability(stubType.frontmatter_defaults?.durability),
+      derived_from: [],
+    };
+    fs.writeFileSync(stubPath, serializeFrontmatter(stubFrontmatter, stubType.template), 'utf-8');
+  }
+
+  const content = serializeFrontmatter(hookResult.frontmatter, body);
 
   fs.mkdirSync(folder, { recursive: true });
   fs.writeFileSync(filepath, content, 'utf-8');
@@ -75,10 +118,21 @@ export function createNote(
   return {
     slug: finalSlug,
     filepath,
-    frontmatter,
+    frontmatter: hookResult.frontmatter,
     body,
     outgoing_links: [],
   };
+}
+
+const RESERVED_IMMUTABLE_FIELDS = new Set(['id', 'type', 'title', 'created', 'modified']);
+
+function stripReservedFields(extra: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (RESERVED_IMMUTABLE_FIELDS.has(key)) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 export function readNote(filepath: string): Note {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeDefaultConfig, loadConfig } from '../../src/core/config.js';
 import { createNote } from '../../src/core/note.js';
 import { createDatabase, rebuildIndex } from '../../src/core/index-db.js';
-import { resolveText } from '../../src/core/resolve.js';
+import { resolveText, suggestStub } from '../../src/core/resolve.js';
 import type { GraniteConfig } from '../../src/core/types.js';
 
 describe('resolveText', () => {
@@ -46,5 +46,44 @@ describe('resolveText', () => {
     rebuildIndex(tmpDir, config, db);
     expect(resolveText(db, 'nonexistent')).toEqual([]);
     db.close();
+  });
+
+  it('returns [] for empty input and filters by target_type', () => {
+    createNote(tmpDir, config, 'note', 'Apollo', 'Space note.\n');
+    createNote(tmpDir, config, 'source', 'Apollo Source', 'content.\n');
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    expect(resolveText(db, '   ')).toEqual([]);
+
+    const onlyNotes = resolveText(db, 'Apollo', { target_type: 'note' });
+    expect(onlyNotes.every(m => m.type === 'note')).toBe(true);
+
+    db.close();
+  });
+
+  it('matches by exact title and alias', () => {
+    createNote(tmpDir, config, 'note', 'Exact Title', 'body.\n', {
+      extraFrontmatter: { aliases: ['Nickname'] },
+    });
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const byTitle = resolveText(db, 'Exact Title');
+    expect(byTitle[0].reason === 'slug' || byTitle[0].reason === 'title').toBe(true);
+
+    const byAlias = resolveText(db, 'Nickname');
+    expect(byAlias[0]?.slug).toBe('exact-title');
+
+    db.close();
+  });
+
+  it('suggestStub produces a sluggified stub', () => {
+    expect(suggestStub('Acme Corp', 'organization')).toEqual({
+      type: 'organization',
+      title: 'Acme Corp',
+      slug: 'acme-corp',
+    });
+    expect(suggestStub('  ', 'organization').slug).toBe('untitled');
   });
 });

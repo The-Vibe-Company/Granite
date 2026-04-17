@@ -125,6 +125,50 @@ describe('typed hooks', () => {
     db.close();
   });
 
+  it('resolve_wikilinks returns the existing slug when the target already exists', () => {
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    createNote(tmpDir, config, 'organization', 'Acme', '## Identity\n', {
+      db,
+      extraFrontmatter: { kind: 'client' },
+    });
+    rebuildIndex(tmpDir, config, db);
+
+    createNote(tmpDir, config, 'person', 'Carol', '## Context\n', {
+      db,
+      extraFrontmatter: { organization: 'Acme' },
+    });
+
+    const carol = findNoteBySlug(tmpDir, config, 'carol');
+    expect(carol?.frontmatter.organization).toBe('acme');
+    // No duplicate org stub should have been created.
+    const acme = findNoteBySlug(tmpDir, config, 'acme');
+    expect(acme?.frontmatter.tags ?? []).not.toContain('stub');
+
+    db.close();
+  });
+
+  it('indexed_fields handles array values with blanks filtered out', () => {
+    const cfgPath = path.join(tmpDir, 'granite.yml');
+    const raw = yaml.load(fs.readFileSync(cfgPath, 'utf-8')) as GraniteConfig;
+    raw.note_types.note = {
+      ...raw.note_types.note,
+      fields: { tags_list: { type: 'text' } },
+      indexed_fields: ['tags_list'],
+    };
+    fs.writeFileSync(cfgPath, yaml.dump(raw));
+    const config2 = loadConfig(tmpDir);
+
+    createNote(tmpDir, config2, 'note', 'Arr', 'body\n', {
+      extraFrontmatter: { tags_list: ['a', '', 'b'] },
+    });
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config2, db);
+    const rows = db.prepare('SELECT field_value FROM note_fields WHERE slug = ? AND field_name = ?').all('arr', 'tags_list') as Array<{ field_value: string }>;
+    const values = rows.map(r => r.field_value).sort();
+    expect(values).toEqual(['a', 'b']);
+    db.close();
+  });
+
   it('indexed_fields are populated into note_fields table on rebuild', () => {
     createNote(tmpDir, config, 'organization', 'Acme', '## Identity\n', {
       extraFrontmatter: { kind: 'client' },

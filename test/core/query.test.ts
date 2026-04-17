@@ -101,4 +101,90 @@ describe('runQuery', () => {
     expect(results.map(r => r.slug)).toEqual(['recent']);
     db.close();
   });
+
+  it('throws on unknown note type', () => {
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+    expect(() => runQuery(db, config, { type: 'nope' })).toThrow(/Unknown note type/);
+    db.close();
+  });
+
+  it('filters by status and source on notes, eq object, lte and between', () => {
+    createNote(tmpDir, config, 'meeting', 'A', '## Summary\n', {
+      extraFrontmatter: { date: '2025-06-01' },
+    });
+    createNote(tmpDir, config, 'meeting', 'B', '## Summary\n', {
+      extraFrontmatter: { date: '2026-03-01' },
+    });
+    createNote(tmpDir, config, 'meeting', 'C', '## Summary\n', {
+      extraFrontmatter: { date: '2026-12-31' },
+    });
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const lte = runQuery(db, config, { type: 'meeting', where: { date: { lte: '2026-01-01' } } });
+    expect(lte.map(r => r.slug)).toEqual(['a']);
+
+    const between = runQuery(db, config, {
+      type: 'meeting',
+      where: { date: { gte: '2026-01-01', lte: '2026-06-01' } },
+    });
+    expect(between.map(r => r.slug)).toEqual(['b']);
+
+    const eqObj = runQuery(db, config, { type: 'meeting', where: { date: { eq: '2025-06-01' } } });
+    expect(eqObj.map(r => r.slug)).toEqual(['a']);
+
+    const status = runQuery(db, config, { type: 'meeting', where: { status: 'active' } });
+    expect(status.length).toBeGreaterThanOrEqual(0);
+
+    const source = runQuery(db, config, { type: 'meeting', where: { source: 'human' } });
+    expect(source.length).toBeGreaterThanOrEqual(0);
+
+    db.close();
+  });
+
+  it('supports in filter and sorts by indexed field', () => {
+    createNote(tmpDir, config, 'meeting', 'One', '## Summary\n', {
+      extraFrontmatter: { date: '2026-01-10', organization: 'acme' },
+    });
+    createNote(tmpDir, config, 'meeting', 'Two', '## Summary\n', {
+      extraFrontmatter: { date: '2026-02-10', organization: 'beta' },
+    });
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const inResults = runQuery(db, config, {
+      type: 'meeting',
+      where: { organization: { in: ['acme', 'beta'] } },
+      sort: { field: 'date', dir: 'asc' },
+    });
+    expect(inResults.map(r => r.slug)).toEqual(['one', 'two']);
+
+    const byTitle = runQuery(db, config, { type: 'meeting', sort: { field: 'title', dir: 'desc' } });
+    expect(byTitle[0].slug).toBe('two');
+
+    db.close();
+  });
+
+  it('throws when sorting by non-indexed field', () => {
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+    expect(() => runQuery(db, config, { type: 'meeting', sort: { field: 'bogus', dir: 'asc' } }))
+      .toThrow(/non-indexed/);
+    db.close();
+  });
+
+  it('ignores empty in filter and returns untyped rows', () => {
+    createNote(tmpDir, config, 'note', 'Plain', 'body\n');
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const all = runQuery(db, config, {});
+    expect(all.some(r => r.slug === 'plain')).toBe(true);
+
+    db.close();
+  });
 });

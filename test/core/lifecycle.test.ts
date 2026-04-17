@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suggestLifecycleTransitions } from '../../src/core/lifecycle.js';
+import { suggestLifecycleTransitions, isValidTransition } from '../../src/core/lifecycle.js';
 import type { GraniteConfig, Note } from '../../src/core/types.js';
 
 describe('suggestLifecycleTransitions', () => {
@@ -56,5 +56,37 @@ describe('suggestLifecycleTransitions', () => {
   it('does not suggest when state does not match', () => {
     const note = makeNote('active', 300);
     expect(suggestLifecycleTransitions(note, config)).toEqual([]);
+  });
+
+  it('returns [] when the type has no lifecycle declared', () => {
+    const otherConfig: GraniteConfig = {
+      ...config,
+      note_types: {
+        ...config.note_types,
+        note: { folder: 'notes', description: '', template: '', line_limit: 200, warn_only: false },
+      },
+    };
+    const note: Note = {
+      slug: 'x', filepath: '/tmp/x.md',
+      frontmatter: {
+        id: '1', title: 'X', type: 'note',
+        created: new Date().toISOString(), modified: new Date().toISOString(),
+        tags: [], aliases: [],
+        status: 'active', source: 'human', review_state: 'draft', durability: 'canonical', derived_from: [],
+      },
+      body: '', outgoing_links: [],
+    };
+    expect(suggestLifecycleTransitions(note, otherConfig)).toEqual([]);
+  });
+
+  it('returns [] when the current status is not in declared states', () => {
+    const note = makeNote('bogus', 999);
+    expect(suggestLifecycleTransitions(note, config)).toEqual([]);
+  });
+
+  it('isValidTransition matches declared transitions', () => {
+    const ts = [{ from: 'a', to: 'b', trigger: 'manual' as const }];
+    expect(isValidTransition(ts, 'a', 'b')).toBe(true);
+    expect(isValidTransition(ts, 'a', 'c')).toBe(false);
   });
 });

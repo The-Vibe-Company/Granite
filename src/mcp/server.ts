@@ -7,6 +7,8 @@ import * as z from 'zod/v4';
 import {
   renderDisposeNoteMarkdown,
   renderExtractDocumentMarkdown,
+  renderGardenAdjudicationsMarkdown,
+  renderGardenPlanMarkdown,
   renderImportDocumentMarkdown,
   renderMutationResultMarkdown,
   renderNoteTypesMarkdown,
@@ -480,24 +482,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerTool('granite_wakeup', {
     title: 'Granite Wakeup',
     description: 'Load a compressed AAAK snapshot of the entire vault into context. Call this at the start of every session to know what exists, how notes cluster, and what changed recently. Costs ~200-500 tokens instead of reading every note.',
-    outputSchema: z.object({
-      total: z.number(),
-      by_type: z.record(z.string(), z.number()),
-      modified: z.string(),
-      clusters: z.array(z.object({
-        tag: z.string(),
-        slugs: z.array(z.string()),
-        hub: z.string().nullable(),
-      })),
-      people: z.array(z.object({ slug: z.string(), title: z.string() })),
-      recent: z.array(z.object({ slug: z.string(), age: z.string() })),
-      stale: z.array(z.object({ slug: z.string(), reason: z.string() })),
-      aaak: z.string(),
-    }),
     annotations: readOnlyAnnotations,
   }, async () => {
     const result = runtime.wakeup();
-    return toolResult(result, renderWakeupMarkdown(result));
+    return toolResult(renderWakeupMarkdown(result));
   });
 
   server.registerTool('granite_research_topic', {
@@ -507,14 +495,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       query: z.string().describe('Topic, keyword set, or research angle to search for in the vault.'),
       limit: z.number().int().min(1).max(50).optional().describe('Maximum number of results to return. Defaults to 10.'),
     },
-    outputSchema: z.object({
-      query: z.string(),
-      results: z.array(searchResultSchema),
-    }),
     annotations: readOnlyAnnotations,
   }, async ({ query, limit }) => {
     const results = runtime.search(query, limit ?? 10);
-    return toolResult({ query, results }, renderSearchResultsMarkdown(query, results));
+    return toolResult(renderSearchResultsMarkdown(query, results));
   });
 
   server.registerTool('granite_plan_garden', {
@@ -524,17 +508,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       anchor_slug: z.string().optional().describe('Optional note slug. When provided, the plan focuses on the anchor note, its local graph neighborhood, and its cluster.'),
       limit: z.number().int().min(1).max(20).optional().describe('Maximum number of opportunities to return. Defaults to 5.'),
     },
-    outputSchema: gardenPlanSchema,
     annotations: readOnlyAnnotations,
   }, async ({ anchor_slug, limit }) => {
     const result = runtime.planGarden({ anchor_slug, limit });
-    const scopeLabel = result.scope.kind === 'anchor'
-      ? `around "${result.scope.anchor_slug}"`
-      : 'for the vault';
-    return toolResult(
-      result,
-      `Planned ${result.opportunities.length} garden opportunit${result.opportunities.length === 1 ? 'y' : 'ies'} ${scopeLabel}. ${result.operator_hint}`,
-    );
+    return toolResult(renderGardenPlanMarkdown(result));
   });
 
   server.registerTool('granite_adjudicate_garden_opportunity', {
@@ -547,7 +524,6 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       rationale: z.string().optional().describe('Optional operator rationale for auditability.'),
       recheck_after_days: z.number().int().min(1).max(365).optional().describe('Optional recheck window. Only allowed with reason_code "blocked"; defaults to 14 days.'),
     },
-    outputSchema: adjudicateGardenOpportunityResultSchema,
     annotations: writeAnnotations,
   }, async ({ opportunity_id, decision, reason_code, rationale, recheck_after_days }) => {
     if (decision === 'downrank' && !reason_code) {
@@ -560,7 +536,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       throw new Error('recheck_after_days is only allowed when reason_code is "blocked".');
     }
 
-    const result = runtime.adjudicateGardenOpportunity({
+    runtime.adjudicateGardenOpportunity({
       opportunity_id,
       decision,
       reason_code,
@@ -568,7 +544,6 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       recheck_after_days,
     });
     return toolResult(
-      result,
       decision === 'clear'
         ? `Cleared garden adjudication for "${opportunity_id}".`
         : `Recorded garden adjudication for "${opportunity_id}".`,
@@ -578,18 +553,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
   server.registerTool('granite_list_garden_adjudications', {
     title: 'List Granite Garden Adjudications',
     description: 'Inspect the active operator adjudications that are currently influencing Granite garden planning.',
-    outputSchema: z.object({
-      adjudications: z.array(gardenAdjudicationSummarySchema),
-    }),
     annotations: readOnlyAnnotations,
   }, async () => {
     const adjudications = runtime.listGardenAdjudications();
-    return toolResult(
-      { adjudications },
-      adjudications.length === 0
-        ? 'No active garden adjudications.'
-        : `Listed ${adjudications.length} active garden adjudication${adjudications.length === 1 ? '' : 's'}.`,
-    );
+    return toolResult(renderGardenAdjudicationsMarkdown(adjudications));
   });
 
   server.registerTool('granite_capture_knowledge', {
@@ -609,11 +576,6 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       derived_from: z.array(z.string()).optional().describe('Source note IDs or slugs this note derives from.'),
       fields: z.record(z.string(), z.unknown()).optional().describe('Type-specific frontmatter fields (e.g. { date: "2026-04-17" } for meetings). Keys reserved by the system (id, title, type, created, modified, tags, aliases, status, source, review_state, durability, derived_from) are ignored here — use the dedicated inputs. See granite://vault/types for each type\'s required fields.'),
     },
-    outputSchema: z.object({
-      note: noteDetailsSchema,
-      recommendations: recommendationSchema,
-      validation: validationResultSchema.optional(),
-    }),
     annotations: writeAnnotations,
   }, async (args) => {
     if (args.title) {
@@ -630,7 +592,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
         derived_from: args.derived_from,
         fields: args.fields,
       });
-      return toolResult(result, renderMutationResultMarkdown('Created', result.note, result.recommendations, result.validation));
+      return toolResult(renderMutationResultMarkdown('Created', result.note, result.recommendations, result.validation));
     }
 
     if (!args.text) {
@@ -649,7 +611,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       derived_from: args.derived_from,
       fields: args.fields,
     });
-    return toolResult(result, renderMutationResultMarkdown('Captured', result.note, result.recommendations, result.validation));
+    return toolResult(renderMutationResultMarkdown('Captured', result.note, result.recommendations, result.validation));
   });
 
   server.registerTool('granite_import_document', {
@@ -662,20 +624,14 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       tags: z.array(z.string()).optional().describe('Tags to add immediately to the source note.'),
       aliases: z.array(z.string()).optional().describe('Aliases to add immediately to the source note.'),
     },
-    outputSchema: z.object({
-      note: noteDetailsSchema,
-      document: importedDocumentAssetSchema,
-      recommendations: recommendationSchema,
-    }),
     annotations: writeAnnotations,
   }, async ({ file_path, content, title, tags, aliases }) => {
     const result = runtime.importDocument({ file_path, content, title, tags, aliases });
     const summary = renderImportDocumentMarkdown(result);
 
     return {
-      ...toolResult(result, summary),
       content: [
-        { type: 'text', text: summary },
+        { type: 'text' as const, text: summary },
         createNoteResourceLink(result.note.title, result.note.resource_uri),
         createAssetResourceLink(result.document.file, result.document.resource_uri, result.document.mime_type),
       ],
@@ -688,11 +644,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     inputSchema: {
       file_path: z.string().describe('Absolute path, or vault-relative path, to the local document file to extract.'),
     },
-    outputSchema: extractedDocumentSchema,
     annotations: readOnlyAnnotations,
   }, async ({ file_path }) => {
     const result = await runtime.extractDocument({ file_path });
-    return toolResult(result, renderExtractDocumentMarkdown(result));
+    return toolResult(renderExtractDocumentMarkdown(result));
   });
 
   server.registerTool('granite_understand_note', {
@@ -701,12 +656,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     inputSchema: {
       slug: z.string().describe('Slug of the note to inspect.'),
     },
-    outputSchema: noteUnderstandingSchema,
     annotations: readOnlyAnnotations,
   }, async ({ slug }) => {
     const result = runtime.understandNote(slug);
     return {
-      ...toolResult(result, renderUnderstandNoteMarkdown(result)),
       content: buildUnderstandNoteContent(result),
     };
   });
@@ -729,15 +682,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       derived_from: z.array(z.string()).optional().describe('New derived_from references.'),
       fields: z.record(z.string(), z.unknown()).optional().describe('Type-specific frontmatter fields to set or overwrite (e.g. { date: "2026-04-17" } when promoting to meeting). Keys reserved by the system are ignored — use the dedicated inputs for those. See granite://vault/types for each type\'s required fields.'),
     },
-    outputSchema: z.object({
-      note: noteDetailsSchema,
-      recommendations: recommendationSchema,
-      validation: validationResultSchema.optional(),
-    }),
     annotations: writeAnnotations,
   }, async ({ slug, ...updates }) => {
     const result = runtime.reviseNote(slug, updates);
-    return toolResult(result, renderMutationResultMarkdown('Revised', result.note, result.recommendations, result.validation));
+    return toolResult(renderMutationResultMarkdown('Revised', result.note, result.recommendations, result.validation));
   });
 
   server.registerTool('granite_resolve', {
@@ -748,27 +696,13 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       target_type: z.string().optional().describe('Restrict matches to a given note type (e.g. "person", "organization").'),
       limit: z.number().int().min(1).max(20).optional().describe('Maximum matches to return. Defaults to 5.'),
     },
-    outputSchema: z.object({
-      matches: z.array(z.object({
-        slug: z.string(),
-        title: z.string(),
-        type: z.string(),
-        score: z.number(),
-        reason: z.enum(['slug', 'title', 'alias', 'fts']),
-      })),
-      suggested_stub: z.object({
-        type: z.string(),
-        title: z.string(),
-        slug: z.string(),
-      }).optional(),
-    }),
     annotations: readOnlyAnnotations,
   }, async ({ text, target_type, limit }) => {
     const result = runtime.resolve(text, { target_type, limit });
     const summary = result.matches.length > 0
       ? `# Resolve Matches\n\n${result.matches.map(m => `- **${m.title}** (${m.slug}, ${m.type}) — ${m.reason} score=${m.score.toFixed(2)}`).join('\n')}`
       : `# Resolve Matches\n\nNo matches for "${text}".${result.suggested_stub ? `\n\nSuggested stub: ${result.suggested_stub.type} "${result.suggested_stub.title}" → ${result.suggested_stub.slug}` : ''}`;
-    return toolResult(result, summary);
+    return toolResult(summary);
   });
 
   server.registerTool('granite_query', {
@@ -781,15 +715,6 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       sort_dir: z.enum(['asc', 'desc']).optional().describe('Sort direction. Defaults to desc.'),
       limit: z.number().int().min(1).max(200).optional().describe('Maximum results. Defaults to 25.'),
     },
-    outputSchema: z.object({
-      results: z.array(z.object({
-        slug: z.string(),
-        title: z.string(),
-        type: z.string(),
-        modified: z.string(),
-        fields: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
-      })),
-    }),
     annotations: readOnlyAnnotations,
   }, async ({ type, where, sort_field, sort_dir, limit }) => {
     const result = runtime.query({
@@ -798,8 +723,32 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       sort: sort_field ? { field: sort_field, dir: sort_dir ?? 'desc' } : undefined,
       limit,
     });
-    const summary = `# Query Results (${result.results.length})\n\n${result.results.map(r => `- **${r.title}** (${r.slug}, ${r.type})`).join('\n')}`;
-    return toolResult(result, summary);
+    const fieldNames = Array.from(
+      new Set(result.results.flatMap(r => Object.keys(r.fields ?? {}))),
+    );
+    const lines = [`# Query Results (${result.results.length})`, ''];
+    if (result.results.length === 0) {
+      lines.push('No matches.');
+    } else {
+      const header = ['title', 'slug', 'type', 'modified', ...fieldNames];
+      lines.push(`| ${header.join(' | ')} |`);
+      lines.push(`| ${header.map(() => '---').join(' | ')} |`);
+      for (const row of result.results) {
+        const cells = [
+          row.title,
+          row.slug,
+          row.type,
+          row.modified,
+          ...fieldNames.map(name => {
+            const value = row.fields?.[name];
+            if (value === undefined) return '';
+            return Array.isArray(value) ? value.join(', ') : String(value);
+          }),
+        ];
+        lines.push(`| ${cells.map(c => c.replace(/\|/g, '\\|')).join(' | ')} |`);
+      }
+    }
+    return toolResult(lines.join('\n'));
   });
 
   server.registerTool('granite_compile_context', {
@@ -810,19 +759,6 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       slug: z.string().optional().describe('Note slug to compile context for.'),
       limit: z.number().int().min(1).max(100).optional().describe('Max entries per section. Defaults to 20.'),
     },
-    outputSchema: z.object({
-      mode: z.enum(['topic', 'slug']),
-      title: z.string(),
-      sections: z.array(z.object({
-        heading: z.string(),
-        entries: z.array(z.object({
-          slug: z.string(),
-          title: z.string(),
-          type: z.string(),
-          reason: z.string(),
-        })),
-      })),
-    }),
     annotations: readOnlyAnnotations,
   }, async ({ topic, slug, limit }) => {
     const result = runtime.compileContext({ topic, slug, limit });
@@ -836,7 +772,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
         '',
       ]),
     ].join('\n');
-    return toolResult(result, summary);
+    return toolResult(summary);
   });
 
   server.registerTool('granite_dispose_note', {
@@ -846,11 +782,10 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       slug: z.string().describe('Slug of the note to archive or delete.'),
       mode: z.enum(['archive', 'delete']).optional().describe('How to dispose of the note. Defaults to archive.'),
     },
-    outputSchema: disposeNoteSchema,
     annotations: writeAnnotations,
   }, async ({ slug, mode }) => {
     const result = runtime.disposeNote(slug, mode ?? 'archive');
-    return toolResult(result, renderDisposeNoteMarkdown(result));
+    return toolResult(renderDisposeNoteMarkdown(result));
   });
 }
 
@@ -1045,10 +980,9 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
 
 }
 
-function toolResult<T>(structuredContent: T, summary: string) {
+function toolResult(summary: string) {
   return {
     content: [{ type: 'text' as const, text: summary }],
-    structuredContent: asStructuredContent(structuredContent),
   };
 }
 
@@ -1115,10 +1049,6 @@ function formatCompileTopicNote(note: { title: string; slug: string; type: strin
     note.body.slice(0, 500) + (note.body.length > 500 ? '...' : ''),
     '',
   ].join('\n');
-}
-
-function asStructuredContent<T>(value: T): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
 function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcpHttpServerOptions): Hono {

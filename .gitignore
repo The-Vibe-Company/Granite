@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .granite/
+coverage/
 *.tsbuildinfo
 
 # Local vault data (created by mem init)

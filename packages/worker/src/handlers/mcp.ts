@@ -184,10 +184,9 @@ function createRuntime(c: Context<{ Bindings: Env }>): CloudMcpRuntime {
   return new CloudMcpRuntime(storage, db, TIER_LIMITS[tier].maxStorageBytes);
 }
 
-function toolResult<T>(structuredContent: T, markdown: string) {
+function toolResult(markdown: string) {
   return {
     content: [{ type: 'text' as const, text: markdown }],
-    structuredContent,
   };
 }
 
@@ -203,19 +202,17 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
     inputSchema: {
       recent_limit: z.number().optional(),
     },
-    outputSchema: vaultOverviewSchema,
   }, async ({ recent_limit }) => {
     const overview = await runtime.getVaultOverview(recent_limit);
-    return toolResult(overview, renderVaultOverviewMarkdown(overview));
+    return toolResult(renderVaultOverviewMarkdown(overview));
   });
 
   server.registerTool('granite_list_note_types', {
     title: 'List Granite Note Types',
     description: 'List all configured note types.',
-    outputSchema: noteTypesResultSchema,
   }, async () => {
     const types = await runtime.listNoteTypes();
-    return toolResult({ note_types: types }, renderNoteTypesMarkdown(types));
+    return toolResult(renderNoteTypesMarkdown(types));
   });
 
   server.registerTool('granite_list_notes', {
@@ -228,10 +225,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
       since: z.string().optional(),
       limit: z.number().optional(),
     },
-    outputSchema: listNotesResultSchema,
   }, async (input) => {
     const notes = await runtime.listNotes(input);
-    return toolResult({ notes }, renderNotesMarkdown(notes));
+    return toolResult(renderNotesMarkdown(notes));
   });
 
   server.registerTool('granite_get_note', {
@@ -240,10 +236,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
     inputSchema: {
       slug: z.string(),
     },
-    outputSchema: noteDetailsSchema,
   }, async ({ slug }) => {
     const note = await runtime.getNote(slug);
-    return toolResult(note, renderNoteDetailsMarkdown(note));
+    return toolResult(renderNoteDetailsMarkdown(note));
   });
 
   server.registerTool('granite_search_notes', {
@@ -253,10 +248,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
       query: z.string(),
       limit: z.number().optional(),
     },
-    outputSchema: searchResultSetSchema,
   }, async ({ query, limit }) => {
     const results = await runtime.search(query, limit);
-    return toolResult({ query, results }, renderSearchResultsMarkdown(query, results));
+    return toolResult(renderSearchResultsMarkdown(query, results));
   });
 
   server.registerTool('granite_get_backlinks', {
@@ -265,10 +259,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
     inputSchema: {
       slug: z.string(),
     },
-    outputSchema: backlinksResultSchema,
   }, async ({ slug }) => {
     const backlinks = await runtime.getBacklinks(slug);
-    return toolResult({ slug, backlinks }, renderBacklinksMarkdown(slug, backlinks));
+    return toolResult(renderBacklinksMarkdown(slug, backlinks));
   });
 
   server.registerTool('granite_suggest_links', {
@@ -277,10 +270,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
     inputSchema: {
       slug: z.string(),
     },
-    outputSchema: linkSuggestionsResultSchema,
   }, async ({ slug }) => {
     const suggestions = await runtime.suggestLinks(slug);
-    return toolResult({ slug, suggestions }, renderLinkSuggestionsMarkdown(slug, suggestions));
+    return toolResult(renderLinkSuggestionsMarkdown(slug, suggestions));
   });
 
   server.registerTool('granite_create_note', {
@@ -295,10 +287,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
       status: z.enum(['inbox', 'active', 'archived']).optional(),
       source: z.enum(['human', 'agent', 'extraction']).optional(),
     },
-    outputSchema: noteMutationSchema,
   }, async (input) => {
     const result = await runtime.createNote(input);
-    return toolResult(result, renderMutationResultMarkdown('Created', result.note, result.recommendations));
+    return toolResult(renderMutationResultMarkdown('Created', result.note, result.recommendations));
   });
 
   server.registerTool('granite_capture_note', {
@@ -311,10 +302,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
       status: z.enum(['inbox', 'active', 'archived']).optional(),
       source: z.enum(['human', 'agent', 'extraction']).optional(),
     },
-    outputSchema: noteMutationSchema,
   }, async (input) => {
     const result = await runtime.captureNote(input);
-    return toolResult(result, renderMutationResultMarkdown('Captured', result.note, result.recommendations));
+    return toolResult(renderMutationResultMarkdown('Captured', result.note, result.recommendations));
   });
 
   server.registerTool('granite_update_note', {
@@ -330,10 +320,9 @@ export function createMcpServer(runtime: WorkerMcpRuntime): McpServer {
       status: z.enum(['inbox', 'active', 'archived']).optional(),
       source: z.enum(['human', 'agent', 'extraction']).optional(),
     },
-    outputSchema: noteMutationSchema,
   }, async ({ slug, ...input }) => {
     const result = await runtime.updateNote(slug, input);
-    return toolResult(result, renderMutationResultMarkdown('Updated', result.note, result.recommendations));
+    return toolResult(renderMutationResultMarkdown('Updated', result.note, result.recommendations));
   });
 
   server.resource(

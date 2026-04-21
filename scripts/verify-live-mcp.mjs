@@ -68,10 +68,10 @@ console.log('revise.type schema:', JSON.stringify(revProps.type));
 h('2. Instructions header contains TYPES pointer + signature?');
 console.log('instructions head:\n', (client.getInstructions() ?? '').split('\n').slice(0, 25).join('\n'));
 
-h('3. wakeup.aaak contains TYPES pointer?');
+h('3. wakeup markdown contains TYPES pointer?');
 const wk = await client.callTool({ name: 'granite_wakeup', arguments: {} });
-const wkStruct = wk.structuredContent;
-console.log('TYPES line in AAAK:', wkStruct.aaak.match(/^TYPES: .*/m)?.[0]);
+const wkText = wk.content?.find(c => c.type === 'text')?.text ?? '';
+console.log('TYPES line in wakeup markdown:', wkText.match(/^TYPES: .*/m)?.[0]);
 
 h('4. Strict meeting WITHOUT required fields → should be rejected');
 const missingResult = await client.callTool({
@@ -97,10 +97,9 @@ const okResult = await client.callTool({
   },
 });
 console.log('isError:', okResult.isError);
-const okStruct = okResult.structuredContent;
-console.log('note.frontmatter.date:', okStruct.note.frontmatter.date);
-console.log('validation.passed:', okStruct.validation?.passed);
-console.log('validation.errors:', okStruct.validation?.errors);
+const okText = okResult.content?.find(c => c.type === 'text')?.text ?? '';
+console.log('markdown contains date:', okText.includes('2026-04-17'));
+console.log('markdown contains validation-failure markers:', /missing_required_field|validation_failed/.test(okText));
 
 h('6. Revise that pushes strict body past line_limit → should throw, no mutation');
 const before = fs.readFileSync(path.join(tmp, 'meetings', 'sync-with-date.md'), 'utf-8');

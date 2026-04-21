@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import * as z from 'zod/v4';
 import {
+  renderAdjudicationResultMarkdown,
   renderDisposeNoteMarkdown,
   renderExtractDocumentMarkdown,
   renderGardenAdjudicationsMarkdown,
@@ -12,6 +13,7 @@ import {
   renderImportDocumentMarkdown,
   renderMutationResultMarkdown,
   renderNoteTypesMarkdown,
+  renderQueryResultsMarkdown,
   renderSearchResultsMarkdown,
   renderUnderstandNoteMarkdown,
   renderWakeupMarkdown,
@@ -34,272 +36,12 @@ const writeAnnotations = {
   openWorldHint: false,
 } as const;
 
-const fieldDefinitionSchema = z.object({
-  type: z.enum(['text', 'date', 'number', 'boolean', 'wikilink', 'list', 'enum']),
-  of: z.string().optional(),
-  options: z.array(z.string()).optional(),
-  required: z.boolean().optional(),
-  default: z.string().optional(),
-  description: z.string().optional(),
-});
-
-const noteTypeInfoSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  folder: z.string(),
-  line_limit: z.number(),
-  warn_only: z.boolean(),
-  slug_format: z.enum(['title', 'date']),
-  instructions: z.string().optional(),
-  fields: z.record(z.string(), fieldDefinitionSchema).optional(),
-  template: z.string().optional(),
-  body_sections: z.array(z.string()).optional(),
-  example_slug: z.string().optional(),
-  frontmatter_defaults: z.record(z.string(), z.unknown()).optional(),
-});
-
-const validationIssueSchema = z.object({
-  code: z.string(),
-  field: z.string().optional(),
-  message: z.string(),
-});
-
-const validationResultSchema = z.object({
-  passed: z.boolean(),
-  errors: z.array(validationIssueSchema),
-  warnings: z.array(validationIssueSchema),
-});
-
-const noteSummarySchema = z.object({
-  slug: z.string(),
-  title: z.string(),
-  type: z.string(),
-  created: z.string(),
-  modified: z.string(),
-  tags: z.array(z.string()),
-  aliases: z.array(z.string()),
-  status: z.enum(['inbox', 'active', 'archived']),
-  source: z.enum(['human', 'agent', 'extraction']),
-  review_state: z.enum(['draft', 'reviewed', 'locked']),
-  durability: z.enum(['canonical', 'working', 'ephemeral']),
-  derived_from: z.array(z.string()),
-  filepath: z.string(),
-  resource_uri: z.string(),
-});
-
-const wikiLinkSchema = z.object({
-  raw: z.string(),
-  target: z.string(),
-  display: z.string(),
-  resolved: z.boolean(),
-  resolved_slug: z.string().optional(),
-});
-
-const noteDetailsSchema = noteSummarySchema.extend({
-  body: z.string(),
-  frontmatter: z.record(z.string(), z.unknown()),
-  outgoing_links: z.array(wikiLinkSchema),
-});
-
-const importedDocumentAssetSchema = z.object({
-  file: z.string(),
-  path: z.string(),
-  relative_path: z.string(),
-  markdown: z.string(),
-  mime_type: z.string(),
-  sha256: z.string(),
-  resource_uri: z.string(),
-});
-
-const installInstructionsSchema = z.object({
-  platform: z.enum(['macos-arm64', 'macos-x64']),
-  steps: z.array(z.string()),
-  notes: z.array(z.string()),
-});
-
-const extractedDocumentSchema = z.object({
-  doc_type: z.enum(['pdf', 'docx', 'xlsx', 'pptx']),
-  status: z.enum(['ready', 'needs_dependency', 'failed']),
-  extractor: z.enum(['ferrules', 'mammoth', 'sheetjs', 'ooxml-pptx']),
-  reading_basis: z.enum(['text', 'ocr']),
-  raw_text: z.string(),
-  confidence: z.number(),
-  limits: z.array(z.string()),
-  title_hint: z.string(),
-  missing_dependency: z.literal('ferrules').optional(),
-  install_source_url: z.string().optional(),
-  install_instructions: installInstructionsSchema.optional(),
-  verify_command: z.string().optional(),
-  user_prompt: z.string().optional(),
-});
-
-const searchResultSchema = z.object({
-  slug: z.string(),
-  title: z.string(),
-  snippet: z.string(),
-  score: z.number(),
-});
-
-const backlinkSchema = z.object({
-  source_slug: z.string(),
-  source_title: z.string(),
-  context: z.string(),
-});
-
-const linkSuggestionSchema = z.object({
-  target_slug: z.string(),
-  target_title: z.string(),
-  mentions: z.number(),
-});
-
-const recommendationSchema = z.object({
-  additions: z.array(z.object({ text: z.string() })),
-  links: z.array(z.object({
-    slug: z.string(),
-    title: z.string(),
-    type: z.string(),
-    reason: z.string(),
-    source: z.enum(['mention', 'search']),
-  })),
-  tags: z.array(z.object({
-    tag: z.string(),
-    weight: z.number(),
-    source_slugs: z.array(z.string()),
-  })),
-  next_steps: z.array(z.object({
-    type: z.string(),
-    title_hint: z.string().optional(),
-    reason: z.string(),
-  })),
-});
-
-const graphRoleSchema = z.object({
-  role: z.enum(['hub', 'bridge', 'reference', 'isolated', 'draft', 'synthesis']),
-  reason: z.string(),
-  inbound_links: z.number(),
-  outbound_links: z.number(),
-  total_connections: z.number(),
-});
-
-const noteUnderstandingSchema = z.object({
-  note: noteDetailsSchema,
-  backlinks: z.array(backlinkSchema),
-  link_suggestions: z.array(linkSuggestionSchema),
-  recommendations: recommendationSchema,
-  graph_role: graphRoleSchema,
-});
-
-const gardenPlanNoteRefSchema = z.object({
-  slug: z.string(),
-  title: z.string(),
-  type: z.string(),
-  modified: z.string(),
-});
-
 const gardenAdjudicationReasonCodeSchema = z.enum([
   'intentional-structure',
   'already-current',
   'blocked',
   'low-value',
 ]);
-
-const gardenOpportunityAdjudicationSchema = z.object({
-  decision: z.enum(['downrank']),
-  reason_code: gardenAdjudicationReasonCodeSchema,
-  rationale: z.string().optional(),
-  recorded_at: z.string(),
-  active: z.boolean(),
-});
-
-const gardenPlanOpportunitySchema = z.object({
-  id: z.string(),
-  kind: z.enum([
-    'hot-cluster-cold-hub',
-    'stale-synthesis',
-    'source-not-compiled',
-    'draft-debt',
-    'orphan-with-candidates',
-    'thin-important-note',
-    'duplicate-pair',
-    'missing-synthesis-cluster',
-  ]),
-  priority: z.number(),
-  priority_raw: z.number(),
-  priority_effective: z.number(),
-  action_hint: z.enum(['revise', 'connect', 'merge', 'synthesize', 'review']),
-  targets: z.array(gardenPlanNoteRefSchema),
-  supporting: z.array(gardenPlanNoteRefSchema),
-  why_now: z.string(),
-  evidence: z.object({
-    signals: z.array(z.string()),
-    metrics: z.record(z.string(), z.number()),
-  }),
-  stop_when: z.string(),
-  adjudication: gardenOpportunityAdjudicationSchema.optional(),
-});
-
-const gardenPlanSchema = z.object({
-  scope: z.object({
-    kind: z.enum(['vault', 'anchor']),
-    anchor_slug: z.string().optional(),
-    generated_at: z.string(),
-    notes_considered: z.number(),
-    clusters_considered: z.number(),
-  }),
-  operator_hint: z.string(),
-  opportunities: z.array(gardenPlanOpportunitySchema),
-});
-
-const gardenAdjudicationBaselineSchema = z.object({
-  target_modified_at: z.record(z.string(), z.string()),
-  supporting_modified_at: z.record(z.string(), z.string()).optional(),
-});
-
-const gardenAdjudicationSummarySchema = z.object({
-  opportunity_id: z.string(),
-  kind: z.string(),
-  target_slugs: z.array(z.string()),
-  decision: z.enum(['downrank']),
-  reason_code: gardenAdjudicationReasonCodeSchema,
-  rationale: z.string().optional(),
-  recorded_at: z.string(),
-  updated_at: z.string(),
-  recheck_after_days: z.number().int().positive().optional(),
-  baseline: gardenAdjudicationBaselineSchema,
-  active: z.boolean(),
-});
-
-const adjudicateGardenOpportunityResultSchema = z.object({
-  opportunity_id: z.string(),
-  decision: z.enum(['downrank', 'clear']),
-  adjudication: gardenAdjudicationSummarySchema.nullable(),
-  cleared: z.boolean(),
-});
-
-const disposeNoteSchema = z.object({
-  slug: z.string(),
-  mode: z.enum(['archive', 'delete']),
-  backlinks_removed: z.number(),
-  derived_children: z.number(),
-  note: noteDetailsSchema.nullable(),
-});
-
-const doctorIssueSchema = z.object({
-  level: z.enum(['error', 'warning', 'info']),
-  file: z.string(),
-  message: z.string(),
-});
-
-const vaultOverviewSchema = z.object({
-  vault_root: z.string(),
-  vault_name: z.string(),
-  default_type: z.string(),
-  auto_rebuild: z.boolean(),
-  index_last_rebuild: z.string().optional(),
-  note_count: z.number(),
-  notes_by_type: z.record(z.string(), z.number()),
-  recent_notes: z.array(noteSummarySchema),
-});
 
 export interface GraniteMcpHttpServerOptions {
   host: string;
@@ -536,18 +278,14 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       throw new Error('recheck_after_days is only allowed when reason_code is "blocked".');
     }
 
-    runtime.adjudicateGardenOpportunity({
+    const result = runtime.adjudicateGardenOpportunity({
       opportunity_id,
       decision,
       reason_code,
       rationale,
       recheck_after_days,
     });
-    return toolResult(
-      decision === 'clear'
-        ? `Cleared garden adjudication for "${opportunity_id}".`
-        : `Recorded garden adjudication for "${opportunity_id}".`,
-    );
+    return toolResult(renderAdjudicationResultMarkdown(result));
   });
 
   server.registerTool('granite_list_garden_adjudications', {
@@ -723,32 +461,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
       sort: sort_field ? { field: sort_field, dir: sort_dir ?? 'desc' } : undefined,
       limit,
     });
-    const fieldNames = Array.from(
-      new Set(result.results.flatMap(r => Object.keys(r.fields ?? {}))),
-    );
-    const lines = [`# Query Results (${result.results.length})`, ''];
-    if (result.results.length === 0) {
-      lines.push('No matches.');
-    } else {
-      const header = ['title', 'slug', 'type', 'modified', ...fieldNames];
-      lines.push(`| ${header.join(' | ')} |`);
-      lines.push(`| ${header.map(() => '---').join(' | ')} |`);
-      for (const row of result.results) {
-        const cells = [
-          row.title,
-          row.slug,
-          row.type,
-          row.modified,
-          ...fieldNames.map(name => {
-            const value = row.fields?.[name];
-            if (value === undefined) return '';
-            return Array.isArray(value) ? value.join(', ') : String(value);
-          }),
-        ];
-        lines.push(`| ${cells.map(c => c.replace(/\|/g, '\\|')).join(' | ')} |`);
-      }
-    }
-    return toolResult(lines.join('\n'));
+    return toolResult(renderQueryResultsMarkdown(result.results));
   });
 
   server.registerTool('granite_compile_context', {

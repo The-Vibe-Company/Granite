@@ -107,29 +107,6 @@ const vaultOverviewSchema = z.object({
   recent_notes: z.array(noteSummarySchema),
 });
 
-const noteTypesResultSchema = z.object({
-  note_types: z.array(noteTypeSchema),
-});
-
-const listNotesResultSchema = z.object({
-  notes: z.array(noteSummarySchema),
-});
-
-const searchResultSetSchema = z.object({
-  query: z.string(),
-  results: z.array(searchResultSchema),
-});
-
-const backlinksResultSchema = z.object({
-  slug: z.string(),
-  backlinks: z.array(backlinkSchema),
-});
-
-const linkSuggestionsResultSchema = z.object({
-  slug: z.string(),
-  suggestions: z.array(linkSuggestionSchema),
-});
-
 export interface WorkerMcpRuntime {
   getVaultOverview(recentLimit?: number): Promise<z.infer<typeof vaultOverviewSchema>>;
   listNoteTypes(): Promise<Array<z.infer<typeof noteTypeSchema>>>;

@@ -199,6 +199,28 @@ describe('runQuery', () => {
     db.close();
   });
 
+  it('queries across types when no type is passed, unioning indexed_fields', () => {
+    createNote(tmpDir, config, 'meeting', 'AcmeSync', '## Summary\n', {
+      extraFrontmatter: { date: '2026-03-01', organization: 'acme' },
+    });
+    createNote(tmpDir, config, 'organization', 'Acme', '', {
+      extraFrontmatter: { kind: 'client' },
+    });
+
+    const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
+    rebuildIndex(tmpDir, config, db);
+
+    const byOrg = runQuery(db, config, { where: { organization: 'acme' } });
+    expect(byOrg.map(r => r.slug)).toEqual(['acmesync']);
+
+    const byKind = runQuery(db, config, { where: { kind: 'client' } });
+    expect(byKind.map(r => r.slug)).toEqual(['acme']);
+
+    expect(() => runQuery(db, config, { where: { nope: 'x' } })).toThrow(/not indexed/);
+
+    db.close();
+  });
+
   it('rejects invalid sort direction', () => {
     const db = createDatabase(path.join(tmpDir, '.granite', 'index.db'));
     rebuildIndex(tmpDir, config, db);

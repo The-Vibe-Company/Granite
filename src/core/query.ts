@@ -32,7 +32,9 @@ export function runQuery(
   if (type && !typeConfig) {
     throw new Error(`Unknown note type: "${type}"`);
   }
-  const indexed = new Set(typeConfig?.indexed_fields ?? []);
+  const indexed = typeConfig
+    ? new Set(typeConfig.indexed_fields ?? [])
+    : new Set(Object.values(config.note_types).flatMap(t => t.indexed_fields ?? []));
   const whereEntries = Object.entries(query.where ?? {});
   for (const [field] of whereEntries) {
     if (field === 'status' || field === 'source') continue;

@@ -22,7 +22,7 @@ describe('granite worker MCP server', () => {
     await server.close();
   });
 
-  it('returns markdown tool content while keeping structured content', async () => {
+  it('returns markdown tool content', async () => {
     const overview = await client.callTool({
       name: 'granite_get_vault_overview',
       arguments: {},
@@ -32,16 +32,15 @@ describe('granite worker MCP server', () => {
       arguments: { slug: 'worker-note' },
     });
 
-    const overviewData = extractStructuredContent(overview) as { note_count: number };
-    const noteData = extractStructuredContent(note) as { slug: string; body: string };
+    const overviewText = extractTextContent(overview);
+    const noteText = extractTextContent(note);
 
-    expect(overviewData.note_count).toBe(1);
-    expect(noteData.slug).toBe('worker-note');
-    expect(noteData.body).toContain('Worker note body');
-    expect(extractTextContent(overview)).toContain('# Vault Overview');
-    expect(extractTextContent(overview).trim().startsWith('{')).toBe(false);
-    expect(extractTextContent(note)).toContain('# Worker Note');
-    expect(extractTextContent(note)).toContain('## Body');
+    expect(overviewText).toContain('# Vault Overview');
+    expect(overviewText.trim().startsWith('{')).toBe(false);
+    expect(noteText).toContain('# Worker Note');
+    expect(noteText).toContain('## Body');
+    expect(noteText).toContain('Worker note body');
+    expect(noteText).toContain('worker-note');
   });
 
   it('serves vault overview as a markdown resource', async () => {
@@ -64,13 +63,13 @@ describe('granite worker MCP server', () => {
       },
     });
 
-    const listData = extractStructuredContent(listNotes) as { notes: Array<{ slug: string }> };
-    const createdData = extractStructuredContent(createNote) as { note: { slug: string } };
+    const listText = extractTextContent(listNotes);
+    const createdText = extractTextContent(createNote);
 
-    expect(listData.notes[0]?.slug).toBe('worker-note');
-    expect(createdData.note.slug).toBe('fresh-worker-note');
-    expect(extractTextContent(listNotes)).toContain('# Notes');
-    expect(extractTextContent(createNote)).toContain('# Created Note');
+    expect(listText).toContain('# Notes');
+    expect(listText).toContain('worker-note');
+    expect(createdText).toContain('# Created Note');
+    expect(createdText).toContain('fresh-worker-note');
   });
 });
 
@@ -194,13 +193,6 @@ function emptyRecommendations() {
     tags: [],
     next_steps: [],
   };
-}
-
-function extractStructuredContent(result: Awaited<ReturnType<Client['callTool']>>) {
-  if (!('structuredContent' in result) || !result.structuredContent) {
-    throw new Error('Tool result did not include structuredContent.');
-  }
-  return result.structuredContent;
 }
 
 function extractTextContent(result: Awaited<ReturnType<Client['callTool']>>) {

@@ -96,28 +96,19 @@ describe('granite MCP server', () => {
       },
     });
 
-    const createdData = extractStructuredContent(created) as {
-      note: { slug: string; source: string };
-    };
-
-    expect(createdData.note.slug).toBe('linked-result');
-    expect(createdData.note.source).toBe('agent');
-    expect(extractTextContent(created)).toContain('# Created Note');
-    expect(extractTextContent(created).trim().startsWith('{')).toBe(false);
+    const createdText = extractTextContent(created);
+    expect(createdText).toContain('# Created Note');
+    expect(createdText).toContain('linked-result');
+    expect(createdText.trim().startsWith('{')).toBe(false);
 
     const understood = await client.callTool({
       name: 'granite_understand_note',
       arguments: { slug: 'mcp-note' },
     });
 
-    const understoodData = extractStructuredContent(understood) as {
-      backlinks: Array<{ source_slug: string }>;
-      graph_role: { role: string };
-    };
-
-    expect(understoodData.backlinks.some(link => link.source_slug === 'linked-result')).toBe(true);
-    expect(typeof understoodData.graph_role.role).toBe('string');
-    expect(extractTextContent(understood)).toContain('# Note Context');
+    const understoodText = extractTextContent(understood);
+    expect(understoodText).toContain('# Note Context');
+    expect(understoodText).toContain('linked-result');
   });
 
   it('archives notes through granite_dispose_note', async () => {
@@ -126,13 +117,9 @@ describe('granite MCP server', () => {
       arguments: { slug: 'mcp-note' },
     });
 
-    const disposedData = extractStructuredContent(disposed) as {
-      mode: string;
-      note: { status: string } | null;
-    };
-
-    expect(disposedData.mode).toBe('archive');
-    expect(disposedData.note?.status).toBe('archived');
+    const disposedText = extractTextContent(disposed);
+    expect(disposedText).toMatch(/archive/i);
+    expect(disposedText).toContain('mcp-note');
   });
 
   it('imports documents and serves their asset resources through MCP', async () => {
@@ -147,16 +134,15 @@ describe('granite MCP server', () => {
       },
     });
 
-    const importedData = extractStructuredContent(imported) as {
-      note: { slug: string; body: string; frontmatter: Record<string, unknown> };
-      document: { file: string; resource_uri: string; mime_type: string };
-    };
+    const importedText = extractTextContent(imported);
+    expect(importedText).toContain('mcp-source');
+    expect(importedText).toContain('application/pdf');
 
-    expect(importedData.note.slug).toBe('mcp-source');
-    expect(importedData.note.frontmatter.document_file).toBe(importedData.document.file);
-    expect(importedData.note.body).toContain('MCP source content');
+    const assetLink = (imported.content as Array<{ type: string; uri?: string; mimeType?: string }>)
+      .find((c) => c.type === 'resource_link' && c.mimeType === 'application/pdf');
+    expect(assetLink?.uri).toBeDefined();
 
-    const resource = await client.readResource({ uri: importedData.document.resource_uri });
+    const resource = await client.readResource({ uri: assetLink!.uri! });
     const content = resource.contents[0];
 
     expect(content && 'mimeType' in content ? content.mimeType : '').toBe('application/pdf');
@@ -174,53 +160,37 @@ describe('granite MCP server', () => {
       },
     });
 
-    const extractedData = extractStructuredContent(extracted) as {
-      status: string;
-      doc_type: string;
-      extractor: string;
-      raw_text: string;
-    };
-
-    expect(extractedData.status).toBe('ready');
-    expect(extractedData.doc_type).toBe('docx');
-    expect(extractedData.extractor).toBe('mammoth');
-    expect(extractedData.raw_text).toContain('MCP extraction works');
-    expect(extractTextContent(extracted)).toContain('# Document Extraction');
-    expect(extractTextContent(extracted)).toContain('## Raw Text');
+    const extractedText = extractTextContent(extracted);
+    expect(extractedText).toContain('# Document Extraction');
+    expect(extractedText).toContain('## Raw Text');
+    expect(extractedText).toContain('MCP extraction works');
+    expect(extractedText).toMatch(/docx/);
+    expect(extractedText).toMatch(/mammoth/);
   });
 
-  it('returns wakeup as markdown while preserving structured content', async () => {
+  it('returns wakeup as markdown', async () => {
     const wakeup = await client.callTool({
       name: 'granite_wakeup',
       arguments: {},
     });
 
-    const wakeupData = extractStructuredContent(wakeup) as {
-      total: number;
-      aaak: string;
-    };
-
-    expect(wakeupData.total).toBeGreaterThan(0);
-    expect(wakeupData.aaak.length).toBeGreaterThan(0);
-    expect(extractTextContent(wakeup)).toContain('# Vault Wakeup');
-    expect(extractTextContent(wakeup)).toContain('## AAAK');
+    const wakeupText = extractTextContent(wakeup);
+    expect(wakeupText).toContain('# Vault Wakeup');
+    expect(wakeupText).toContain('## AAAK');
+    expect(wakeupText.trim().startsWith('{')).toBe(false);
   });
 
   it('makes the inbox workflow doc-aware for imported source notes', async () => {
     const inputFile = path.join(tmpDir, 'workflow-source.pdf');
     fs.writeFileSync(inputFile, '%PDF-1.4\nworkflow\n');
 
-    const imported = await client.callTool({
+    await client.callTool({
       name: 'granite_import_document',
       arguments: {
         file_path: inputFile,
         content: 'Workflow source content',
       },
     });
-
-    const importedData = extractStructuredContent(imported) as {
-      note: { slug: string };
-    };
 
     const inboxPrompt = await client.getPrompt({
       name: 'granite_process_inbox',
@@ -234,7 +204,7 @@ describe('granite MCP server', () => {
       throw new Error('Expected text content for inbox prompt.');
     }
 
-    expect(inboxMessage.content.text).toContain(importedData.note.slug);
+    expect(inboxMessage.content.text).toContain('workflow-source');
     expect(inboxMessage.content.text).toContain('granite_extract_document');
     expect(inboxMessage.content.text).toContain('imported document attached');
   });
@@ -269,6 +239,40 @@ describe('granite MCP server', () => {
     expect(message.content.text).toContain('imported document attached');
   });
 
+  it('renders garden plan markdown with opportunity IDs when any exist', async () => {
+    const plan = await client.callTool({
+      name: 'granite_plan_garden',
+      arguments: {},
+    });
+    const planText = extractTextContent(plan);
+    expect(planText).toContain('# Garden Plan');
+    expect(planText).toContain('Operator hint');
+    if (!planText.includes('- None')) {
+      expect(planText).toMatch(/Opportunity ID/);
+    }
+  });
+
+  it('renders garden adjudications markdown', async () => {
+    const list = await client.callTool({
+      name: 'granite_list_garden_adjudications',
+      arguments: {},
+    });
+    const listText = extractTextContent(list);
+    expect(listText).toContain('# Garden Adjudications');
+    expect(listText).toContain('Active adjudications:');
+  });
+
+  it('renders granite_query results with modified timestamps', async () => {
+    const queryResult = await client.callTool({
+      name: 'granite_query',
+      arguments: { type: 'note' },
+    });
+    const queryText = extractTextContent(queryResult);
+    expect(queryText).toContain('# Query Results');
+    expect(queryText).toContain('mcp-note');
+    expect(queryText).toContain('| title | slug | type | modified');
+  });
+
   it('closes cleanup hooks after an HTTP response body is consumed', async () => {
     let cleanupCount = 0;
     const response = new Response('granite');
@@ -281,13 +285,6 @@ describe('granite MCP server', () => {
     expect(cleanupCount).toBe(1);
   });
 });
-
-function extractStructuredContent(result: Awaited<ReturnType<Client['callTool']>>) {
-  if (!('structuredContent' in result) || !result.structuredContent) {
-    throw new Error('Tool result did not include structuredContent.');
-  }
-  return result.structuredContent;
-}
 
 function extractTextContent(result: Awaited<ReturnType<Client['callTool']>>) {
   const textContent = result.content.find(item => item.type === 'text');

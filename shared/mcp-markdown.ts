@@ -384,6 +384,17 @@ export function renderMutationResultMarkdown(
 ): string {
   const lines = [`# ${action} Note`];
   pushNoteMetadata(lines, note);
+
+  const extraFrontmatter = note.frontmatter
+    ? Object.entries(note.frontmatter).filter(([key]) => !STANDARD_FRONTMATTER_KEYS.has(key))
+    : [];
+  if (extraFrontmatter.length > 0) {
+    lines.push('', '## Extra Frontmatter');
+    for (const [key, value] of extraFrontmatter) {
+      lines.push(`- ${key}: ${formatUnknown(value)}`);
+    }
+  }
+
   appendValidation(lines, validation);
   appendRecommendations(lines, recommendations);
   return lines.join('\n');

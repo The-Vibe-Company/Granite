@@ -75,12 +75,9 @@ describe('granite MCP server — strict type validation end-to-end', () => {
       },
     });
     expect(result.isError).toBeFalsy();
-    const structured = (result as { structuredContent: unknown }).structuredContent as {
-      note: { frontmatter: Record<string, unknown> };
-      validation?: { passed: boolean };
-    };
-    expect(structured.note.frontmatter.date).toBe('2026-04-17');
-    expect(structured.validation?.passed).toBe(true);
+    const text = (result.content as Array<{ type: string; text?: string }>).find(c => c.type === 'text')?.text ?? '';
+    expect(text).toContain('2026-04-17');
+    expect(text).not.toMatch(/missing_required_field|validation_failed/);
   });
 
   it('exposes fields input in the granite_capture_knowledge tool schema', async () => {

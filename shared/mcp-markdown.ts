@@ -384,6 +384,17 @@ export function renderMutationResultMarkdown(
 ): string {
   const lines = [`# ${action} Note`];
   pushNoteMetadata(lines, note);
+
+  const extraFrontmatter = note.frontmatter
+    ? Object.entries(note.frontmatter).filter(([key]) => !STANDARD_FRONTMATTER_KEYS.has(key))
+    : [];
+  if (extraFrontmatter.length > 0) {
+    lines.push('', '## Extra Frontmatter');
+    for (const [key, value] of extraFrontmatter) {
+      lines.push(`- ${key}: ${formatUnknown(value)}`);
+    }
+  }
+
   appendValidation(lines, validation);
   appendRecommendations(lines, recommendations);
   return lines.join('\n');
@@ -574,6 +585,46 @@ export function renderAdjudicationResultMarkdown(result: AdjudicationResultLike)
       ['Rationale', result.adjudication.rationale],
       ['Active', yesNo(result.adjudication.active)],
     ]);
+  }
+
+  return lines.join('\n');
+}
+
+interface QueryResultLike {
+  slug: string;
+  title: string;
+  type: string;
+  modified: string;
+  fields: Record<string, string | string[]>;
+}
+
+export function renderQueryResultsMarkdown(results: QueryResultLike[]): string {
+  const lines = [`# Query Results (${results.length})`, ''];
+  if (results.length === 0) {
+    lines.push('No matches.');
+    return lines.join('\n');
+  }
+
+  const fieldNames = Array.from(
+    new Set(results.flatMap(row => Object.keys(row.fields ?? {}))),
+  );
+  const header = ['title', 'slug', 'type', 'modified', ...fieldNames];
+  lines.push(`| ${header.join(' | ')} |`);
+  lines.push(`| ${header.map(() => '---').join(' | ')} |`);
+
+  for (const row of results) {
+    const cells = [
+      row.title,
+      row.slug,
+      row.type,
+      row.modified,
+      ...fieldNames.map(name => {
+        const value = row.fields?.[name];
+        if (value === undefined) return '';
+        return Array.isArray(value) ? value.join(', ') : String(value);
+      }),
+    ];
+    lines.push(`| ${cells.map(escapeCell).join(' | ')} |`);
   }
 
   return lines.join('\n');

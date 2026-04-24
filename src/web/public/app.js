@@ -28,6 +28,7 @@
 
   let sim = null;
   let renderer = null;
+  let invalidateDraw = () => {}; // rebound once the graph boots
   let nodes = [];           // [{slug, title, type}]
   let links = [];           // [{source, target}]
   let byslug = {};          // slug -> node meta
@@ -212,7 +213,28 @@
     for (const btn of typeFilters.querySelectorAll('.dirA-filter')) {
       btn.classList.toggle('active', btn.dataset.k === k);
     }
-    lastLabelHtml = ''; // force redraw
+    applyTypeFilter();
+    lastLabelHtml = ''; // force label recompute
+    // Invalidate the draw cache so shouldWork() lets the loop redraw.
+    invalidateDraw();
+  }
+
+  // Node visibility follows the active type filter. Unmatched nodes fade way
+  // down; the active note stays lit so you don't lose it when filtering.
+  function applyTypeFilter() {
+    if (!sim) return;
+    if (typeFilter === 'all') {
+      for (let i = 0; i < sim.n; i++) sim.alpha[i] = 1;
+      return;
+    }
+    const activeIdx = activeSlug ? sim.idxOf[activeSlug] : -1;
+    for (let i = 0; i < sim.n; i++) {
+      const slug = sim.slugOf[i];
+      const note = byslug[slug];
+      if (!note) continue;
+      if (note.type === typeFilter || i === activeIdx) sim.alpha[i] = 1;
+      else sim.alpha[i] = 0.12;
+    }
   }
 
   function renderStats() {
@@ -266,6 +288,7 @@
     // changed we skip the whole step/draw/labels work — important since
     // physics is frozen 99 % of the time.
     const lastDrawn = { k: NaN, tx: NaN, ty: NaN, active: null, hovered: -2, revealDone: false };
+    invalidateDraw = () => { lastDrawn.k = NaN; lastDrawn.revealDone = false; };
     function shouldWork() {
       // Physics still moving?
       if (sim.cooling > 0) return true;

@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "set -e\nnpm install\nif [ ! -f \"$HOME/.granite/granite.yml\" ]; then\n  npm run dev -- init\nfi",
+    "run": "npm run dev -- daemon --vault \"$HOME/.granite\" --host 127.0.0.1 --web-port \"$CONDUCTOR_PORT\" --mcp-port \"$((CONDUCTOR_PORT + 1))\""
+  },
+  "runScriptMode": "nonconcurrent"
+}

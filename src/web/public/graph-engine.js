@@ -230,6 +230,10 @@
       state.cooling = Math.max(state.coolTarget, state.cooling - state.coolRate);
       const a = state.cooling;
 
+      // Fast path: physics completely idle and nothing being dragged. Skip
+      // the O(n log n) quadtree rebuild + force passes entirely.
+      if (a === 0 && state.pinnedIdx < 0) return;
+
       // Build quadtree
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (let i = 0; i < n; i++) {

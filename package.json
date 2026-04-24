@@ -25,7 +25,7 @@
     "url": "https://github.com/The-Vibe-Company/Granite"
   },
   "scripts": {
-    "build": "tsup && rm -rf dist/public && cp -r src/web/public dist/public && rm -rf dist/templates && cp -r templates dist/templates",
+    "build": "tsup && node scripts/build-web.mjs && rm -rf dist/templates && cp -r templates dist/templates",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

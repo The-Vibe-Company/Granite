@@ -262,11 +262,40 @@
     requestAnimationFrame(() => bootArrival(0));
 
     let phase = 0;
+    // Snapshot of the last state we drew. When nothing interesting has
+    // changed we skip the whole step/draw/labels work — important since
+    // physics is frozen 99 % of the time.
+    const lastDrawn = { k: NaN, tx: NaN, ty: NaN, active: null, hovered: -2, revealDone: false };
+    function shouldWork() {
+      // Physics still moving?
+      if (sim.cooling > 0) return true;
+      if (sim.pinnedIdx >= 0) return true;
+      // Arrival reveal still in flight?
+      if (!lastDrawn.revealDone) {
+        let allFull = true;
+        for (let i = 0; i < sim.n; i++) if (sim.alpha[i] < 0.999) { allFull = false; break; }
+        if (!allFull || sim.edgeAlpha < 0.999) return true;
+        lastDrawn.revealDone = true;
+      }
+      // Anything changed since we last drew?
+      if (view.k !== lastDrawn.k || view.tx !== lastDrawn.tx || view.ty !== lastDrawn.ty) return true;
+      if (activeSlug !== lastDrawn.active) return true;
+      if (hoveredIdx !== lastDrawn.hovered) return true;
+      return false;
+    }
     function loop() {
-      sim.step(1 / 60);
-      renderer.draw(phase);
-      phase += 0.016;
-      updateLabels();
+      if (shouldWork()) {
+        // Only run the simulation when positions can actually change —
+        // pan/zoom triggers redraws but not a physics step.
+        const physicsActive = sim.cooling > 0 || sim.pinnedIdx >= 0;
+        const revealActive = !lastDrawn.revealDone;
+        if (physicsActive || revealActive) sim.step(1 / 60);
+        renderer.draw(phase);
+        phase += 0.016;
+        updateLabels();
+        lastDrawn.k = view.k; lastDrawn.tx = view.tx; lastDrawn.ty = view.ty;
+        lastDrawn.active = activeSlug; lastDrawn.hovered = hoveredIdx;
+      }
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -470,7 +499,7 @@
         if (overlap) continue;
         placed.push(box);
         keptLocal.push({ ...it, box });
-        if (keptLocal.length > 140) break;
+        if (keptLocal.length > 80) break;
       }
       kept = keptLocal;
 

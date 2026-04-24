@@ -15,6 +15,13 @@ import { listCommand } from './commands/list.js';
 import { editCommand } from './commands/edit.js';
 import { statusCommand } from './commands/status.js';
 import { mcpCommand, mcpStopCommand, mcpStatusCommand, parseTransport } from './commands/mcp.js';
+import {
+  daemonCommand,
+  daemonStartCommand,
+  daemonStopCommand,
+  daemonStatusCommand,
+  daemonLogsCommand,
+} from './commands/daemon.js';
 import { wakeupCommand } from './commands/wakeup.js';
 import { attachCommand } from './commands/attach.js';
 import { extractDocumentCommand } from './commands/extract.js';
@@ -264,6 +271,56 @@ mcpCmd
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
     mcpStatusCommand(options);
+  });
+
+// ─── Daemon ────────────────────────────────────────────────────────────
+// One background service exposing both MCP (HTTP) and the web UI.
+
+const daemonCmd = program
+  .command('daemon')
+  .description('Run Granite as a background service (MCP + web UI in one process)')
+  .option('--vault <path>', 'Vault root. Defaults to the current Granite vault or $GRANITE_VAULT')
+  .option('--host <host>', 'Host both servers bind to', '127.0.0.1')
+  .option('--mcp-port <port>', 'MCP HTTP port', '3321')
+  .option('--web-port <port>', 'Web UI port', '4321')
+  .action(async (options) => {
+    await daemonCommand(options);
+  });
+
+daemonCmd
+  .command('start')
+  .description('Start the daemon in the background')
+  .option('--vault <path>', 'Vault root')
+  .option('--host <host>', 'Host both servers bind to', '127.0.0.1')
+  .option('--mcp-port <port>', 'MCP HTTP port', '3321')
+  .option('--web-port <port>', 'Web UI port', '4321')
+  .action((options) => {
+    daemonStartCommand(options);
+  });
+
+daemonCmd
+  .command('stop')
+  .description('Stop the background daemon')
+  .option('--vault <path>', 'Vault root')
+  .action((options: { vault?: string }) => {
+    daemonStopCommand(options);
+  });
+
+daemonCmd
+  .command('status')
+  .description('Show status of the background daemon')
+  .option('--vault <path>', 'Vault root')
+  .action((options: { vault?: string }) => {
+    daemonStatusCommand(options);
+  });
+
+daemonCmd
+  .command('logs')
+  .description('Tail the daemon log file')
+  .option('--vault <path>', 'Vault root')
+  .option('-n, --lines <count>', 'Number of tail lines', '100')
+  .action((options: { vault?: string; lines?: string }) => {
+    daemonLogsCommand(options);
   });
 
 await program.parseAsync();

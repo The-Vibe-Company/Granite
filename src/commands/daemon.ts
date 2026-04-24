@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { loadConfig } from '../core/config.js';
-import { requireVaultRoot, getGraniteDir } from '../core/vault.js';
+import { requireVaultRoot, getGraniteDir, getDefaultVaultRoot } from '../core/vault.js';
 import { startGraniteMcpHttpServer } from '../mcp/server.js';
 import { GraniteMcpRuntime } from '../mcp/runtime.js';
 import { startServer as startWebServer } from '../web/server.js';
@@ -86,6 +86,12 @@ function resolveVaultRoot(explicitVault?: string): string {
   const fromEnv = process.env.GRANITE_VAULT;
   if (explicitVault) return path.resolve(explicitVault);
   if (fromEnv) return path.resolve(fromEnv);
+  // Daemon commands run machine-wide, so prefer the default vault (~/.granite)
+  // over whatever cwd-based walk would find. Users running commands from the
+  // Granite source repo or any other folder with a granite.yml would otherwise
+  // see "daemon not running" even though the real daemon is up against ~/.granite.
+  const defaultRoot = getDefaultVaultRoot();
+  if (fs.existsSync(path.join(defaultRoot, 'granite.yml'))) return defaultRoot;
   return requireVaultRoot();
 }
 

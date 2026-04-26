@@ -69,9 +69,9 @@ That's the thesis of this project.
       <sub><b>Graph-aware reading.</b> Preview notes without losing the surrounding context.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/granite-empty.png" alt="Granite empty vault">
+      <img src="docs/screenshots/granite-note.png" alt="Granite reader view">
       <br>
-      <sub><b>Local from the first note.</b> Markdown files on disk, indexed for search and links.</sub>
+      <sub><b>Floating reader.</b> Open a note without leaving the constellation.</sub>
     </td>
   </tr>
 </table>

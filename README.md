@@ -12,7 +12,7 @@
 > Markdown files. One SQLite index. A typed contract your agent already knows how to operate.
 
 <p align="center">
-  <img src="docs/screenshots/granite-note.png" alt="Granite note view" width="720">
+  <img src="docs/screenshots/granite-graph.png" alt="Granite constellation graph" width="720">
 </p>
 
 <p align="center">

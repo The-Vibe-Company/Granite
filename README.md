@@ -57,9 +57,9 @@ That's the thesis of this project.
       <sub><b>Constellation graph.</b> Browse the vault as communities, hubs, and links.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/granite-create.png" alt="Granite create note flow">
+      <img src="docs/screenshots/granite-search.png" alt="Granite command palette search">
       <br>
-      <sub><b>Structured capture.</b> Create typed notes with the fields your agent will rely on.</sub>
+      <sub><b>Command palette.</b> Search the vault and jump straight into the graph context.</sub>
     </td>
   </tr>
   <tr>

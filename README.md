@@ -19,12 +19,6 @@
   <b>Install it with your agent.</b> Or run it standalone as a local markdown knowledge graph.
 </p>
 
-<p align="center">
-  <a href="#install-prompts-copy-paste"><b>Install with your agent</b></a>
-  ·
-  <a href="#try-it-standalone"><b>Try it standalone</b></a>
-</p>
-
 ---
 
 ## The wow moment
@@ -78,55 +72,13 @@ That's the thesis of this project.
 
 ## What is Granite?
 
-Granite is a **local-first operating substrate** for the human + agent duo:
+A local-first markdown store with an opinionated flow. **No AI inside** — just plain files on disk, indexed by SQLite, queried deterministically.
 
-- **Files you own.** Plain markdown with YAML frontmatter in `~/.granite`. No database, no lock-in, `git` works.
-- **Typed contracts, not folders.** Note types declare fields, hooks, indexed queries, and lifecycles. Create a `meeting` and the org stub, date default, and backlinks all fall into place automatically — deterministically, no LLM involved.
-- **Agent-native MCP.** The server *teaches* methodology: tools organized along `orient → research → inspect → plan → mutate`. Drop any MCP-capable LLM onto the vault and it can operate it without a system prompt.
-- **Hard boundary.** **No LLM, no embeddings, no scheduler inside Granite.** All intelligence lives in your agent. Granite is the disk, the schema, and the rules — never the brain.
+- **Imposed flow.** Capture, compile, query, output, lint. The shape is fixed; the content is yours.
+- **Four default note types** — `note`, `source`, `synthesis`, `output`. Add your own in `granite.yml` when your life grows a new shape.
+- **A specialized MCP** that teaches your agent how to use the vault. Drop any MCP-capable agent on it and it knows how to operate, no system prompt required.
 
-One loop: **capture → compile → query → output → lint**.
-
-> Karpathy wrote that there was room for "an incredible new product instead of a hacky collection of scripts" around LLM knowledge bases.
->
-> Granite is the product that answers that call.
->
-> — [@karpathy on LLM knowledge bases](https://x.com/karpathy/status/2039805659525644595)
-
-## Install prompts (copy-paste)
-
-### Claude Code / Claude Desktop
-
-```
-Install Granite for me:
-  npm install -g granite-mem
-  granite init --template founder-os
-  claude mcp add granite -- granite mcp --vault ~/.granite
-After restart, call granite_wakeup and tell me what the vault looks like.
-```
-
-### Cursor
-
-```
-Run these commands, then add Granite to .cursor/mcp.json:
-  npm install -g granite-mem
-  granite init --template founder-os
-
-Append to .cursor/mcp.json:
-  { "mcpServers": { "granite": { "command": "granite", "args": ["mcp", "--vault", "~/.granite"] } } }
-
-Reload Cursor. Then call granite_wakeup.
-```
-
-### ChatGPT / any HTTP-MCP client
-
-```
-Start the Granite MCP over HTTP:
-  granite mcp --transport http --host 127.0.0.1 --port 3321
-Then register http://127.0.0.1:3321 as an MCP server in your client.
-```
-
-Every one of these leaves you with the same outcome: your agent owns the loop.
+Your agent brings the intelligence. Granite holds the ground truth.
 
 ## Try it standalone
 
@@ -137,35 +89,6 @@ granite serve
 ```
 
 That starts with the default knowledge model: `note`, `source`, `synthesis`, and `output`. Add `--template founder-os` when you want people, organizations, meetings, and learnings wired in from the start.
-
-## What your agent can do with it
-
-Once connected, these are real prompts that work **out of the box**:
-
-> **"Process my inbox."**
-> The agent calls `granite_wakeup`, lists inbox notes, classifies each, rewrites them as durable `note`s, links them to existing people/orgs, and promotes `review_state: draft → reviewed`.
-
-> **"Summarize everything I know about [[acme-corp]] before the meeting at 3pm."**
-> `granite_compile_context` returns a typed brief: identity, recent meetings, people, open threads, links into related syntheses. One tool call. No fuzzy matching.
-
-> **"I just talked to Alice from Acme about local-first sync."**
-> `granite_capture_knowledge` creates a `meeting`, fills `date: today` via a hook, resolves `organization: Acme` to a slug (creates a stub if missing), links `attendees: [[alice]]`, and suggests three follow-up notes.
-
-> **"Garden the vault."**
-> `granite_plan_garden` returns the highest-leverage clusters to revisit. The agent opens the top three, revises them, and flags lifecycle transitions (`stale_days`) for your review.
-
-Each starts from intention-level MCP tools and leaves deterministic, auditable changes in `git log`.
-
-## What's inside
-
-- **`granite_wakeup`** — compressed AAAK snapshot of the whole vault, usually ~200-500 tokens, so an agent can orient in one tool call instead of crawling the file tree.
-- **Deterministic garden planning** — `granite_plan_garden` returns the highest-leverage notes and clusters to revisit. Eight opportunity types. No ML, no embeddings.
-- **Types as active contracts** — fields, hooks, indexed queries, and lifecycles. A `meeting` note auto-fills `${today}`, resolves `[[acme-corp]]` to a slug, and can age out after 180 days.
-- **`synthesis` notes with provenance** — durable compiled knowledge with `derived_from` links. Not just clipped sources: actual memory you can build on.
-- **Constellation graph** — WebGL + community detection through `granite serve`. Click a node, pan the constellation, browse the vault visually.
-- **Daemon mode** — MCP + web UI unified in one background process with `granite daemon start`. One port for your agent, one port for you.
-- **AAAK protocol** — five shared frontmatter fields (`status`, `source`, `review_state`, `durability`, `derived_from`) so humans and agents share ground truth.
-- **Document workflows** — attach assets, extract local documents, and import source notes while keeping original files linked to the vault.
 
 ## Agent-native MCP
 
@@ -267,6 +190,12 @@ Read [CHANGELOG.md](CHANGELOG.md) for release history. The product boundary stay
 Issues and focused PRs are welcome.
 
 For local development, read [CLAUDE.md](CLAUDE.md). The key product rule is simple: no embedded LLM, no vector store, no autonomous scheduler inside Granite.
+
+> Karpathy wrote that there was room for "an incredible new product instead of a hacky collection of scripts" around LLM knowledge bases.
+>
+> Granite is the product that answers that call.
+>
+> — [@karpathy on LLM knowledge bases](https://x.com/karpathy/status/2039805659525644595)
 
 ## Philosophy
 

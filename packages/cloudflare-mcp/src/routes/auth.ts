@@ -187,7 +187,12 @@ async function signState(session: string, secret: string): Promise<string> {
 async function verifyState(state: string, secret: string): Promise<string | null> {
   const dot = state.lastIndexOf('.');
   if (dot < 0) return null;
-  const session = decodeURIComponent(state.slice(0, dot));
+  let session: string;
+  try {
+    session = decodeURIComponent(state.slice(0, dot));
+  } catch {
+    return null;
+  }
   const expected = await signState(session, secret);
   return timingSafeEqual(state.slice(dot + 1), expected.slice(expected.lastIndexOf('.') + 1)) ? session : null;
 }

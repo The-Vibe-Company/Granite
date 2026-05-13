@@ -307,11 +307,11 @@ cloudCmd
   .option('--base-url <url>', 'Granite Cloud base URL')
   .option('--vault <vault_id>', 'Default cloud vault ID')
   .option('--no-browser', 'Print the login URL without opening a browser')
-  .action(async (options: { apiKey?: string; baseUrl?: string; vault?: string; noBrowser?: boolean }) => {
+  .action(async (options: { apiKey?: string; baseUrl?: string; vault?: string; browser?: boolean; noBrowser?: boolean }) => {
     await cloudLoginCommand({
       ...options,
       vault: options.vault ?? cloudSubcommandVaultId(),
-      noBrowser: options.noBrowser === true,
+      noBrowser: options.noBrowser === true || options.browser === false,
     });
   });
 

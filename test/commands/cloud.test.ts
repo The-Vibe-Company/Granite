@@ -11,6 +11,7 @@ import {
 import { getCloudConfigPath, readCloudConfig, removeCloudConfig } from '../../src/core/cloud-config.js';
 
 const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 const originalApiKey = process.env.GRANITE_CLOUD_API_KEY;
 const originalCloudUrl = process.env.GRANITE_CLOUD_URL;
 const originalCloudVault = process.env.GRANITE_CLOUD_VAULT;
@@ -21,6 +22,7 @@ describe('cloud commands', () => {
   beforeEach(() => {
     tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'granite-cloud-home-'));
     process.env.HOME = tmpHome;
+    process.env.USERPROFILE = tmpHome;
     delete process.env.GRANITE_CLOUD_API_KEY;
     delete process.env.GRANITE_CLOUD_URL;
     delete process.env.GRANITE_CLOUD_VAULT;
@@ -29,9 +31,11 @@ describe('cloud commands', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     removeCloudConfig();
     fs.rmSync(tmpHome, { recursive: true, force: true });
     restoreEnv('HOME', originalHome);
+    restoreEnv('USERPROFILE', originalUserProfile);
     restoreEnv('GRANITE_CLOUD_API_KEY', originalApiKey);
     restoreEnv('GRANITE_CLOUD_URL', originalCloudUrl);
     restoreEnv('GRANITE_CLOUD_VAULT', originalCloudVault);

@@ -207,25 +207,40 @@ function textResult(markdown: string) {
 }
 
 async function withServerCleanup(response: Response, cleanup: () => Promise<void>): Promise<Response> {
-  if (!response.body) {
+  let cleaned = false;
+  async function runCleanup(): Promise<void> {
+    if (cleaned) return;
+    cleaned = true;
     await cleanup();
+  }
+
+  if (!response.body) {
+    await runCleanup();
     return response;
   }
 
   const reader = response.body.getReader();
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        await cleanup();
-        controller.close();
-        return;
+      try {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          await runCleanup();
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunk.value);
+      } catch (error) {
+        await runCleanup();
+        throw error;
       }
-      controller.enqueue(chunk.value);
     },
     async cancel(reason) {
-      await reader.cancel(reason);
-      await cleanup();
+      try {
+        await reader.cancel(reason);
+      } finally {
+        await runCleanup();
+      }
     },
   });
 

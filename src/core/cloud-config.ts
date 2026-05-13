@@ -17,7 +17,10 @@ export function getCloudConfigPath(): string {
 export function readCloudConfig(): GraniteCloudConfig | null {
   const envConfig = readCloudConfigFromEnv();
   if (envConfig) return envConfig;
+  return readStoredCloudConfig();
+}
 
+function readStoredCloudConfig(): GraniteCloudConfig | null {
   try {
     return JSON.parse(fs.readFileSync(getCloudConfigPath(), 'utf-8')) as GraniteCloudConfig;
   } catch {
@@ -42,7 +45,7 @@ export function updateCloudConfig(patch: Partial<GraniteCloudConfig>): GraniteCl
   const next: GraniteCloudConfig = {
     base_url: DEFAULT_CLOUD_BASE_URL,
     api_key: '',
-    ...(readCloudConfig() ?? {}),
+    ...(readStoredCloudConfig() ?? {}),
     ...patch,
   };
   writeCloudConfig(next);

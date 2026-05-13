@@ -25,9 +25,9 @@ export const authMiddleware = createMiddleware<Bindings>(async (c, next) => {
     return c.json({ error: 'Invalid API key.' }, 401);
   }
 
-  await c.env.ACCOUNTS_DB.prepare(
+  c.executionCtx.waitUntil(c.env.ACCOUNTS_DB.prepare(
     "UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE key_hash = ?",
-  ).bind(keyHash).run();
+  ).bind(keyHash).run());
 
   c.set('user', result);
   await next();

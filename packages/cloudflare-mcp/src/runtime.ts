@@ -178,6 +178,7 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
   }
 
   async understandNote(input: { slug: string }): Promise<any> {
+    await this.index.initialize();
     const note = await this.noteDetails(input.slug);
     const backlinks = await this.index.backlinks(input.slug);
     return {
@@ -240,6 +241,7 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
   }
 
   async compileContext(input: Parameters<CanonicalCloudMcpRuntime['compileContext']>[0]): Promise<any[]> {
+    await this.index.initialize();
     if (input.slug) {
       const note = await this.index.getNote(input.slug);
       return note ? [{ ...toSummary(note), fields: {} }] : [];

@@ -570,6 +570,9 @@ function assertGraniteConfig(value: unknown): asserts value is GraniteConfig {
   if (!config.defaults?.note_type || !config.note_types || typeof config.note_types !== 'object') {
     throw new Error('Invalid Granite config.');
   }
+  if (!config.note_types[config.defaults.note_type]) {
+    throw new Error('Invalid Granite config.');
+  }
 }
 
 function assertSafeNotePath(path: string): void {

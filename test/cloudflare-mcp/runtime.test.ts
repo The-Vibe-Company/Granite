@@ -57,6 +57,39 @@ describe('granite cloudflare runtime', () => {
     expect(index.initialize).not.toHaveBeenCalled();
     expect(storage.writeText).not.toHaveBeenCalled();
   });
+
+  it('rejects configs whose default note type is not configured', async () => {
+    const storage = {
+      writeText: vi.fn(),
+      writeBytes: vi.fn(),
+    };
+    const index = {
+      initialize: vi.fn(),
+      clear: vi.fn(),
+    };
+    const runtime = new CloudMcpRuntime(
+      'v_1',
+      storage as unknown as R2VaultStorage,
+      index as unknown as VaultSqlIndex,
+    );
+
+    await expect(runtime.importVault({
+      config: [
+        'vault_name: Cloud Vault',
+        'version: 1',
+        'note_types:',
+        '  source:',
+        '    folder: sources',
+        'defaults:',
+        '  note_type: note',
+      ].join('\n'),
+      notes: [],
+      assets: [],
+    })).rejects.toThrow('Invalid Granite config.');
+
+    expect(index.initialize).not.toHaveBeenCalled();
+    expect(storage.writeText).not.toHaveBeenCalled();
+  });
 });
 
 function validConfig(): string {

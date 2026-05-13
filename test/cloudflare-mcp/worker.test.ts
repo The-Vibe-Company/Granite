@@ -95,6 +95,19 @@ describe('granite cloudflare worker routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Invalid import JSON.' });
   });
 
+  it('returns 400 for non-string login poll fields', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: 123, poll_secret: {}, verification_code: [] }),
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Missing login verification.' });
+  });
+
   it('returns 400 for malformed note create and update JSON inside the vault object', async () => {
     const vault = new VaultObject({
       id: { name: 'v_a' },
@@ -188,13 +201,18 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
                   return args[0] === validHash ? user : null;
                 }
                 if (
-                  sql.includes('SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?') ||
-                  sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? AND vault_id = ?')
+                  sql.includes('SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?')
                 ) {
                   const vaultId = String(args[0]);
-                  const reorderedVaultId = String(args[1]);
-                  const resolvedVaultId = vaults.has(vaultId) ? vaultId : reorderedVaultId;
-                  return vaults.has(resolvedVaultId) ? { vault_id: resolvedVaultId } : null;
+                  const userId = String(args[1]);
+                  return vaults.has(vaultId) && userId === user.id ? { vault_id: vaultId } : null;
+                }
+                if (
+                  sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? AND vault_id = ?')
+                ) {
+                  const userId = String(args[0]);
+                  const vaultId = String(args[1]);
+                  return userId === user.id && vaults.has(vaultId) ? { vault_id: vaultId } : null;
                 }
                 if (sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? ORDER BY created_at LIMIT 1')) {
                   return { vault_id: 'v_a' };

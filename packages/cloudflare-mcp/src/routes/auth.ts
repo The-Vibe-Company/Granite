@@ -22,9 +22,9 @@ auth.post('/auth/start', async (c) => {
     return c.json({ error: 'GitHub OAuth is not configured.' }, 503);
   }
 
-  const body = await c.req.json().catch(() => null) as { session?: string; poll_secret?: string } | null;
-  const session = body?.session?.trim() ?? '';
-  const pollSecret = body?.poll_secret?.trim() ?? '';
+  const body = await c.req.json().catch(() => null);
+  const session = trimmedStringField(body, 'session');
+  const pollSecret = trimmedStringField(body, 'poll_secret');
   if (!session || !pollSecret) return c.json({ error: 'Missing login session.' }, 400);
 
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
@@ -135,14 +135,10 @@ auth.get('/auth/callback', async (c) => {
 });
 
 auth.post('/auth/poll', async (c) => {
-  const body = await c.req.json().catch(() => null) as {
-    session?: string;
-    poll_secret?: string;
-    verification_code?: string;
-  } | null;
-  const session = body?.session?.trim() ?? '';
-  const pollSecret = body?.poll_secret?.trim() ?? '';
-  const verificationCode = body?.verification_code?.trim() ?? '';
+  const body = await c.req.json().catch(() => null);
+  const session = trimmedStringField(body, 'session');
+  const pollSecret = trimmedStringField(body, 'poll_secret');
+  const verificationCode = trimmedStringField(body, 'verification_code');
   if (!session || !pollSecret || !verificationCode) return c.json({ error: 'Missing login verification.' }, 400);
 
   const row = await c.env.ACCOUNTS_DB.prepare(`
@@ -217,6 +213,12 @@ function timingSafeEqual(a: string, b: string): boolean {
   let result = 0;
   for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return result === 0;
+}
+
+function trimmedStringField(body: unknown, field: string): string {
+  if (!body || typeof body !== 'object') return '';
+  const value = (body as Record<string, unknown>)[field];
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function hex(buffer: ArrayBuffer): string {

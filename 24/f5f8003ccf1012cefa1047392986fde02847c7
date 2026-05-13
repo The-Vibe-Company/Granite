@@ -1,0 +1,21 @@
+test/cloudflare-mcp/runtime.test.ts
+  s_bc3dd13b908a9d::t_d482858cdc5554 1-44
+packages/cloudflare-mcp/src/runtime.ts
+  s_bc3dd13b908a9d::t_f207ec836c6cfd 79-85,583-584
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "24f5f8003ccf1012cefa1047392986fde02847c7",
+  "prompts": {},
+  "sessions": {
+    "s_bc3dd13b908a9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2201-9060-7910-9a43-5a995dacad10",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

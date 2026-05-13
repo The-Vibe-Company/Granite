@@ -76,20 +76,25 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
     const parsedConfig = yaml.load(payload.config) as GraniteConfig;
     assertGraniteConfig(parsedConfig);
 
+    for (const note of payload.notes) {
+      assertSafeNotePath(note.path);
+    }
+    for (const asset of payload.assets ?? []) {
+      assertSafeImportPath(asset.path);
+    }
+
     await this.index.initialize();
     await this.storage.writeText('granite.yml', payload.config, 'text/yaml');
     await this.index.clear();
     this.configCache = parsedConfig;
 
     for (const note of payload.notes) {
-      assertSafeNotePath(note.path);
       await this.storage.writeText(note.path, note.content, 'text/markdown');
       const indexed = parseNoteContent(note.path, note.content);
       await this.index.upsertNote(indexed);
     }
 
     for (const asset of payload.assets ?? []) {
-      assertSafeImportPath(asset.path);
       const bytes = decodeBase64(asset.content_base64);
       await this.storage.writeBytes(asset.path, bytes, asset.content_type);
     }
@@ -575,7 +580,8 @@ function assertSafeImportPath(path: string): void {
     !path ||
     path.startsWith('/') ||
     path.includes('\\') ||
-    path.split('/').includes('..')
+    path.split('/').includes('..') ||
+    path === 'granite.yml'
   ) {
     throw new Error(`Invalid import path: ${path}`);
   }

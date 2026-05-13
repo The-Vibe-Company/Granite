@@ -58,6 +58,46 @@ describe('granite cloudflare runtime', () => {
     expect(storage.writeText).not.toHaveBeenCalled();
   });
 
+  it('rejects asset imports that collide with note paths before writing', async () => {
+    const storage = {
+      writeText: vi.fn(),
+      writeBytes: vi.fn(),
+    };
+    const index = {
+      initialize: vi.fn(),
+      clear: vi.fn(),
+    };
+    const runtime = new CloudMcpRuntime(
+      'v_1',
+      storage as unknown as R2VaultStorage,
+      index as unknown as VaultSqlIndex,
+    );
+
+    await expect(runtime.importVault({
+      config: validConfig(),
+      notes: [{ path: 'notes/same.md', content: '# Same\n' }],
+      assets: [{ path: 'notes/same.md', content_base64: 'YmluYXJ5' }],
+    })).rejects.toThrow('Duplicate import path: notes/same.md');
+
+    expect(index.initialize).not.toHaveBeenCalled();
+    expect(storage.writeText).not.toHaveBeenCalled();
+    expect(storage.writeBytes).not.toHaveBeenCalled();
+  });
+
+  it('rejects note import paths with an empty basename', async () => {
+    const runtime = new CloudMcpRuntime(
+      'v_1',
+      { writeText: vi.fn(), writeBytes: vi.fn() } as unknown as R2VaultStorage,
+      { initialize: vi.fn(), clear: vi.fn() } as unknown as VaultSqlIndex,
+    );
+
+    await expect(runtime.importVault({
+      config: validConfig(),
+      notes: [{ path: '.md', content: '# Empty\n' }],
+      assets: [],
+    })).rejects.toThrow('Invalid note import path: .md');
+  });
+
   it('rejects configs whose default note type is not configured', async () => {
     const storage = {
       writeText: vi.fn(),

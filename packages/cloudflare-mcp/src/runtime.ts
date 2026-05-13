@@ -77,14 +77,19 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
     assertGraniteConfig(parsedConfig);
 
     const seenSlugs = new Set<string>();
+    const seenPaths = new Set<string>(['granite.yml']);
     for (const note of payload.notes) {
       assertSafeNotePath(note.path);
+      if (seenPaths.has(note.path)) throw new Error(`Duplicate import path: ${note.path}`);
+      seenPaths.add(note.path);
       const slug = slugFromImportPath(note.path);
       if (seenSlugs.has(slug)) throw new Error(`Duplicate note slug in import: ${slug}`);
       seenSlugs.add(slug);
     }
     for (const asset of payload.assets ?? []) {
       assertSafeImportPath(asset.path);
+      if (seenPaths.has(asset.path)) throw new Error(`Duplicate import path: ${asset.path}`);
+      seenPaths.add(asset.path);
     }
 
     await this.index.initialize();
@@ -577,7 +582,7 @@ function assertGraniteConfig(value: unknown): asserts value is GraniteConfig {
 
 function assertSafeNotePath(path: string): void {
   assertSafeImportPath(path);
-  if (!path.endsWith('.md') || path === 'granite.yml') {
+  if (!path.endsWith('.md') || path === 'granite.yml' || !slugFromImportPath(path)) {
     throw new Error(`Invalid note import path: ${path}`);
   }
 }

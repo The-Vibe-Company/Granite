@@ -36,7 +36,7 @@ Create or import a vault:
 
 ```bash
 granite cloud create --name "My Vault"
-granite cloud import --from ~/.granite --name "My Vault"
+granite cloud import --from ~/my-granite-vault --name "My Vault"
 ```
 
 Print the MCP URL:

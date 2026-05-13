@@ -311,20 +311,27 @@ function buildImportPayload(vaultRoot: string) {
   const config = fs.readFileSync(path.join(vaultRoot, 'granite.yml'), 'utf-8');
   const graniteConfig = loadConfig(vaultRoot);
   const notes = listNotes(vaultRoot, graniteConfig).map(note => ({
-    path: path.relative(vaultRoot, note.filepath),
+    path: toCloudImportPath(vaultRoot, note.filepath),
     content: fs.readFileSync(note.filepath, 'utf-8'),
   }));
 
   const assetsDir = path.join(vaultRoot, 'assets');
   const assets = fs.existsSync(assetsDir)
     ? walkFiles(assetsDir).map(file => ({
-        path: path.relative(vaultRoot, file),
+        path: toCloudImportPath(vaultRoot, file),
         content_base64: fs.readFileSync(file).toString('base64'),
         content_type: contentType(file),
       }))
     : [];
 
   return { config, notes, assets };
+}
+
+export function toCloudImportPath(vaultRoot: string, file: string): string {
+  const relative = vaultRoot.includes('\\') || file.includes('\\')
+    ? path.win32.relative(vaultRoot, file)
+    : path.relative(vaultRoot, file);
+  return relative.replace(/\\/g, '/');
 }
 
 function walkFiles(dir: string): string[] {

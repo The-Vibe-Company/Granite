@@ -9,6 +9,7 @@ import {
   cloudMcpConfigCommand,
   cloudMcpUrlCommand,
   cloudStatusCommand,
+  toCloudImportPath,
 } from '../../src/commands/cloud.js';
 import { getCloudConfigPath, readCloudConfig, removeCloudConfig, updateCloudConfig, writeCloudConfig } from '../../src/core/cloud-config.js';
 
@@ -202,6 +203,10 @@ describe('cloud commands', () => {
       command: 'rundll32',
       args: ['url.dll,FileProtocolHandler', 'https://cloud.example/login?x=1&y=2'],
     });
+  });
+
+  it('normalizes cloud import paths to POSIX separators', () => {
+    expect(toCloudImportPath('C:\\vault', 'C:\\vault\\assets\\image.png')).toBe('assets/image.png');
   });
 });
 

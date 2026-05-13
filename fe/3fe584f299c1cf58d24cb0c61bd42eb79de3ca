@@ -1,0 +1,26 @@
+packages/cloudflare-mcp/src/routes/auth.ts
+  s_bc3dd13b908a9d::t_db22949505a21b 169-181
+src/core/cloud-config.ts
+  s_bc3dd13b908a9d::t_fcf7aa82252c9e 61-63
+packages/cloudflare-mcp/src/runtime.ts
+  s_bc3dd13b908a9d::t_f70574be37669e 76-78,82,298,301-303,556-561
+src/index.ts
+  s_bc3dd13b908a9d::t_18e4b2faaecccc 564-574
+  s_bc3dd13b908a9d::t_1f451425dff49e 447,456,470-471,482-483,492,501,511
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "fe3fe584f299c1cf58d24cb0c61bd42eb79de3ca",
+  "prompts": {},
+  "sessions": {
+    "s_bc3dd13b908a9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2201-9060-7910-9a43-5a995dacad10",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

@@ -18,7 +18,7 @@ import { listNotes } from '../core/note.js';
 
 export async function cloudLoginCommand(options: { apiKey?: string; baseUrl?: string; vault?: string; noBrowser?: boolean }): Promise<void> {
   const baseUrl = options.baseUrl ?? process.env.GRANITE_CLOUD_URL ?? readCloudConfig()?.base_url ?? DEFAULT_CLOUD_BASE_URL;
-  const apiKey = options.apiKey ?? process.env.GRANITE_CLOUD_API_KEY;
+  const apiKey = options.apiKey;
   if (!apiKey) {
     const result = await browserLogin(baseUrl, options.noBrowser ?? false);
     const config = updateCloudConfig({

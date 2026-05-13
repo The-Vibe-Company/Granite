@@ -43,6 +43,33 @@ describe('granite cloudflare worker routes', () => {
     expect(routedVaults).toEqual(['v_b']);
   });
 
+  it('requires explicit vault selection for /mcp', async () => {
+    const { env, routedVaults } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/mcp', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gsk_valid' },
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Missing vault_id. Provide ?vault_id=<id> or X-Vault-Id.' });
+    expect(routedVaults).toEqual([]);
+  });
+
+  it('defaults invalid vault names instead of throwing', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/vaults', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gsk_valid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 123 }),
+    }));
+
+    expect(response.status).toBe(201);
+    const body = await response.json() as { vault_name: string };
+    expect(body.vault_name).toBe('Cloud Vault');
+  });
+
   it('reports missing api key revocations instead of false success', async () => {
     const { env } = await createEnv({ revokeChanges: 0 });
 
@@ -108,6 +135,9 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
                 return { results: [] };
               },
               async run() {
+                if (sql.includes('INSERT INTO vaults')) {
+                  return { success: true, meta: { changes: 1 } };
+                }
                 if (sql.includes('SET revoked_at')) {
                   return { success: true, meta: { changes: options.revokeChanges ?? 1 } };
                 }

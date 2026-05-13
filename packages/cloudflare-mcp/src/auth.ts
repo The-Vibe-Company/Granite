@@ -45,10 +45,5 @@ export async function resolveVaultId(c: Context<Bindings>): Promise<string | Res
     return requested;
   }
 
-  const first = await c.env.ACCOUNTS_DB.prepare(
-    'SELECT vault_id FROM vaults WHERE user_id = ? ORDER BY created_at LIMIT 1',
-  ).bind(user.id).first<{ vault_id: string }>();
-
-  if (!first) return c.json({ error: 'No vaults found. Create one first.' }, 404);
-  return first.vault_id;
+  return c.json({ error: 'Missing vault_id. Provide ?vault_id=<id> or X-Vault-Id.' }, 400);
 }

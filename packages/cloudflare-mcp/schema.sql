@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   session_id TEXT PRIMARY KEY,
   poll_secret_hash TEXT NOT NULL,
   verification_code_hash TEXT,
-  api_key TEXT,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   username TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   expires_at TEXT NOT NULL

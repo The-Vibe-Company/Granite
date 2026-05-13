@@ -54,7 +54,7 @@ app.post('/vaults', async (c) => {
   const user = c.get('user');
   const body = await safeJson<{ name?: string }>(c.req.raw);
   const vaultId = `v_${nanoid(12)}`;
-  const name = (body?.name || 'Cloud Vault').slice(0, 100);
+  const name = (typeof body?.name === 'string' && body.name.trim() ? body.name : 'Cloud Vault').slice(0, 100);
   await c.env.ACCOUNTS_DB.prepare(`
     INSERT INTO vaults (vault_id, user_id, vault_name)
     VALUES (?, ?, ?)
@@ -158,7 +158,14 @@ export class VaultObject {
     }
 
     if (url.pathname === '/api/notes' && request.method === 'GET') {
-      return Response.json({ notes: await this.runtime.listNotes(url.searchParams.get('type') ?? undefined) });
+      return Response.json({
+        notes: await this.runtime.listNotes({
+          type: url.searchParams.get('type') ?? undefined,
+          status: url.searchParams.get('status') ?? undefined,
+          source: url.searchParams.get('source') ?? undefined,
+          since: url.searchParams.get('since') ?? undefined,
+        }),
+      });
     }
 
     if (url.pathname === '/api/notes' && request.method === 'POST') {

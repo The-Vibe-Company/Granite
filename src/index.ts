@@ -429,7 +429,9 @@ const mcpCmd = program
     tunnel?: 'cloudflare' | 'tailscale';
     background?: boolean;
   }) => {
-    const target = parseCloudTarget(options.vault) ?? currentCloudTarget();
+    const target = options.vault === undefined
+      ? currentCloudTarget()
+      : parseCloudTarget(options.vault);
     if (target) {
       cloudMcpUrlCommand(target.vaultId);
       return;

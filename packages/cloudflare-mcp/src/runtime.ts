@@ -93,9 +93,9 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
     return { note_count: payload.notes.length, asset_count: payload.assets?.length ?? 0 };
   }
 
-  async listNotes(type?: string): Promise<any[]> {
+  async listNotes(filters: { type?: string; status?: string; source?: string; since?: string } = {}): Promise<any[]> {
     await this.index.initialize();
-    const notes = await this.index.listNotes({ type, limit: 500 });
+    const notes = await this.index.listNotes({ ...filters, limit: 500 });
     return notes.map(toSummary);
   }
 
@@ -330,12 +330,12 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
   private async rebuildLinks(): Promise<void> {
     const notes = await this.index.listNotes({ limit: 5000 });
     for (const note of notes) {
-      await this.indexLinksFor(note.slug, note.body);
+      await this.indexLinksFor(note.slug, note.body, notes);
     }
   }
 
-  private async indexLinksFor(slug: string, body: string): Promise<void> {
-    const notes = await this.index.listNotes({ limit: 5000 });
+  private async indexLinksFor(slug: string, body: string, indexedNotes?: IndexedNote[]): Promise<void> {
+    const notes = indexedNotes ?? await this.index.listNotes({ limit: 5000 });
     const links = resolveWikilinks(parseWikilinks(body), notes).map(link => ({
       source_slug: slug,
       target_slug: link.resolved_slug ?? null,
@@ -425,6 +425,7 @@ export class VaultSqlIndex {
     type?: string;
     status?: string;
     source?: string;
+    since?: string;
     limit?: number;
     sortField?: string;
     sortDir?: 'asc' | 'desc';
@@ -434,6 +435,7 @@ export class VaultSqlIndex {
     if (options.type) { clauses.push('type = ?'); params.push(options.type); }
     if (options.status) { clauses.push('status = ?'); params.push(options.status); }
     if (options.source) { clauses.push('source = ?'); params.push(options.source); }
+    if (options.since) { clauses.push('modified >= ?'); params.push(options.since); }
     const sortField = ['title', 'type', 'created', 'modified', 'status', 'source'].includes(options.sortField ?? '')
       ? options.sortField
       : 'modified';

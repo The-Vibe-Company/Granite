@@ -71,6 +71,12 @@ auth.get('/auth/callback', async (c) => {
 
   const session = await verifyState(state, c.env.GITHUB_CLIENT_SECRET);
   if (session === null) return c.json({ error: 'Invalid OAuth state.' }, 400);
+  const activeSession = await c.env.ACCOUNTS_DB.prepare(`
+    SELECT session_id
+    FROM auth_sessions
+    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).bind(session).first<{ session_id: string }>();
+  if (!activeSession) return c.json({ error: 'Login session expired or not found.' }, 400);
 
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
@@ -117,23 +123,15 @@ auth.get('/auth/callback', async (c) => {
     `).bind(`v_${nanoid(12)}`, userId, `${ghUser.login}'s vault`).run();
   }
 
-  const apiKey = generateApiKey();
-  await c.env.ACCOUNTS_DB.prepare(`
-    INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
-    VALUES (?, ?, ?, 'oauth-login')
-  `).bind(await hashApiKey(apiKey), userId, getKeyPrefix(apiKey)).run();
+  const verificationCode = generateVerificationCode();
+  const update = await c.env.ACCOUNTS_DB.prepare(`
+    UPDATE auth_sessions
+    SET user_id = ?, username = ?, verification_code_hash = ?
+    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).bind(userId, ghUser.login, await hashApiKey(verificationCode), session).run() as { meta?: { changes?: number } };
+  if ((update.meta?.changes ?? 0) === 0) return c.json({ error: 'Login session expired or not found.' }, 400);
 
-  if (session) {
-    const verificationCode = generateVerificationCode();
-    await c.env.ACCOUNTS_DB.prepare(`
-      UPDATE auth_sessions
-      SET api_key = ?, username = ?, verification_code_hash = ?
-      WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    `).bind(apiKey, ghUser.login, await hashApiKey(verificationCode), session).run();
-    return c.html(successPage(ghUser.login, verificationCode));
-  }
-
-  return c.html(successPage(ghUser.login));
+  return c.html(successPage(ghUser.login, verificationCode));
 });
 
 auth.post('/auth/poll', async (c) => {
@@ -148,11 +146,11 @@ auth.post('/auth/poll', async (c) => {
   if (!session || !pollSecret || !verificationCode) return c.json({ error: 'Missing login verification.' }, 400);
 
   const row = await c.env.ACCOUNTS_DB.prepare(`
-    SELECT api_key, username, poll_secret_hash, verification_code_hash
+    SELECT user_id, username, poll_secret_hash, verification_code_hash
     FROM auth_sessions
     WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   `).bind(session).first<{
-    api_key: string | null;
+    user_id: string | null;
     username: string | null;
     poll_secret_hash: string;
     verification_code_hash: string | null;
@@ -162,14 +160,19 @@ auth.post('/auth/poll', async (c) => {
   if (!timingSafeEqual(await hashApiKey(pollSecret), row.poll_secret_hash)) {
     return c.json({ error: 'Invalid login verification.' }, 401);
   }
-  if (!row.api_key || !row.username || !row.verification_code_hash) {
+  if (!row.user_id || !row.username || !row.verification_code_hash) {
     return c.json({ pending: true }, 202);
   }
   if (!timingSafeEqual(await hashApiKey(verificationCode), row.verification_code_hash)) {
     return c.json({ error: 'Invalid login verification.' }, 401);
   }
+  const apiKey = generateApiKey();
+  await c.env.ACCOUNTS_DB.prepare(`
+    INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
+    VALUES (?, ?, ?, 'oauth-login')
+  `).bind(await hashApiKey(apiKey), row.user_id, getKeyPrefix(apiKey)).run();
   await c.env.ACCOUNTS_DB.prepare('DELETE FROM auth_sessions WHERE session_id = ?').bind(session).run();
-  return c.json({ api_key: row.api_key, username: row.username });
+  return c.json({ api_key: apiKey, username: row.username });
 });
 
 async function signState(session: string, secret: string): Promise<string> {

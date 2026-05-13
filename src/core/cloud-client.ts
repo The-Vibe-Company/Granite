@@ -130,12 +130,11 @@ export class CloudClient {
   async listNotes(input: { vaultId?: string; type?: string; status?: string; source?: string; since?: string } = {}): Promise<CloudNoteSummary[]> {
     const params = this.vaultParams(input.vaultId);
     if (input.type) params.set('type', input.type);
+    if (input.status) params.set('status', input.status);
+    if (input.source) params.set('source', input.source);
+    if (input.since) params.set('since', input.since);
     const data = await this.request<{ notes: CloudNoteSummary[] }>(`/api/notes?${params}`);
-    let notes = data.notes;
-    if (input.status) notes = notes.filter(note => note.status === input.status);
-    if (input.source) notes = notes.filter(note => note.source === input.source);
-    if (input.since) notes = notes.filter(note => note.modified >= input.since!);
-    return notes;
+    return data.notes;
   }
 
   async getNote(slug: string, vaultId?: string): Promise<CloudNoteDetails> {

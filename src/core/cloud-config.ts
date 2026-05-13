@@ -42,12 +42,15 @@ export function writeCloudConfig(config: GraniteCloudConfig): void {
 }
 
 export function updateCloudConfig(patch: Partial<GraniteCloudConfig>): GraniteCloudConfig {
+  const stored = readStoredCloudConfig();
+  if (!stored?.api_key && !patch.api_key) {
+    throw new Error('Granite Cloud is not configured. Run: granite cloud login first.');
+  }
   const next: GraniteCloudConfig = {
     base_url: DEFAULT_CLOUD_BASE_URL,
-    api_key: '',
-    ...(readStoredCloudConfig() ?? {}),
+    ...stored,
     ...patch,
-  };
+  } as GraniteCloudConfig;
   writeCloudConfig(next);
   return next;
 }

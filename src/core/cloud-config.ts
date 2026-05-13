@@ -4,9 +4,11 @@ import path from 'node:path';
 
 export interface GraniteCloudConfig {
   base_url: string;
-  api_key: string;
+  api_key?: string;
   default_vault_id?: string;
 }
+
+export type ResolvedGraniteCloudConfig = GraniteCloudConfig & { api_key: string };
 
 export const DEFAULT_CLOUD_BASE_URL = 'https://granite.thevibecompany.co';
 
@@ -14,10 +16,25 @@ export function getCloudConfigPath(): string {
   return path.join(getCloudConfigDir(), 'cloud.json');
 }
 
-export function readCloudConfig(): GraniteCloudConfig | null {
+export function readCloudConfig(): ResolvedGraniteCloudConfig | null {
+  const storedConfig = readStoredCloudConfig();
   const envConfig = readCloudConfigFromEnv();
-  if (envConfig) return envConfig;
-  return readStoredCloudConfig();
+  if (envConfig) {
+    return {
+      ...storedConfig,
+      ...envConfig,
+      base_url: envConfig.base_url || storedConfig?.base_url || DEFAULT_CLOUD_BASE_URL,
+      default_vault_id: envConfig.default_vault_id ?? storedConfig?.default_vault_id,
+    };
+  }
+  if (storedConfig?.api_key) {
+    return {
+      ...storedConfig,
+      base_url: storedConfig.base_url || DEFAULT_CLOUD_BASE_URL,
+      api_key: storedConfig.api_key,
+    };
+  }
+  return null;
 }
 
 function readStoredCloudConfig(): GraniteCloudConfig | null {
@@ -28,7 +45,7 @@ function readStoredCloudConfig(): GraniteCloudConfig | null {
   }
 }
 
-export function requireCloudConfig(): GraniteCloudConfig {
+export function requireCloudConfig(): ResolvedGraniteCloudConfig {
   const config = readCloudConfig();
   if (!config?.api_key) {
     throw new Error('Granite Cloud is not configured. Run: granite cloud login --api-key <key> --base-url <url>');
@@ -43,14 +60,16 @@ export function writeCloudConfig(config: GraniteCloudConfig): void {
 
 export function updateCloudConfig(patch: Partial<GraniteCloudConfig>): GraniteCloudConfig {
   const stored = readStoredCloudConfig();
-  if (!stored?.api_key && !patch.api_key) {
+  const envConfig = readCloudConfigFromEnv();
+  if (!stored?.api_key && !patch.api_key && !envConfig?.api_key) {
     throw new Error('Granite Cloud is not configured. Run: granite cloud login first.');
   }
   const next: GraniteCloudConfig = {
-    base_url: DEFAULT_CLOUD_BASE_URL,
+    base_url: stored?.base_url ?? envConfig?.base_url ?? DEFAULT_CLOUD_BASE_URL,
     ...stored,
     ...patch,
   } as GraniteCloudConfig;
+  if (!next.api_key) delete next.api_key;
   writeCloudConfig(next);
   return next;
 }
@@ -67,7 +86,7 @@ function getCloudConfigDir(): string {
   return path.join(os.homedir(), '.granite');
 }
 
-function readCloudConfigFromEnv(): GraniteCloudConfig | null {
+function readCloudConfigFromEnv(): ResolvedGraniteCloudConfig | null {
   const apiKey = process.env.GRANITE_CLOUD_API_KEY;
   if (!apiKey) return null;
   return {

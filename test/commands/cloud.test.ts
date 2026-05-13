@@ -4,11 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   cloudLoginCommand,
+  cloudImportCommand,
   cloudMcpConfigCommand,
   cloudMcpUrlCommand,
   cloudStatusCommand,
 } from '../../src/commands/cloud.js';
-import { getCloudConfigPath, readCloudConfig, removeCloudConfig } from '../../src/core/cloud-config.js';
+import { getCloudConfigPath, readCloudConfig, removeCloudConfig, updateCloudConfig } from '../../src/core/cloud-config.js';
 
 const originalHome = process.env.HOME;
 const originalUserProfile = process.env.USERPROFILE;
@@ -65,6 +66,15 @@ describe('cloud commands', () => {
     cloudMcpUrlCommand('v_demo');
 
     expect(console.log).toHaveBeenLastCalledWith('https://cloud.example/mcp?vault_id=v_demo');
+  });
+
+  it('cloud mcp-url fails before building a server-rejected URL when no vault is selected', async () => {
+    await cloudLoginCommand({
+      apiKey: 'gsk_test',
+      baseUrl: 'https://cloud.example',
+    });
+
+    expect(() => cloudMcpUrlCommand()).toThrow('Cloud vault is not selected');
   });
 
   it('cloud mcp-config prints URL and Authorization header', async () => {
@@ -126,6 +136,38 @@ describe('cloud commands', () => {
     await cloudStatusCommand({ json: true });
     const valid = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)?.[0] as string);
     expect(valid.data.auth).toEqual({ ok: true, vault_count: 1 });
+  });
+
+  it('updates env-backed cloud preferences without persisting the env API key', () => {
+    process.env.GRANITE_CLOUD_API_KEY = 'gsk_env';
+
+    updateCloudConfig({ default_vault_id: 'v_env' });
+
+    expect(readCloudConfig()).toMatchObject({
+      api_key: 'gsk_env',
+      default_vault_id: 'v_env',
+    });
+    const stored = JSON.parse(fs.readFileSync(getCloudConfigPath(), 'utf-8'));
+    expect(stored).toEqual({
+      base_url: 'https://granite.thevibecompany.co',
+      default_vault_id: 'v_env',
+    });
+  });
+
+  it('builds the import payload before creating a cloud vault', async () => {
+    await cloudLoginCommand({
+      apiKey: 'gsk_test',
+      baseUrl: 'https://cloud.example',
+    });
+    stubFetch(async (url) => {
+      throw new Error(`Unexpected cloud request before local import validation: ${url}`);
+    });
+
+    await expect(cloudImportCommand({
+      from: path.join(tmpHome, 'missing-vault'),
+      name: 'Missing',
+    })).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,4 @@
-import { requireCloudConfig, type GraniteCloudConfig } from './cloud-config.js';
+import { requireCloudConfig, type ResolvedGraniteCloudConfig } from './cloud-config.js';
 
 export interface CloudVault {
   vault_id: string;
@@ -56,7 +56,7 @@ export interface CloudKeySummary {
 }
 
 export interface CloudCreateNoteInput {
-  title: string;
+  title?: string;
   type?: string;
   body?: string;
   tags?: string[];
@@ -75,7 +75,7 @@ export interface CloudUpdateNoteInput extends Partial<Omit<CloudCreateNoteInput,
 }
 
 export class CloudClient {
-  constructor(private config: GraniteCloudConfig = requireCloudConfig()) {}
+  constructor(private config: ResolvedGraniteCloudConfig = requireCloudConfig()) {}
 
   get baseUrl(): string {
     return this.config.base_url.replace(/\/+$/, '');
@@ -171,6 +171,9 @@ export class CloudClient {
   private vaultParams(vaultId?: string): URLSearchParams {
     const params = new URLSearchParams();
     const resolved = vaultId ?? this.defaultVaultId;
+    if (!resolved) {
+      throw new Error('Cloud vault is not selected. Pass --vault <id> or set a default with granite cloud create/import.');
+    }
     if (resolved) params.set('vault_id', resolved);
     return params;
   }

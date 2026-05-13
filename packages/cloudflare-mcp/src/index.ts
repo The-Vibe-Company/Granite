@@ -170,7 +170,8 @@ export class VaultObject {
     }
 
     if (url.pathname === '/api/notes' && request.method === 'POST') {
-      const input = await request.json() as Parameters<CloudMcpRuntime['captureKnowledge']>[0];
+      const input = await safeJson<Parameters<CloudMcpRuntime['captureKnowledge']>[0]>(request);
+      if (!input) return Response.json({ error: 'Invalid note JSON.' }, { status: 400 });
       return Response.json(await this.runtime.captureKnowledge(input), { status: 201 });
     }
 
@@ -180,7 +181,8 @@ export class VaultObject {
     }
 
     if (noteMatch && request.method === 'PATCH') {
-      const input = await request.json() as Omit<Parameters<CloudMcpRuntime['reviseNote']>[0], 'slug'>;
+      const input = await safeJson<Omit<Parameters<CloudMcpRuntime['reviseNote']>[0], 'slug'>>(request);
+      if (!input) return Response.json({ error: 'Invalid note JSON.' }, { status: 400 });
       return Response.json(await this.runtime.reviseNote({
         slug: decodeURIComponent(noteMatch[1]),
         ...input,

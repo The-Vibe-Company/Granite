@@ -103,7 +103,7 @@ export function createCloudMcpServer(runtime: CanonicalCloudMcpRuntime): McpServ
       fields: z.record(z.string(), z.unknown()).optional(),
     },
   }, async (input) => {
-    if (!input.title && !input.text) {
+    if (!input.title && !input.text && !input.body) {
       throw new Error('granite_capture_knowledge requires either text, or title with body/text.');
     }
     const result = await runtime.captureKnowledge(input);

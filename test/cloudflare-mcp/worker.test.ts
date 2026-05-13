@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import worker from '../../packages/cloudflare-mcp/src/index.js';
+import worker, { VaultObject } from '../../packages/cloudflare-mcp/src/index.js';
 import { hashApiKey } from '../../packages/cloudflare-mcp/src/lib/api-key.js';
 
 describe('granite cloudflare worker routes', () => {
@@ -93,6 +93,29 @@ describe('granite cloudflare worker routes', () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Invalid import JSON.' });
+  });
+
+  it('returns 400 for malformed note create and update JSON inside the vault object', async () => {
+    const vault = new VaultObject({
+      id: { name: 'v_a' },
+      storage: {},
+    } as any, { VAULT_BUCKET: {} } as any);
+
+    const create = await vault.fetch(new Request('https://vault.internal/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad',
+    }));
+    const update = await vault.fetch(new Request('https://vault.internal/api/notes/demo', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad',
+    }));
+
+    expect(create.status).toBe(400);
+    expect(update.status).toBe(400);
+    await expect(create.json()).resolves.toEqual({ error: 'Invalid note JSON.' });
+    await expect(update.json()).resolves.toEqual({ error: 'Invalid note JSON.' });
   });
 
   it('reports missing api key revocations instead of false success', async () => {

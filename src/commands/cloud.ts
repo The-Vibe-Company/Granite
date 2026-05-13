@@ -134,12 +134,12 @@ export async function cloudCreateCommand(options: { name?: string; json?: boolea
 
 export async function cloudImportCommand(options: { from?: string; name?: string; vault?: string; json?: boolean }): Promise<void> {
   const from = path.resolve(options.from ?? process.cwd());
+  const payload = buildImportPayload(from);
   const client = new CloudClient();
   const vault = options.vault
     ? { vault_id: options.vault, vault_name: options.name ?? options.vault }
     : await client.createVault(options.name ?? (path.basename(from) || 'Imported Vault'));
 
-  const payload = buildImportPayload(from);
   const result = await client.importVault(vault.vault_id, payload);
   updateCloudConfig({ default_vault_id: vault.vault_id });
 

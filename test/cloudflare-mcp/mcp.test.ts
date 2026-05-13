@@ -60,12 +60,17 @@ describe('granite cloudflare MCP server', () => {
       name: 'granite_capture_knowledge',
       arguments: { text: 'Raw cloud capture.\n\nDetails.' },
     });
+    const bodyOnlyCapture = await client.callTool({
+      name: 'granite_capture_knowledge',
+      arguments: { body: 'Body-only cloud capture.\n' },
+    });
     const query = await client.callTool({ name: 'granite_query', arguments: { type: 'note' } });
     const garden = await client.callTool({ name: 'granite_plan_garden', arguments: {} });
     const dispose = await client.callTool({ name: 'granite_dispose_note', arguments: { slug: 'cloud-note' } });
 
     expect(extractTextContent(capture)).toContain('# Captured Note');
     expect(extractTextContent(rawCapture)).toContain('# Captured Note');
+    expect(extractTextContent(bodyOnlyCapture)).toContain('# Captured Note');
     expect(extractTextContent(query)).toContain('# Query Results');
     expect(extractTextContent(garden)).toContain('# Garden Plan');
     expect(extractTextContent(dispose)).toContain('# Disposed Note');

@@ -153,7 +153,8 @@ export class VaultObject {
     }
 
     if (url.pathname === '/import' && request.method === 'POST') {
-      const payload = await request.json() as ImportPayload;
+      const payload = await safeJson<ImportPayload>(request);
+      if (!payload) return Response.json({ error: 'Invalid import JSON.' }, { status: 400 });
       return Response.json(await this.runtime.importVault(payload));
     }
 

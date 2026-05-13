@@ -7,7 +7,8 @@ type Bindings = { Bindings: Env; Variables: AppVariables };
 
 export const authMiddleware = createMiddleware<Bindings>(async (c, next) => {
   const authHeader = c.req.header('Authorization') ?? '';
-  const apiKey = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  const [scheme, ...rest] = authHeader.split(/\s+/);
+  const apiKey = scheme?.toLowerCase() === 'bearer' ? rest.join(' ').trim() : '';
 
   if (!apiKey || !apiKey.startsWith('gsk_')) {
     return c.json({ error: 'Missing or invalid API key.' }, 401);

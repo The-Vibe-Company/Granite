@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { CloudClient, type CloudCreateNoteInput, type CloudUpdateNoteInput } from '../core/cloud-client.js';
+import { CloudClient, type CloudCreateNoteInput, type CloudNoteSummary, type CloudUpdateNoteInput } from '../core/cloud-client.js';
 import {
   DEFAULT_CLOUD_BASE_URL,
   getCloudConfigPath,
@@ -161,7 +161,10 @@ export async function cloudListCommand(options: {
   const notes = await new CloudClient().listNotes({ ...options, vaultId });
   const sorted = notes.sort((a, b) => b.modified.localeCompare(a.modified));
   if (options.json !== undefined && options.json !== false) {
-    console.log(jsonSuccess(sorted));
+    const fields = typeof options.json === 'string'
+      ? options.json.split(',').map(field => field.trim()).filter(Boolean)
+      : undefined;
+    console.log(jsonSuccess(fields ? sorted.map(note => pickFields(note, fields)) : sorted));
     return;
   }
   if (sorted.length === 0) {
@@ -172,6 +175,11 @@ export async function cloudListCommand(options: {
     console.log(`  ${note.modified.slice(0, 10)}  ${(note.type ?? '').padEnd(10)}  ${(note.status ?? '').padEnd(8)}  ${note.title}  (${note.slug})`);
   }
   console.log(`\n${sorted.length} note(s)`);
+}
+
+function pickFields(note: CloudNoteSummary, fields: string[]): Record<string, unknown> {
+  const record = note as unknown as Record<string, unknown>;
+  return Object.fromEntries(fields.map(field => [field, record[field]]));
 }
 
 export async function cloudShowCommand(slug: string, options: { json?: boolean; body?: boolean }, vaultId?: string): Promise<void> {

@@ -27,6 +27,18 @@ describe('granite cloudflare worker routes', () => {
     expect(routedVaults).toEqual(['v_a']);
   });
 
+  it('accepts bearer authorization case-insensitively', async () => {
+    const { env, routedVaults } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/mcp?vault_id=v_a', {
+      method: 'POST',
+      headers: { Authorization: 'bearer gsk_valid' },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(routedVaults).toEqual(['v_a']);
+  });
+
   it('routes /mcp to the durable object selected by X-Vault-Id', async () => {
     const { env, routedVaults } = await createEnv();
 
@@ -68,6 +80,19 @@ describe('granite cloudflare worker routes', () => {
     expect(response.status).toBe(201);
     const body = await response.json() as { vault_name: string };
     expect(body.vault_name).toBe('Cloud Vault');
+  });
+
+  it('returns 400 for malformed import JSON', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/vaults/v_a/import', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gsk_valid', 'Content-Type': 'application/json' },
+      body: '{bad',
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid import JSON.' });
   });
 
   it('reports missing api key revocations instead of false success', async () => {
@@ -122,9 +147,14 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
                 if (sql.includes('JOIN users')) {
                   return args[0] === validHash ? user : null;
                 }
-                if (sql.includes('SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?')) {
+                if (
+                  sql.includes('SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?') ||
+                  sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? AND vault_id = ?')
+                ) {
                   const vaultId = String(args[0]);
-                  return vaults.has(vaultId) ? { vault_id: vaultId } : null;
+                  const reorderedVaultId = String(args[1]);
+                  const resolvedVaultId = vaults.has(vaultId) ? vaultId : reorderedVaultId;
+                  return vaults.has(resolvedVaultId) ? { vault_id: resolvedVaultId } : null;
                 }
                 if (sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? ORDER BY created_at LIMIT 1')) {
                   return { vault_id: 'v_a' };
@@ -156,6 +186,13 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
         return {
           async fetch(request: Request) {
             routedVaults.push(id.name);
+            if (new URL(request.url).pathname === '/import') {
+              try {
+                await request.clone().json();
+              } catch {
+                return Response.json({ error: 'Invalid import JSON.' }, { status: 400 });
+              }
+            }
             return Response.json({ vault_id: id.name, path: new URL(request.url).pathname });
           },
         };

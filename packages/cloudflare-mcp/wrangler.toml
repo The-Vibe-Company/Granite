@@ -1,0 +1,28 @@
+name = "granite-cloudflare-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-03-31"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+BASE_URL = "https://granite.thevibecompany.co"
+
+# Secrets:
+# GITHUB_CLIENT_ID
+# GITHUB_CLIENT_SECRET
+
+[[r2_buckets]]
+binding = "VAULT_BUCKET"
+bucket_name = "granite-vaults"
+
+[[d1_databases]]
+binding = "ACCOUNTS_DB"
+database_name = "granite-accounts"
+database_id = "replace-with-your-d1-database-id"
+
+[[durable_objects.bindings]]
+name = "VAULT_OBJECT"
+class_name = "VaultObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["VaultObject"]

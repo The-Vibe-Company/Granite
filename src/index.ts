@@ -26,6 +26,26 @@ import { wakeupCommand } from './commands/wakeup.js';
 import { attachCommand } from './commands/attach.js';
 import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
+import {
+  cloudAddCommand,
+  cloudCreateCommand,
+  cloudEditCommand,
+  cloudImportCommand,
+  cloudKeysCommand,
+  cloudListCommand,
+  cloudLoginCommand,
+  cloudLogoutCommand,
+  cloudCreateKeyCommand,
+  cloudMcpUrlCommand,
+  cloudMcpConfigCommand,
+  cloudNewCommand,
+  cloudRevokeKeyCommand,
+  cloudSearchCommand,
+  cloudShowCommand,
+  cloudStatusCommand,
+  cloudVaultsCommand,
+} from './commands/cloud.js';
+import { parseCloudTarget } from './core/cloud-target.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -33,7 +53,8 @@ const program = new Command();
 program
   .name('granite')
   .description('Granite — a local-first knowledge compiler. capture → compile → query → output → lint')
-  .version(GRANITE_VERSION);
+  .version(GRANITE_VERSION)
+  .option('--vault <target>', 'Vault target: local path, cloud, or cloud:<vault_id>');
 
 // ─── Setup ────────────────────────────────────────────────────────────
 
@@ -50,6 +71,7 @@ program
   .description('See where your vault stands and what to do next')
   .option('--json', 'Output as JSON')
   .action((options: { json?: boolean }) => {
+    rejectCloudTarget('status');
     statusCommand(options);
   });
 
@@ -66,7 +88,12 @@ program
   .option('--durability <durability>', 'Knowledge permanence (canonical, working, ephemeral)')
   .option('--derived-from <refs>', 'Provenance: slugs this note derives from (comma-separated)')
   .option('--json', 'Output as JSON (agent-friendly)')
-  .action((title: string, options: { type?: string; source?: string; status?: string; reviewState?: string; durability?: string; derivedFrom?: string; json?: boolean }) => {
+  .action(async (title: string, options: { type?: string; source?: string; status?: string; reviewState?: string; durability?: string; derivedFrom?: string; json?: boolean }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudNewCommand(title, options, cloud.vaultId);
+      return;
+    }
     newNote(title, options);
   });
 
@@ -75,7 +102,12 @@ program
   .description('Quick-capture raw text into the vault — the fastest way to get something in')
   .argument('[text]', 'Note text (or pipe via stdin)')
   .option('--json', 'Output as JSON (agent-friendly)')
-  .action((text: string | undefined, options: { json?: boolean }) => {
+  .action(async (text: string | undefined, options: { json?: boolean }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudAddCommand(text, options, cloud.vaultId);
+      return;
+    }
     addNote(text, options);
   });
 
@@ -90,7 +122,12 @@ program
   .option('--source <source>', 'Filter by source (human, agent, extraction)')
   .option('--since <date>', 'Only notes modified since (YYYY-MM-DD)')
   .option('--json [fields]', 'Output as JSON; optionally select fields (e.g. --json slug,title,type)')
-  .action((options: { type?: string; status?: string; source?: string; since?: string; json?: boolean | string }) => {
+  .action(async (options: { type?: string; status?: string; source?: string; since?: string; json?: boolean | string }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudListCommand(options, cloud.vaultId);
+      return;
+    }
     listCommand(options);
   });
 
@@ -101,7 +138,12 @@ program
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .option('--body', 'Output body only (for piping)')
-  .action((slug: string, options: { json?: boolean; body?: boolean }) => {
+  .action(async (slug: string, options: { json?: boolean; body?: boolean }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudShowCommand(slug, options, cloud.vaultId);
+      return;
+    }
     showCommand(slug, options);
   });
 
@@ -110,7 +152,12 @@ program
   .description('Research a topic across the vault — use before creating to avoid duplicates')
   .argument('<query>', 'Search query')
   .option('--json', 'Output as JSON (agent-friendly)')
-  .action((query: string, options: { json?: boolean }) => {
+  .action(async (query: string, options: { json?: boolean }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudSearchCommand(query, options, cloud.vaultId);
+      return;
+    }
     searchCommand(query, options);
   });
 
@@ -130,7 +177,12 @@ program
   .option('--review-state <state>', 'Set review state (draft, reviewed, locked)')
   .option('--durability <durability>', 'Set durability (canonical, working, ephemeral)')
   .option('--derived-from <refs>', 'Set derived_from references (comma-separated slugs)')
-  .action((slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string; reviewState?: string; durability?: string; derivedFrom?: string }) => {
+  .action(async (slug: string, options: { body?: string; append?: string; title?: string; tag?: string; alias?: string; status?: string; source?: string; reviewState?: string; durability?: string; derivedFrom?: string }) => {
+    const cloud = currentCloudTarget();
+    if (cloud) {
+      await cloudEditCommand(slug, options, cloud.vaultId);
+      return;
+    }
     editCommand(slug, options);
   });
 
@@ -139,6 +191,7 @@ program
   .description('Open a note in your editor')
   .argument('<slug>', 'Note slug')
   .action((slug: string) => {
+    rejectCloudTarget('open');
     openNote(slug);
   });
 
@@ -148,6 +201,7 @@ program
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
+    rejectCloudTarget('backlinks');
     backlinksCommand(slug, options);
   });
 
@@ -157,6 +211,7 @@ program
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
+    rejectCloudTarget('suggest-links');
     suggestLinksCommand(slug, options);
   });
 
@@ -166,6 +221,7 @@ program
   .argument('<slug>', 'Note slug')
   .option('--json', 'Output as JSON (agent-friendly)')
   .action((slug: string, options: { json?: boolean }) => {
+    rejectCloudTarget('recommend');
     recommendCommand(slug, options);
   });
 
@@ -176,6 +232,7 @@ program
   .description('Health-check the vault — broken links, missing fields, line limit violations')
   .option('--json', 'Output as JSON')
   .action((options: { json?: boolean }) => {
+    rejectCloudTarget('doctor');
     doctorCommand(options);
   });
 
@@ -183,6 +240,7 @@ program
   .command('types')
   .description('See the note types and the natural flow: source → note → synthesis → output')
   .action(() => {
+    rejectCloudTarget('types');
     typesCommand();
   });
 
@@ -192,6 +250,7 @@ program
   .option('--slug <slug>', 'Note slug to suggest appending to')
   .option('--json', 'Output as JSON')
   .action((file: string, options: { slug?: string; json?: boolean }) => {
+    rejectCloudTarget('attach');
     attachCommand(file, options);
   });
 
@@ -200,6 +259,7 @@ program
   .description('Extract raw text from a local document without importing it. Does not clean or summarize the document.')
   .option('--json', 'Output as JSON')
   .action(async (file: string, options: { json?: boolean }) => {
+    rejectCloudTarget('extract');
     await extractDocumentCommand(file, options);
   });
 
@@ -212,6 +272,7 @@ program
   .option('--alias <aliases>', 'Add aliases immediately (comma-separated)')
   .option('--json', 'Output as JSON')
   .action((file: string, options: { content: string; title?: string; tag?: string; alias?: string; json?: boolean }) => {
+    rejectCloudTarget('import');
     importDocumentCommand(file, options);
   });
 
@@ -220,6 +281,7 @@ program
   .description('Generate a compressed AAAK snapshot of the vault for LLM context loading')
   .option('--json', 'Output as JSON (includes structured data + AAAK)')
   .action((options: { json?: boolean }) => {
+    rejectCloudTarget('wakeup');
     wakeupCommand(options);
   });
 
@@ -230,7 +292,120 @@ program
   .description('Start the local web UI — browse, search, and visualize the knowledge graph')
   .option('-p, --port <port>', 'Port number', '4321')
   .action((options: { port: string }) => {
+    rejectCloudTarget('serve');
     serveCommand(options);
+  });
+
+const cloudCmd = program
+  .command('cloud')
+  .description('Configure and operate Granite Cloud vaults');
+
+cloudCmd
+  .command('login')
+  .description('Store Granite Cloud API credentials for CLI use')
+  .option('--api-key <key>', 'Granite Cloud API key. If omitted, opens the browser login flow.')
+  .option('--base-url <url>', 'Granite Cloud base URL')
+  .option('--vault <vault_id>', 'Default cloud vault ID')
+  .option('--no-browser', 'Print the login URL without opening a browser')
+  .action(async (options: { apiKey?: string; baseUrl?: string; vault?: string; noBrowser?: boolean }) => {
+    await cloudLoginCommand({
+      ...options,
+      vault: options.vault ?? cloudSubcommandVaultId(),
+      noBrowser: options.noBrowser === true,
+    });
+  });
+
+cloudCmd
+  .command('logout')
+  .description('Remove stored Granite Cloud credentials')
+  .action(() => {
+    cloudLogoutCommand();
+  });
+
+cloudCmd
+  .command('status')
+  .description('Show Granite Cloud configuration')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await cloudStatusCommand(options);
+  });
+
+cloudCmd
+  .command('vaults')
+  .description('List cloud vaults')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await cloudVaultsCommand(options);
+  });
+
+cloudCmd
+  .command('keys')
+  .description('List Granite Cloud API keys')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    await cloudKeysCommand(options);
+  });
+
+cloudCmd
+  .command('key-create')
+  .description('Create a Granite Cloud API key')
+  .option('--name <name>', 'API key name')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { name?: string; json?: boolean }) => {
+    await cloudCreateKeyCommand(options);
+  });
+
+cloudCmd
+  .command('key-revoke')
+  .description('Revoke a Granite Cloud API key by prefix')
+  .argument('<prefix>', 'API key prefix, e.g. gsk_...')
+  .option('--json', 'Output as JSON')
+  .action(async (prefix: string, options: { json?: boolean }) => {
+    await cloudRevokeKeyCommand(prefix, options);
+  });
+
+cloudCmd
+  .command('create')
+  .description('Create a cloud vault and set it as default')
+  .option('--name <name>', 'Vault name')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { name?: string; json?: boolean }) => {
+    await cloudCreateCommand(options);
+  });
+
+cloudCmd
+  .command('import')
+  .description('One-shot import a local vault into a cloud vault')
+  .option('--from <path>', 'Local vault root. Defaults to current directory')
+  .option('--name <name>', 'Cloud vault name when creating a new vault')
+  .option('--vault <vault_id>', 'Import into an existing cloud vault')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { from?: string; name?: string; vault?: string; json?: boolean }) => {
+    await cloudImportCommand({
+      ...options,
+      vault: options.vault ?? cloudSubcommandVaultId(),
+    });
+  });
+
+cloudCmd
+  .command('mcp-url')
+  .description('Print the hosted MCP endpoint URL')
+  .option('--vault <vault_id>', 'Cloud vault ID')
+  .action((options: { vault?: string }) => {
+    cloudMcpUrlCommand(options.vault ?? cloudSubcommandVaultId());
+  });
+
+cloudCmd
+  .command('mcp-config')
+  .description('Print a client MCP configuration snippet with URL and Authorization header')
+  .option('--client <name>', 'Client name: generic, cursor, claude', 'generic')
+  .option('--vault <vault_id>', 'Cloud vault ID')
+  .option('--json', 'Output as JSON')
+  .action((options: { client?: string; vault?: string; json?: boolean }) => {
+    cloudMcpConfigCommand({
+      ...options,
+      vault: options.vault ?? cloudSubcommandVaultId(),
+    });
   });
 
 const mcpCmd = program
@@ -254,6 +429,11 @@ const mcpCmd = program
     tunnel?: 'cloudflare' | 'tailscale';
     background?: boolean;
   }) => {
+    const target = parseCloudTarget(options.vault) ?? currentCloudTarget();
+    if (target) {
+      cloudMcpUrlCommand(target.vaultId);
+      return;
+    }
     await mcpCommand(options);
   });
 
@@ -323,8 +503,6 @@ daemonCmd
     daemonLogsCommand(options);
   });
 
-await program.parseAsync();
-
 function collectValues(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
@@ -335,4 +513,48 @@ function parseTransportOption(value: string): 'stdio' | 'http' {
   } catch (error) {
     throw new InvalidArgumentError(error instanceof Error ? error.message : String(error));
   }
+}
+
+function selectedVaultTarget(): string | undefined {
+  const target = program.opts<{ vault?: string }>().vault;
+  if (target && !parseCloudTarget(target)) {
+    process.env.GRANITE_VAULT = target;
+  }
+  return target;
+}
+
+function cloudSubcommandOptionValue(name: string): string | undefined {
+  const cloudIndex = process.argv.indexOf('cloud');
+  if (cloudIndex < 0) return undefined;
+  const longOption = `--${name}`;
+  for (let index = cloudIndex + 1; index < process.argv.length; index += 1) {
+    const arg = process.argv[index];
+    if (arg === longOption) return process.argv[index + 1];
+    if (arg.startsWith(`${longOption}=`)) return arg.slice(longOption.length + 1);
+  }
+  return undefined;
+}
+
+function cloudSubcommandVaultId(): string | undefined {
+  const localVault = cloudSubcommandOptionValue('vault');
+  if (localVault) return localVault;
+  return parseCloudTarget(program.opts<{ vault?: string }>().vault)?.vaultId;
+}
+
+function currentCloudTarget(): ReturnType<typeof parseCloudTarget> {
+  return parseCloudTarget(selectedVaultTarget());
+}
+
+function rejectCloudTarget(command: string): void {
+  if (currentCloudTarget()) {
+    console.error(`granite ${command} does not support cloud vaults yet.`);
+    process.exit(1);
+  }
+}
+
+try {
+  await program.parseAsync();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
 }

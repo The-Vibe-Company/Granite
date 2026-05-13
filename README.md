@@ -176,6 +176,7 @@ Your agent reads these before writing and sets them as it works. You inherit a f
 - `git init` your vault and you have versioning for free
 - `granite serve` gives you a local web UI — browse, search, explore the graph
 - `granite daemon start` runs MCP + web UI in one background process
+- A private hosted MCP can be run separately as Granite Cloud MCP; see [docs/CLOUD_MCP.md](docs/CLOUD_MCP.md)
 
 For the full CLI, run `granite --help`. For development, see [CLAUDE.md](CLAUDE.md).
 

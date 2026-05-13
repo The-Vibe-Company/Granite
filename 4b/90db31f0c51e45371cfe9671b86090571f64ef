@@ -1,0 +1,34 @@
+packages/cloudflare-mcp/src/mcp.ts
+  s_bc3dd13b908a9d::t_2e5dfc76093357 106
+src/commands/cloud.ts
+  s_bc3dd13b908a9d::t_ab61684001a7ba 137
+src/core/cloud-config.ts
+  s_bc3dd13b908a9d::t_c7f2c70cb16a3a 7,11-12,19-20,22-25,27-32,34-37,48,63-64,68,72,89
+  s_bc3dd13b908a9d::t_cfd080134df4bf 26,33
+test/commands/cloud.test.ts
+  s_bc3dd13b908a9d::t_965a3560bc2cae 7,12,71-79,140-170
+src/core/cloud-client.ts
+  s_bc3dd13b908a9d::t_d29d679a158271 1,59,78,174-176
+packages/cloudflare-mcp/src/index.ts
+  s_bc3dd13b908a9d::t_8a93aa31e39ef4 173-174,184-185
+test/cloudflare-mcp/mcp.test.ts
+  s_bc3dd13b908a9d::t_a17233ce77a3d8 63-66,73
+test/cloudflare-mcp/worker.test.ts
+  s_bc3dd13b908a9d::t_dae1af4ff874cc 2,98-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "4b90db31f0c51e45371cfe9671b86090571f64ef",
+  "prompts": {},
+  "sessions": {
+    "s_bc3dd13b908a9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2201-9060-7910-9a43-5a995dacad10",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

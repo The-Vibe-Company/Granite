@@ -177,20 +177,20 @@ export class VaultObject {
 
     const noteMatch = url.pathname.match(/^\/api\/notes\/([^/]+)$/);
     if (noteMatch && request.method === 'GET') {
-      return Response.json(await this.runtime.getNote(decodeURIComponent(noteMatch[1])));
+      return noteEndpointResponse(() => this.runtime.getNote(decodeURIComponent(noteMatch[1])));
     }
 
     if (noteMatch && request.method === 'PATCH') {
       const input = await safeJson<Omit<Parameters<CloudMcpRuntime['reviseNote']>[0], 'slug'>>(request);
       if (!input) return Response.json({ error: 'Invalid note JSON.' }, { status: 400 });
-      return Response.json(await this.runtime.reviseNote({
+      return noteEndpointResponse(() => this.runtime.reviseNote({
         slug: decodeURIComponent(noteMatch[1]),
         ...input,
       }));
     }
 
     if (noteMatch && request.method === 'DELETE') {
-      return Response.json(await this.runtime.disposeNote({
+      return noteEndpointResponse(() => this.runtime.disposeNote({
         slug: decodeURIComponent(noteMatch[1]),
         mode: url.searchParams.get('mode') === 'delete' ? 'delete' : 'archive',
       }));
@@ -239,6 +239,17 @@ async function safeJson<T>(request: Request): Promise<T | null> {
     return await request.json() as T;
   } catch {
     return null;
+  }
+}
+
+async function noteEndpointResponse(action: () => Promise<unknown>): Promise<Response> {
+  try {
+    return Response.json(await action());
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note not found')) {
+      return Response.json({ error: 'Note not found.' }, { status: 404 });
+    }
+    throw error;
   }
 }
 

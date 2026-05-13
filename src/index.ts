@@ -63,7 +63,12 @@ program
   .description('Create a new vault and start the knowledge loop')
   .option('--template <name>', 'Start from a template (e.g. founder-os)')
   .action((options: { template?: string }) => {
-    initVault(undefined, { template: options.template });
+    const target = selectedVaultTarget();
+    if (parseCloudTarget(target)) {
+      console.error('granite init does not support cloud vaults.');
+      process.exit(1);
+    }
+    initVault(target, { template: options.template });
   });
 
 program

@@ -118,6 +118,23 @@ describe('granite cloudflare worker routes', () => {
     await expect(update.json()).resolves.toEqual({ error: 'Invalid note JSON.' });
   });
 
+  it('returns 404 for missing notes inside the vault object', async () => {
+    const vault = new VaultObject({
+      id: { name: 'v_a' },
+      storage: {},
+    } as any, { VAULT_BUCKET: {} } as any);
+    (vault as any).runtime = {
+      getNote: async () => {
+        throw new Error('Note not found: missing');
+      },
+    };
+
+    const response = await vault.fetch(new Request('https://vault.internal/api/notes/missing'));
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: 'Note not found.' });
+  });
+
   it('reports missing api key revocations instead of false success', async () => {
     const { env } = await createEnv({ revokeChanges: 0 });
 

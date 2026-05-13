@@ -23,7 +23,9 @@ export function readCloudConfig(): ResolvedGraniteCloudConfig | null {
     return {
       ...storedConfig,
       ...envConfig,
-      base_url: envConfig.base_url || storedConfig?.base_url || DEFAULT_CLOUD_BASE_URL,
+      base_url: process.env.GRANITE_CLOUD_URL
+        ? envConfig.base_url
+        : storedConfig?.base_url ?? envConfig.base_url,
       default_vault_id: envConfig.default_vault_id ?? storedConfig?.default_vault_id,
     };
   }
@@ -55,7 +57,9 @@ export function requireCloudConfig(): ResolvedGraniteCloudConfig {
 
 export function writeCloudConfig(config: GraniteCloudConfig): void {
   fs.mkdirSync(getCloudConfigDir(), { recursive: true });
-  fs.writeFileSync(getCloudConfigPath(), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const configPath = getCloudConfigPath();
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  fs.chmodSync(configPath, 0o600);
 }
 
 export function updateCloudConfig(patch: Partial<GraniteCloudConfig>): GraniteCloudConfig {

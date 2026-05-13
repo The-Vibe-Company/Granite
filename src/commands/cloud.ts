@@ -409,15 +409,16 @@ async function promptVerificationCode(): Promise<string> {
 }
 
 function openBrowser(url: string): void {
-  const command = process.platform === 'darwin'
-    ? 'open'
-    : process.platform === 'win32'
-      ? 'cmd'
-      : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const { command, args } = browserLaunchCommand(url);
   const child = spawn(command, args, { stdio: 'ignore', detached: true });
   child.on('error', () => {});
   child.unref();
+}
+
+export function browserLaunchCommand(url: string, platform: NodeJS.Platform = process.platform): { command: string; args: string[] } {
+  if (platform === 'darwin') return { command: 'open', args: [url] };
+  if (platform === 'win32') return { command: 'rundll32', args: ['url.dll,FileProtocolHandler', url] };
+  return { command: 'xdg-open', args: [url] };
 }
 
 function sleep(ms: number): Promise<void> {

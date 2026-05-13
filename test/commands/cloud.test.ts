@@ -3,13 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  browserLaunchCommand,
   cloudLoginCommand,
   cloudImportCommand,
   cloudMcpConfigCommand,
   cloudMcpUrlCommand,
   cloudStatusCommand,
 } from '../../src/commands/cloud.js';
-import { getCloudConfigPath, readCloudConfig, removeCloudConfig, updateCloudConfig } from '../../src/core/cloud-config.js';
+import { getCloudConfigPath, readCloudConfig, removeCloudConfig, updateCloudConfig, writeCloudConfig } from '../../src/core/cloud-config.js';
 
 const originalHome = process.env.HOME;
 const originalUserProfile = process.env.USERPROFILE;
@@ -154,6 +155,32 @@ describe('cloud commands', () => {
     });
   });
 
+  it('preserves a stored custom base URL when only the API key comes from env', () => {
+    writeCloudConfig({
+      base_url: 'https://self-hosted.example',
+      default_vault_id: 'v_stored',
+    });
+    process.env.GRANITE_CLOUD_API_KEY = 'gsk_env';
+
+    expect(readCloudConfig()).toMatchObject({
+      api_key: 'gsk_env',
+      base_url: 'https://self-hosted.example',
+      default_vault_id: 'v_stored',
+    });
+  });
+
+  it('forces restrictive permissions when rewriting cloud config', () => {
+    writeCloudConfig({
+      api_key: 'gsk_test',
+      base_url: 'https://cloud.example',
+    });
+    fs.chmodSync(getCloudConfigPath(), 0o644);
+
+    updateCloudConfig({ default_vault_id: 'v_demo' });
+
+    expect(fs.statSync(getCloudConfigPath()).mode & 0o777).toBe(0o600);
+  });
+
   it('builds the import payload before creating a cloud vault', async () => {
     await cloudLoginCommand({
       apiKey: 'gsk_test',
@@ -168,6 +195,13 @@ describe('cloud commands', () => {
       name: 'Missing',
     })).rejects.toThrow();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uses a non-shell Windows browser launcher', () => {
+    expect(browserLaunchCommand('https://cloud.example/login?x=1&y=2', 'win32')).toEqual({
+      command: 'rundll32',
+      args: ['url.dll,FileProtocolHandler', 'https://cloud.example/login?x=1&y=2'],
+    });
   });
 });
 

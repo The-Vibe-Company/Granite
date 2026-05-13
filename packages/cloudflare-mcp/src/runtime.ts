@@ -76,8 +76,12 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
     const parsedConfig = yaml.load(payload.config) as GraniteConfig;
     assertGraniteConfig(parsedConfig);
 
+    const seenSlugs = new Set<string>();
     for (const note of payload.notes) {
       assertSafeNotePath(note.path);
+      const slug = slugFromImportPath(note.path);
+      if (seenSlugs.has(slug)) throw new Error(`Duplicate note slug in import: ${slug}`);
+      seenSlugs.add(slug);
     }
     for (const asset of payload.assets ?? []) {
       assertSafeImportPath(asset.path);
@@ -585,6 +589,10 @@ function assertSafeImportPath(path: string): void {
   ) {
     throw new Error(`Invalid import path: ${path}`);
   }
+}
+
+function slugFromImportPath(path: string): string {
+  return path.split('/').pop()?.replace(/\.md$/, '') ?? '';
 }
 
 function normalizeBody(body: string): string {

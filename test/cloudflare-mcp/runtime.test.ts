@@ -29,6 +29,34 @@ describe('granite cloudflare runtime', () => {
     expect(storage.writeText).not.toHaveBeenCalled();
     expect(storage.writeBytes).not.toHaveBeenCalled();
   });
+
+  it('rejects imports with duplicate basename-derived note slugs before writing', async () => {
+    const storage = {
+      writeText: vi.fn(),
+      writeBytes: vi.fn(),
+    };
+    const index = {
+      initialize: vi.fn(),
+      clear: vi.fn(),
+    };
+    const runtime = new CloudMcpRuntime(
+      'v_1',
+      storage as unknown as R2VaultStorage,
+      index as unknown as VaultSqlIndex,
+    );
+
+    await expect(runtime.importVault({
+      config: validConfig(),
+      notes: [
+        { path: 'notes/same.md', content: '# One\n' },
+        { path: 'drafts/same.md', content: '# Two\n' },
+      ],
+      assets: [],
+    })).rejects.toThrow('Duplicate note slug in import: same');
+
+    expect(index.initialize).not.toHaveBeenCalled();
+    expect(storage.writeText).not.toHaveBeenCalled();
+  });
 });
 
 function validConfig(): string {

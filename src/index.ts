@@ -444,6 +444,7 @@ mcpCmd
   .description('Stop a background MCP server')
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
+    prepareLocalOnlyCommand('mcp stop', options.vault);
     mcpStopCommand(options);
   });
 
@@ -452,6 +453,7 @@ mcpCmd
   .description('Show status of background MCP server')
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
+    prepareLocalOnlyCommand('mcp status', options.vault);
     mcpStatusCommand(options);
   });
 
@@ -465,7 +467,8 @@ const daemonCmd = program
   .option('--host <host>', 'Host both servers bind to', '127.0.0.1')
   .option('--mcp-port <port>', 'MCP HTTP port', '3321')
   .option('--web-port <port>', 'Web UI port', '4321')
-  .action(async (options) => {
+  .action(async (options: { vault?: string }) => {
+    prepareLocalOnlyCommand('daemon', options.vault);
     await daemonCommand(options);
   });
 
@@ -476,7 +479,8 @@ daemonCmd
   .option('--host <host>', 'Host both servers bind to', '127.0.0.1')
   .option('--mcp-port <port>', 'MCP HTTP port', '3321')
   .option('--web-port <port>', 'Web UI port', '4321')
-  .action((options) => {
+  .action((options: { vault?: string }) => {
+    prepareLocalOnlyCommand('daemon start', options.vault);
     daemonStartCommand(options);
   });
 
@@ -485,6 +489,7 @@ daemonCmd
   .description('Stop the background daemon')
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
+    prepareLocalOnlyCommand('daemon stop', options.vault);
     daemonStopCommand(options);
   });
 
@@ -493,6 +498,7 @@ daemonCmd
   .description('Show status of the background daemon')
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
+    prepareLocalOnlyCommand('daemon status', options.vault);
     daemonStatusCommand(options);
   });
 
@@ -502,6 +508,7 @@ daemonCmd
   .option('--vault <path>', 'Vault root')
   .option('-n, --lines <count>', 'Number of tail lines', '100')
   .action((options: { vault?: string; lines?: string }) => {
+    prepareLocalOnlyCommand('daemon logs', options.vault);
     daemonLogsCommand(options);
   });
 
@@ -552,6 +559,17 @@ function rejectCloudTarget(command: string): void {
     console.error(`granite ${command} does not support cloud vaults yet.`);
     process.exit(1);
   }
+}
+
+function prepareLocalOnlyCommand(command: string, explicitVault?: string): void {
+  if (explicitVault !== undefined) {
+    if (parseCloudTarget(explicitVault)) {
+      console.error(`granite ${command} does not support cloud vaults yet.`);
+      process.exit(1);
+    }
+    return;
+  }
+  rejectCloudTarget(command);
 }
 
 try {

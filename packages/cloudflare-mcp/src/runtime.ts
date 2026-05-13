@@ -73,10 +73,13 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
   ) {}
 
   async importVault(payload: ImportPayload): Promise<{ note_count: number; asset_count: number }> {
+    const parsedConfig = yaml.load(payload.config) as GraniteConfig;
+    assertGraniteConfig(parsedConfig);
+
     await this.index.initialize();
     await this.storage.writeText('granite.yml', payload.config, 'text/yaml');
     await this.index.clear();
-    this.configCache = yaml.load(payload.config) as GraniteConfig;
+    this.configCache = parsedConfig;
 
     for (const note of payload.notes) {
       await this.storage.writeText(note.path, note.content, 'text/markdown');
@@ -292,11 +295,12 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
 
   private async getConfig(): Promise<GraniteConfig> {
     if (this.configCache) return this.configCache;
-    try {
-      this.configCache = yaml.load(await this.storage.readText('granite.yml')) as GraniteConfig;
-    } catch {
+    if (!await this.storage.exists('granite.yml')) {
       this.configCache = defaultConfig();
       await this.storage.writeText('granite.yml', yaml.dump(this.configCache), 'text/yaml');
+    } else {
+      this.configCache = yaml.load(await this.storage.readText('granite.yml')) as GraniteConfig;
+      assertGraniteConfig(this.configCache);
     }
     return this.configCache;
   }
@@ -547,6 +551,14 @@ function defaultConfig(): GraniteConfig {
     defaults: { note_type: 'note', editor: '$EDITOR' },
     index: { auto_rebuild: true },
   };
+}
+
+function assertGraniteConfig(value: unknown): asserts value is GraniteConfig {
+  if (!value || typeof value !== 'object') throw new Error('Invalid Granite config.');
+  const config = value as Partial<GraniteConfig>;
+  if (!config.defaults?.note_type || !config.note_types || typeof config.note_types !== 'object') {
+    throw new Error('Invalid Granite config.');
+  }
 }
 
 function normalizeBody(body: string): string {

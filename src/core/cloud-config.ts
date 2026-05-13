@@ -58,7 +58,9 @@ export function updateCloudConfig(patch: Partial<GraniteCloudConfig>): GraniteCl
 export function removeCloudConfig(): void {
   try {
     fs.unlinkSync(getCloudConfigPath());
-  } catch {}
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 function getCloudConfigDir(): string {

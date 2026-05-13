@@ -166,12 +166,24 @@ auth.post('/auth/poll', async (c) => {
   if (!timingSafeEqual(await hashApiKey(verificationCode), row.verification_code_hash)) {
     return c.json({ error: 'Invalid login verification.' }, 401);
   }
+  const consumed = await c.env.ACCOUNTS_DB.prepare(`
+    DELETE FROM auth_sessions
+    WHERE session_id = ? AND poll_secret_hash = ? AND verification_code_hash = ? AND user_id = ?
+  `).bind(
+    session,
+    row.poll_secret_hash,
+    row.verification_code_hash,
+    row.user_id,
+  ).run() as { meta?: { changes?: number } };
+  if ((consumed.meta?.changes ?? 0) === 0) {
+    return c.json({ error: 'Login session already consumed.' }, 409);
+  }
+
   const apiKey = generateApiKey();
   await c.env.ACCOUNTS_DB.prepare(`
     INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
     VALUES (?, ?, ?, 'oauth-login')
   `).bind(await hashApiKey(apiKey), row.user_id, getKeyPrefix(apiKey)).run();
-  await c.env.ACCOUNTS_DB.prepare('DELETE FROM auth_sessions WHERE session_id = ?').bind(session).run();
   return c.json({ api_key: apiKey, username: row.username });
 });
 

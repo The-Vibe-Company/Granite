@@ -15,11 +15,21 @@ const AUTH_RATE_LIMIT_CLEANUP_MS = 300_000;
 let lastAuthRateLimitCleanup = 0;
 
 auth.post('/auth/neon/session', async (c) => {
-  const token = await tokenFromRequest(c.req.raw);
+  const { token, cliSession } = await tokenAndCliSessionFromRequest(c.req.raw);
   if (!token) return c.json({ error: 'Missing Neon Auth token.' }, 400);
   try {
     const user = await upsertNeonUser(database(c.env), await verifyNeonJwt(c.env, token));
-    return c.json({ user }, 200, { 'Set-Cookie': await createWebSession(c, user) });
+    const cookie = await createWebSession(c, user);
+    if (cliSession) {
+      const verificationCode = await completeCliLogin(c.env, cliSession, user.id);
+      if (!verificationCode) return c.json({ user, cli_expired: true }, 200, { 'Set-Cookie': cookie });
+      return c.json(
+        { verification_code: verificationCode, username: user.display_name ?? user.email ?? user.id },
+        200,
+        { 'Set-Cookie': cookie },
+      );
+    }
+    return c.json({ user }, 200, { 'Set-Cookie': cookie });
   } catch {
     return c.json({ error: 'Invalid Neon Auth token.' }, 401);
   }
@@ -159,6 +169,19 @@ async function tokenFromRequest(request: Request): Promise<string> {
   if (scheme?.toLowerCase() === 'bearer') return rest.join(' ').trim();
   const body = await request.json().catch(() => null) as { token?: unknown } | null;
   return typeof body?.token === 'string' ? body.token : '';
+}
+
+async function tokenAndCliSessionFromRequest(request: Request): Promise<{ token: string; cliSession: string }> {
+  const auth = request.headers.get('Authorization') ?? '';
+  const [scheme, ...rest] = auth.split(/\s+/);
+  if (scheme?.toLowerCase() === 'bearer') {
+    return { token: rest.join(' ').trim(), cliSession: '' };
+  }
+  const body = await request.json().catch(() => null) as { token?: unknown; cli_session?: unknown } | null;
+  return {
+    token: typeof body?.token === 'string' ? body.token : '',
+    cliSession: typeof body?.cli_session === 'string' ? body.cli_session.trim() : '',
+  };
 }
 
 async function neonEmailAuth(c: Context<Bindings>, endpoint: 'sign-in/email' | 'sign-up/email'): Promise<Response> {

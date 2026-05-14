@@ -384,8 +384,8 @@ cloudCmd
   .description('Open the Granite Cloud Stripe billing portal')
   .option('--json', 'Output as JSON')
   .option('--no-browser', 'Print the portal URL without opening a browser')
-  .action(async (options: { json?: boolean; noBrowser?: boolean }) => {
-    await cloudBillingCommand(options);
+  .action(async (options: { json?: boolean; browser?: boolean }) => {
+    await cloudBillingCommand({ json: options.json, noBrowser: options.browser === false });
   });
 
 cloudCmd

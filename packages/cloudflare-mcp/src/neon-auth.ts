@@ -7,13 +7,18 @@ type Bindings = { Bindings: Env; Variables: AppVariables };
 
 const SESSION_COOKIE = 'granite_session';
 const NEON_TOKEN_COOKIE = 'granite_neon_jwt';
+const jwksByUrl = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 export async function currentWebUser(c: Context<Bindings>): Promise<User | null> {
   const token = bearerToken(c.req.header('Authorization') ?? '')
     || cookie(c.req.header('Cookie') ?? '', NEON_TOKEN_COOKIE);
   if (token) {
-    const neonUser = await verifyNeonJwt(c.env, token);
-    return upsertNeonUser(database(c.env), neonUser);
+    try {
+      const neonUser = await verifyNeonJwt(c.env, token);
+      return upsertNeonUser(database(c.env), neonUser);
+    } catch {
+      // Fall through to the durable web session cookie when the Neon JWT is stale.
+    }
   }
 
   const session = cookie(c.req.header('Cookie') ?? '', SESSION_COOKIE);
@@ -37,7 +42,7 @@ export async function createWebSession(c: Context<Bindings>, user: User): Promis
 
 export async function verifyNeonJwt(env: Env, token: string): Promise<NeonAuthUser> {
   if (!env.NEON_AUTH_JWKS_URL) throw new Error('NEON_AUTH_JWKS_URL is not configured.');
-  const jwks = createRemoteJWKSet(new URL(env.NEON_AUTH_JWKS_URL));
+  const jwks = jwksFor(env.NEON_AUTH_JWKS_URL);
   const { payload } = await jwtVerify(token, jwks);
   const id = stringClaim(payload.sub);
   if (!id) throw new Error('Neon Auth token is missing a subject.');
@@ -46,6 +51,14 @@ export async function verifyNeonJwt(env: Env, token: string): Promise<NeonAuthUs
     email: stringClaim(payload.email),
     display_name: stringClaim(payload.name) ?? stringClaim(payload.preferred_username),
   };
+}
+
+function jwksFor(url: string): ReturnType<typeof createRemoteJWKSet> {
+  const cached = jwksByUrl.get(url);
+  if (cached) return cached;
+  const jwks = createRemoteJWKSet(new URL(url));
+  jwksByUrl.set(url, jwks);
+  return jwks;
 }
 
 function bearerToken(header: string): string {

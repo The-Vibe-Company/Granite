@@ -37,11 +37,17 @@ CREATE TABLE IF NOT EXISTS cli_login_sessions (
   poll_secret_hash TEXT NOT NULL,
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   verification_code_hash TEXT,
-  api_key_value TEXT,
-  api_key_prefix TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  rate_key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0,
+  reset_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_reset ON auth_rate_limits(reset_at);
 
 CREATE TABLE IF NOT EXISTS vaults (
   vault_id TEXT PRIMARY KEY,

@@ -5,11 +5,11 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 BASE_URL = "https://granite.thevibecompany.co"
-NEON_AUTH_BASE_URL = "https://replace-with-your-neon-auth-url"
-NEON_AUTH_JWKS_URL = "https://replace-with-your-neon-auth-jwks-url"
 
 # Secrets:
 # DATABASE_URL (or configure Hyperdrive and expose HYPERDRIVE.connectionString)
+# NEON_AUTH_BASE_URL
+# NEON_AUTH_JWKS_URL
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
 # STRIPE_VAULT_1GB_PRICE_ID

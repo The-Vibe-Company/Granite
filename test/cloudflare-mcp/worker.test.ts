@@ -3,6 +3,144 @@ import worker, { VaultObject } from '../../packages/cloudflare-mcp/src/index.js'
 import { hashApiKey } from '../../packages/cloudflare-mcp/src/lib/api-key.js';
 
 describe('granite cloudflare worker routes', () => {
+  it('redirects the root route to the dashboard app', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/'));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/app');
+  });
+
+  it('renders a real login page without the temporary JWT paste form', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app/login?cli_session=cli_1'));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Granite Cloud');
+    expect(html).toContain('Create account');
+    expect(html).toContain('Reset password');
+    expect(html).toContain('cli_1');
+    expect(html).toContain('role="status" aria-live="polite"');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).not.toContain('Neon Auth JWT');
+    expect(html).not.toContain('<textarea');
+  });
+
+  it('escapes CLI session values inside the login page script', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app/login?cli_session=%3C/script%3E%3Cimg%20src=x%20onerror=alert(1)%3E'));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('\\u003c/script\\u003e');
+    expect(html).not.toContain('</script><img');
+  });
+
+
+  it('uses BASE_URL when rendering dashboard MCP URLs', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('https://granite.test/mcp?vault_id=v_a');
+    expect(html).not.toContain('https://granite.thevibecompany.co/mcp?vault_id=v_a');
+  });
+
+  it('renders checkout return state messages on the dashboard', async () => {
+    const { env } = await createEnv();
+
+    const success = await fetchWorker(env, new Request('https://granite.test/app?checkout=success', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+    const canceled = await fetchWorker(env, new Request('https://granite.test/app?checkout=canceled', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+
+    await expect(success.text()).resolves.toContain('Checkout complete');
+    await expect(canceled.text()).resolves.toContain('Checkout was canceled');
+  });
+
+  it('generates CLI API keys only after verification succeeds', async () => {
+    const { env } = await createEnv({ cliLoginComplete: true });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: 'cli_session',
+        poll_secret: 'poll_secret',
+        verification_code: 'VERIFYME',
+      }),
+    }));
+    const body = await response.json() as { api_key: string; username: string };
+
+    expect(response.status).toBe(200);
+    expect(body.api_key).toMatch(/^gsk_/);
+    expect(body.username).toBe('u_1');
+  });
+
+  it('rejects CLI login poll when the session was already consumed', async () => {
+    const { env } = await createEnv({ cliLoginComplete: true, cliConsumeSucceeds: false });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: 'cli_session',
+        poll_secret: 'poll_secret',
+        verification_code: 'VERIFYME',
+      }),
+    }));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'Login session is no longer available.' });
+  });
+
+  it('keeps unknown CLI login poll sessions pending', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: 'missing_session',
+        poll_secret: 'poll_secret',
+        verification_code: 'VERIFYME',
+      }),
+    }));
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ pending: true });
+  });
+
+  it('returns a terminal error for expired CLI login poll sessions', async () => {
+    const { env } = await createEnv({ cliLoginExpired: true });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: 'cli_session',
+        poll_secret: 'poll_secret',
+        verification_code: 'VERIFYME',
+      }),
+    }));
+
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toEqual({ error: 'Login session expired.' });
+  });
+
+
+
   it('rejects /mcp without a bearer api key', async () => {
     const { env } = await createEnv();
 
@@ -98,6 +236,20 @@ describe('granite cloudflare worker routes', () => {
     expect(body.billing_status).toBe('pending_checkout');
     expect(body.checkout_url).toBe('https://stripe.test/checkout');
   });
+
+  it('fails vault creation clearly when the Stripe price is not configured', async () => {
+    const { env } = await createEnv({ missingStripePrice: true });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/vaults', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gsk_valid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Broken Billing' }),
+    }));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Stripe price is not configured.' });
+  });
+
 
   it('returns 400 for malformed import JSON', async () => {
     const { env } = await createEnv();
@@ -207,7 +359,13 @@ function fetchWorker(env: any, request: Request): Promise<Response> {
   return worker.fetch(request, env, { waitUntil: () => {} } as any);
 }
 
-async function createEnv(options: { revokeChanges?: number } = {}) {
+async function createEnv(options: {
+  revokeChanges?: number;
+  cliLoginComplete?: boolean;
+  cliLoginExpired?: boolean;
+  cliConsumeSucceeds?: boolean;
+  missingStripePrice?: boolean;
+} = {}) {
   const validHash = await hashApiKey('gsk_valid');
   const routedVaults: string[] = [];
   const user = {
@@ -227,6 +385,22 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
   const seenEvents = new Set<string>();
   const db = {
     async first(sql: string, args: unknown[] = []) {
+      if (sql.includes('FROM web_sessions')) {
+        return user;
+      }
+      if (sql.includes('WITH deleted AS')) {
+        return options.cliConsumeSucceeds === false ? null : { key_hash: String(args[0]) };
+      }
+      if (sql.includes('FROM cli_login_sessions')) {
+        return options.cliLoginComplete || options.cliLoginExpired
+          ? {
+            user_id: user.id,
+            poll_secret_hash: await hashApiKey('poll_secret'),
+            verification_code_hash: await hashApiKey('VERIFYME'),
+            expired: options.cliLoginExpired ?? false,
+          }
+          : null;
+      }
       if (sql.includes('JOIN users')) {
         return args[0] === validHash ? user : null;
       }
@@ -300,7 +474,7 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
     VAULT_BUCKET: {},
     BASE_URL: 'https://granite.test',
     NEON_AUTH_JWKS_URL: 'https://neon.test/jwks.json',
-    STRIPE_VAULT_1GB_PRICE_ID: 'price_1gb',
+    STRIPE_VAULT_1GB_PRICE_ID: options.missingStripePrice ? undefined : 'price_1gb',
   };
 
   return { env: env as any, routedVaults };

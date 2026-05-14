@@ -51,6 +51,17 @@ interface IndexedLink {
   context: string;
 }
 
+interface ImportFile {
+  path: string;
+  size: number;
+  write(): Promise<void>;
+}
+
+interface ImportSnapshot {
+  existed: boolean;
+  backupPath?: string;
+}
+
 const RESERVED_FRONTMATTER_KEYS = new Set([
   'id', 'title', 'type', 'created', 'modified',
   'tags', 'aliases', 'status', 'source',
@@ -78,6 +89,13 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
 
     const seenSlugs = new Set<string>();
     const seenPaths = new Set<string>(['granite.yml']);
+    const indexedNotes: IndexedNote[] = [];
+    const encoder = new TextEncoder();
+    const files: ImportFile[] = [{
+      path: 'granite.yml',
+      size: encoder.encode(payload.config).byteLength,
+      write: () => this.storage.writeTextUnmetered('granite.yml', payload.config, 'text/yaml'),
+    }];
     for (const note of payload.notes) {
       assertSafeNotePath(note.path);
       if (seenPaths.has(note.path)) throw new Error(`Duplicate import path: ${note.path}`);
@@ -85,30 +103,76 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
       const slug = slugFromImportPath(note.path);
       if (seenSlugs.has(slug)) throw new Error(`Duplicate note slug in import: ${slug}`);
       seenSlugs.add(slug);
+      indexedNotes.push(parseNoteContent(note.path, note.content));
+      files.push({
+        path: note.path,
+        size: encoder.encode(note.content).byteLength,
+        write: () => this.storage.writeTextUnmetered(note.path, note.content, 'text/markdown'),
+      });
     }
     for (const asset of payload.assets ?? []) {
       assertSafeImportPath(asset.path);
       if (seenPaths.has(asset.path)) throw new Error(`Duplicate import path: ${asset.path}`);
       seenPaths.add(asset.path);
-    }
-
-    await this.index.initialize();
-    await this.storage.writeText('granite.yml', payload.config, 'text/yaml');
-    await this.index.clear();
-    this.configCache = parsedConfig;
-
-    for (const note of payload.notes) {
-      await this.storage.writeText(note.path, note.content, 'text/markdown');
-      const indexed = parseNoteContent(note.path, note.content);
-      await this.index.upsertNote(indexed);
-    }
-
-    for (const asset of payload.assets ?? []) {
       const bytes = decodeBase64(asset.content_base64);
-      await this.storage.writeBytes(asset.path, bytes, asset.content_type);
+      files.push({
+        path: asset.path,
+        size: bytes.byteLength,
+        write: () => this.storage.writeBytesUnmetered(asset.path, bytes, asset.content_type),
+      });
     }
 
-    await this.rebuildLinks();
+    const existingPaths = await this.storage.list();
+    const stalePaths = existingPaths.filter(path => !seenPaths.has(path));
+    const quotaDelta = await this.importQuotaDelta(files, stalePaths);
+    await this.storage.reserve(quotaDelta);
+    const backupId = crypto.randomUUID();
+    let snapshots: Map<string, ImportSnapshot>;
+    try {
+      snapshots = await this.snapshotImportPaths(uniquePaths([
+        ...files.map(file => file.path),
+        ...stalePaths,
+      ]), backupId);
+    } catch (error) {
+      await this.storage.reserve(-quotaDelta);
+      throw error;
+    }
+    const mutated: string[] = [];
+    try {
+      for (const file of files) {
+        await file.write();
+        mutated.push(file.path);
+      }
+      for (const path of stalePaths) {
+        await this.storage.deleteUnmetered(path);
+        mutated.push(path);
+      }
+    } catch (error) {
+      try {
+        await this.rollbackImportWrites(mutated, snapshots);
+      } finally {
+        await this.deleteRollbackBackupsBestEffort(snapshots);
+        await this.releaseImportQuota(quotaDelta);
+      }
+      throw error;
+    }
+
+    try {
+      await this.index.initialize();
+      await this.index.replaceAll(indexedNotes, buildLinks(indexedNotes));
+      this.configCache = parsedConfig;
+    } catch (error) {
+      this.configCache = null;
+      try {
+        await this.rollbackImportWrites(mutated, snapshots);
+      } finally {
+        await this.deleteRollbackBackupsBestEffort(snapshots);
+        await this.releaseImportQuota(quotaDelta);
+      }
+      throw error;
+    }
+
+    await this.deleteRollbackBackupsBestEffort(snapshots);
     return { note_count: payload.notes.length, asset_count: payload.assets?.length ?? 0 };
   }
 
@@ -364,6 +428,94 @@ export class CloudMcpRuntime implements CanonicalCloudMcpRuntime {
     }));
     await this.index.setLinks(slug, links);
   }
+
+  private async snapshotImportPaths(paths: string[], backupId: string): Promise<Map<string, ImportSnapshot>> {
+    const snapshots = new Map<string, ImportSnapshot>();
+    for (const path of paths) {
+      if (await this.storage.exists(path)) {
+        const backupPath = await this.storage.createRollbackBackup(path, backupId);
+        if (!backupPath) {
+          if (await this.storage.exists(path)) {
+            throw new Error(`Could not create rollback backup for ${path}`);
+          }
+          snapshots.set(path, { existed: false });
+          continue;
+        }
+        snapshots.set(path, {
+          existed: true,
+          backupPath,
+        });
+      } else {
+        snapshots.set(path, { existed: false });
+      }
+    }
+    return snapshots;
+  }
+
+  private async importQuotaDelta(files: ImportFile[], stalePaths: string[]): Promise<number> {
+    let delta = 0;
+    for (const file of files) {
+      delta += file.size - ((await this.storage.stat(file.path))?.size ?? 0);
+    }
+    for (const path of stalePaths) {
+      delta -= (await this.storage.stat(path))?.size ?? 0;
+    }
+    return delta;
+  }
+
+  private async releaseImportQuota(quotaDelta: number): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await this.storage.reserve(-quotaDelta);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Failed to release import quota reservation.');
+  }
+
+  private async rollbackImportWrites(written: string[], snapshots: Map<string, ImportSnapshot>): Promise<void> {
+    const failures: string[] = [];
+    for (const path of [...written].reverse()) {
+      const snapshot = snapshots.get(path);
+      try {
+        if (!snapshot?.existed) {
+          await this.storage.deleteUnmetered(path);
+        } else if (snapshot.backupPath) {
+          await this.storage.restoreRollbackBackup(path, snapshot.backupPath);
+        }
+      } catch (error) {
+        console.warn(`Failed to roll back import path ${path}`, error);
+        failures.push(path);
+      }
+    }
+    if (failures.length > 0) {
+      throw new Error(`Failed to roll back import paths: ${failures.join(', ')}`);
+    }
+  }
+
+  private async deleteRollbackBackups(snapshots: Map<string, ImportSnapshot>): Promise<void> {
+    for (const snapshot of snapshots.values()) {
+      if (snapshot.backupPath) await this.storage.deleteRollbackBackup(snapshot.backupPath);
+    }
+  }
+
+  private async deleteRollbackBackupsBestEffort(snapshots: Map<string, ImportSnapshot>): Promise<void> {
+    try {
+      await this.deleteRollbackBackups(snapshots);
+    } catch (error) {
+      console.warn('Failed to delete rollback backups', error);
+    }
+  }
+
+}
+
+function uniquePaths(paths: string[]): string[] {
+  return [...new Set(paths)];
 }
 
 export class VaultSqlIndex {
@@ -491,6 +643,69 @@ export class VaultSqlIndex {
     }
   }
 
+  async replaceAll(notes: IndexedNote[], links: IndexedLink[]): Promise<void> {
+    const sql = this.sqlStorage.sql;
+    sql.exec('DROP TABLE IF EXISTS notes_import');
+    sql.exec('DROP TABLE IF EXISTS links_import');
+    sql.exec(`
+      CREATE TABLE notes_import (
+        slug TEXT PRIMARY KEY,
+        id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL,
+        tags TEXT NOT NULL,
+        aliases TEXT NOT NULL,
+        body TEXT NOT NULL,
+        filepath TEXT NOT NULL,
+        status TEXT NOT NULL,
+        source TEXT NOT NULL,
+        review_state TEXT NOT NULL,
+        durability TEXT NOT NULL,
+        derived_from TEXT NOT NULL
+      )
+    `);
+    sql.exec(`
+      CREATE TABLE links_import (
+        source_slug TEXT NOT NULL,
+        target_slug TEXT,
+        target_raw TEXT NOT NULL,
+        context TEXT NOT NULL
+      )
+    `);
+    for (const note of notes) {
+      sql.exec(`
+        INSERT INTO notes_import (
+          slug, id, title, type, created, modified, tags, aliases, body, filepath,
+          status, source, review_state, durability, derived_from
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, note.slug, note.id, note.title, note.type, note.created, note.modified, note.tags, note.aliases, note.body,
+        note.filepath, note.status, note.source, note.review_state, note.durability, note.derived_from);
+    }
+    for (const link of links) {
+      sql.exec(
+        'INSERT INTO links_import (source_slug, target_slug, target_raw, context) VALUES (?, ?, ?, ?)',
+        link.source_slug, link.target_slug, link.target_raw, link.context,
+      );
+    }
+
+    try {
+      const replace = () => {
+        sql.exec('DELETE FROM links');
+        sql.exec('DELETE FROM notes');
+        sql.exec('INSERT INTO notes SELECT * FROM notes_import');
+        sql.exec('INSERT INTO links SELECT * FROM links_import');
+      };
+      const storage = this.sqlStorage as DurableObjectStorage & { transactionSync?: <T>(callback: () => T) => T };
+      if (typeof storage.transactionSync !== 'function') throw new Error('Durable Object transactionSync is required.');
+      storage.transactionSync(replace);
+    } finally {
+      sql.exec('DROP TABLE IF EXISTS notes_import');
+      sql.exec('DROP TABLE IF EXISTS links_import');
+    }
+  }
+
   async listLinks(): Promise<IndexedLink[]> {
     return this.rows<IndexedLink>('SELECT * FROM links');
   }
@@ -532,6 +747,16 @@ function parseNoteContent(filepath: string, content: string): IndexedNote {
     derived_from: JSON.stringify(arrayOfStrings(data.derived_from)),
   };
 }
+
+function buildLinks(notes: IndexedNote[]): IndexedLink[] {
+  return notes.flatMap(note => resolveWikilinks(parseWikilinks(note.body), notes).map(link => ({
+    source_slug: note.slug,
+    target_slug: link.resolved_slug ?? null,
+    target_raw: link.target,
+    context: note.body.split('\n').find(line => line.includes(link.raw))?.trim() ?? '',
+  })));
+}
+
 
 function toSummary(note: IndexedNote): any {
   return {

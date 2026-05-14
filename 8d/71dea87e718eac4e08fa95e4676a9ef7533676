@@ -1,0 +1,44 @@
+packages/cloudflare-mcp/src/billing.ts
+  s_54aeed5151d1e2::t_73b135edcefcbc 14-20,30,105-112,114-117
+  s_54aeed5151d1e2::t_1639c9b498e4fe 113
+test/cloudflare-mcp/worker.test.ts
+  s_54aeed5151d1e2::t_9d08b66c5bba15 471-472,476-477,540-556,565-568,570,589,591-592,628
+  s_54aeed5151d1e2::t_6a08f81e3cf566 136-146,173-174,524-531,588,590,593-596,639
+  s_54aeed5151d1e2::t_dab2e7e9724987 80-83,85-88
+  s_54aeed5151d1e2::t_5d4776656cbaf1 31-32,62-64,69,84,89-119,147-172
+  s_54aeed5151d1e2::t_43a54f9b886b39 59-61,68,70-79,120-121,539
+  s_54aeed5151d1e2::t_e7ba18d63600d0 24-25,623
+docs/CLOUD_MCP.md
+  s_54aeed5151d1e2::t_c99120025036a9 124
+packages/cloudflare-mcp/src/routes/auth.ts
+  s_54aeed5151d1e2::t_a52720e665107c 18,22-32,174-184
+packages/cloudflare-mcp/package.json
+  s_54aeed5151d1e2::t_c99120025036a9 7
+packages/cloudflare-mcp/src/routes/dashboard.ts
+  s_54aeed5151d1e2::t_bcbc02dc3ce820 36-38,202-204,207,214,218-221
+  s_54aeed5151d1e2::t_20ed17c528ba9e 20-24,46-50,108-150
+  s_54aeed5151d1e2::t_c608269f514d4f 7,33-35,39-44,66-73,78-88,96-106,192-201,205-206,208-209,211-213,215,787-788
+  s_54aeed5151d1e2::t_1b7326f555cd65 614,616,636,668,739-761
+  s_54aeed5151d1e2::t_1639c9b498e4fe 95,210,528,673-681
+  s_54aeed5151d1e2::t_e3193bdb460a6a 89-94
+  s_54aeed5151d1e2::t_b76ef93db28c77 14,327-346,417,447-456,482,488,504,524,602-613,615,617-634,637-639,644,649-667,669-671,684-693,737-738
+  s_54aeed5151d1e2::t_552586af071982 635,640-643,645-648
+  s_54aeed5151d1e2::t_f4a031788d65c3 234
+  s_54aeed5151d1e2::t_4f88d0103d9100 235,245-326,347-390,395-410,419-425,427-434,437-442,457-459,461-462,464-465,467,469,476,484,489,494,500,505,510,527,552-553
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "8d71dea87e718eac4e08fa95e4676a9ef7533676",
+  "prompts": {},
+  "sessions": {
+    "s_54aeed5151d1e2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2655-2692-7311-8dc5-3eeada915c4a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

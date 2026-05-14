@@ -121,6 +121,7 @@ Required Cloudflare bindings:
 - `CLOUDFLARE_ACCOUNT_ID`: set in the environment for non-interactive deploys when the local Wrangler session has multiple accounts.
 
 Never commit Neon database URLs or Stripe secrets. If a database URL is pasted into chat or logs, rotate it before production.
+Deployments use `wrangler deploy --keep-vars` so Cloudflare dashboard-managed environment variables are preserved.
 
 Stripe webhook endpoint:
 

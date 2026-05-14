@@ -21,11 +21,15 @@ describe('granite cloudflare worker routes', () => {
     expect(response.status).toBe(200);
     expect(html).toContain('Granite Cloud');
     expect(html).toContain('Create account');
+    expect(html).toContain('Continue with Google');
+    expect(html).toContain('https://neon.test/auth');
     expect(html).toContain('Reset password');
     expect(html).toContain('cli_1');
     expect(html).toContain('role="status" aria-live="polite"');
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
+    expect(html).toContain('/get-session?neon_auth_session_verifier=');
+    expect(html).toContain('showOAuthCallbackError');
     expect(html).not.toContain('Neon Auth JWT');
     expect(html).not.toContain('<textarea');
   });
@@ -52,7 +56,67 @@ describe('granite cloudflare worker routes', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('https://granite.test/mcp?vault_id=v_a');
+    expect(html).toContain('API keys');
+    expect(html).toContain('Create API key');
+    expect(html).toContain('gsk_existing');
+    expect(html).toContain('created 2026-05-14');
+    expect(html).toContain('last used 2026-05-14');
+    expect(html).toContain('Revoke this API key?');
     expect(html).not.toContain('https://granite.thevibecompany.co/mcp?vault_id=v_a');
+  });
+
+  it('creates dashboard API keys for MCP clients', async () => {
+    const { env, apiKeyInserts } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app/keys', {
+      method: 'POST',
+      headers: {
+        Cookie: 'granite_session=session_1',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ name: 'cursor' }),
+    }));
+
+    const html = await response.text();
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(response.headers.get('Location')).toBeNull();
+    expect(html).toContain('API key created for cursor');
+    expect(html).toContain('gsk_');
+    expect(html).toContain('Back to dashboard');
+    expect(apiKeyInserts).toHaveLength(1);
+    expect(apiKeyInserts[0]?.[1]).toBe('u_1');
+    expect(apiKeyInserts[0]?.[2]).toMatch(/^gsk_/);
+    expect(apiKeyInserts[0]?.[3]).toBe('cursor');
+    expect(apiKeyInserts[0]?.[0]).not.toBe(apiKeyInserts[0]?.[2]);
+  });
+
+  it('redirects unauthenticated dashboard API key writes to login', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ name: 'cursor' }),
+    }));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/app/login');
+  });
+
+  it('revokes dashboard API keys from the signed-in dashboard', async () => {
+    const { env, dashboardRevocations } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app/keys/gsk_existing/revoke', {
+      method: 'POST',
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/app');
+    expect(dashboardRevocations).toEqual([['u_1', 'gsk_existing']]);
   });
 
   it('renders checkout return state messages on the dashboard', async () => {
@@ -67,6 +131,45 @@ describe('granite cloudflare worker routes', () => {
 
     await expect(success.text()).resolves.toContain('Checkout complete');
     await expect(canceled.text()).resolves.toContain('Checkout was canceled');
+  });
+
+  it('syncs a successful checkout return before rendering vault status', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app?vault_id=v_pending&checkout=success', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Checkout complete. Your vault is active.');
+    expect(html).toContain('v_pending · active');
+  });
+
+  it('keeps checkout returns pending when Stripe has no active subscription', async () => {
+    const { env } = await createEnv({ checkoutSyncStatus: 'pending_checkout' });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app?vault_id=v_pending&checkout=success', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('will become writable as soon as Stripe confirms the subscription');
+    expect(html).toContain('v_pending · pending_checkout');
+  });
+
+  it('shows a dashboard warning when checkout return sync fails', async () => {
+    const { env } = await createEnv({ checkoutSyncThrows: true });
+
+    const response = await fetchWorker(env, new Request('https://granite.test/app?vault_id=v_pending&checkout=success', {
+      headers: { Cookie: 'granite_session=session_1' },
+    }));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('could not refresh billing yet');
+    expect(html).toContain('v_pending · pending_checkout');
   });
 
   it('generates CLI API keys only after verification succeeds', async () => {
@@ -365,9 +468,13 @@ async function createEnv(options: {
   cliLoginExpired?: boolean;
   cliConsumeSucceeds?: boolean;
   missingStripePrice?: boolean;
+  checkoutSyncStatus?: 'active' | 'past_due' | 'canceled' | 'unpaid' | 'pending_checkout';
+  checkoutSyncThrows?: boolean;
 } = {}) {
   const validHash = await hashApiKey('gsk_valid');
   const routedVaults: string[] = [];
+  const apiKeyInserts: unknown[][] = [];
+  const dashboardRevocations: unknown[][] = [];
   const user = {
     id: 'u_1',
     neon_user_id: 'neon_1',
@@ -414,13 +521,39 @@ async function createEnv(options: {
         seenEvents.add(id);
         return { event_id: id };
       }
+      if (sql.includes('UPDATE vaults') && sql.includes('RETURNING billing_status')) {
+        const vault = vaults.get(String(args[0]));
+        if (!vault || args[1] !== user.id || args[6] !== vault.stripe_checkout_session_id) return null;
+        vault.billing_status = args[2] as any;
+        vault.stripe_subscription_id = args[3] as any;
+        vault.cancel_at_period_end = Boolean(args[5]);
+        vault.activated_at = vault.billing_status === 'active' ? '2026-05-14T00:00:00.000Z' : vault.activated_at;
+        return { billing_status: vault.billing_status };
+      }
       return null;
     },
     async query(sql: string, args: unknown[] = []) {
       if (sql.includes('FROM vaults') && sql.includes('WHERE user_id = $1')) {
         return [...vaults.values()].filter(v => v.user_id === args[0]);
       }
-      if (sql.includes('FROM api_keys')) return [];
+      if (sql.includes('FROM api_keys')) {
+        return [
+          {
+            key_prefix: 'gsk_existing',
+            name: 'cursor',
+            created_at: new Date('2026-05-14T00:00:00.000Z'),
+            last_used_at: '2026-05-14T01:02:03.000Z',
+            revoked_at: null,
+          },
+          {
+            key_prefix: 'gsk_revoked',
+            name: 'old client',
+            created_at: '2026-05-13T00:00:00.000Z',
+            last_used_at: null,
+            revoked_at: '2026-05-14T00:00:00.000Z',
+          },
+        ];
+      }
       return [];
     },
     async execute(sql: string, args: unknown[] = []) {
@@ -429,7 +562,12 @@ async function createEnv(options: {
         vaults.set(vaultId, vaultRow(vaultId, String(args[1]), 'pending_checkout'));
         return { rowCount: 1 };
       }
+      if (sql.includes('INSERT INTO api_keys')) {
+        apiKeyInserts.push(args);
+        return { rowCount: 1 };
+      }
       if (sql.includes('SET revoked_at')) {
+        dashboardRevocations.push(args);
         return { rowCount: options.revokeChanges ?? 1 };
       }
       if (sql.includes('UPDATE vaults') && sql.includes("billing_status = 'active'")) {
@@ -447,6 +585,15 @@ async function createEnv(options: {
       async createCustomer() { return 'cus_1'; },
       async createVaultCheckout() { return { id: 'cs_1', url: 'https://stripe.test/checkout' }; },
       async createPortal() { return { url: 'https://stripe.test/portal' }; },
+      async syncCheckoutSession() {
+        if (options.checkoutSyncThrows) throw new Error('Stripe unavailable');
+        return {
+          billingStatus: options.checkoutSyncStatus ?? 'active',
+          subscriptionId: options.checkoutSyncStatus === 'pending_checkout' ? null : 'sub_1',
+          currentPeriodEnd: 1798761600,
+          cancelAtPeriodEnd: false,
+        };
+      },
       async parseWebhook() {
         return { id: 'evt_1', type: 'checkout.session.completed', data: { object: { metadata: { granite_vault_id: 'v_a' }, subscription: 'sub_1' } } };
       },
@@ -473,12 +620,14 @@ async function createEnv(options: {
     },
     VAULT_BUCKET: {},
     BASE_URL: 'https://granite.test',
+    NEON_AUTH_BASE_URL: 'https://neon.test/auth',
     NEON_AUTH_JWKS_URL: 'https://neon.test/jwks.json',
     STRIPE_VAULT_1GB_PRICE_ID: options.missingStripePrice ? undefined : 'price_1gb',
   };
 
-  return { env: env as any, routedVaults };
+  return { env: env as any, routedVaults, apiKeyInserts, dashboardRevocations };
 }
+
 
 function vaultRow(vaultId: string, userId: string, status: string) {
   return {
@@ -487,7 +636,7 @@ function vaultRow(vaultId: string, userId: string, status: string) {
     vault_name: vaultId,
     billing_status: status,
     stripe_subscription_id: null,
-    stripe_checkout_session_id: null,
+    stripe_checkout_session_id: `cs_${vaultId}`,
     stripe_price_id: 'price_1gb',
     current_period_end: null,
     cancel_at_period_end: false,

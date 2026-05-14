@@ -11,6 +11,13 @@ export interface BillingPortalResult {
   url: string;
 }
 
+export interface CheckoutSyncResult {
+  billingStatus: 'active' | 'past_due' | 'canceled' | 'unpaid' | 'pending_checkout';
+  subscriptionId: string | null;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+}
+
 export interface StripeBilling {
   createCustomer(user: User): Promise<string>;
   createVaultCheckout(input: {
@@ -20,6 +27,7 @@ export interface StripeBilling {
     name: string;
   }): Promise<CheckoutSessionResult>;
   createPortal(input: { customerId: string; returnUrl: string }): Promise<BillingPortalResult>;
+  syncCheckoutSession(sessionId: string): Promise<CheckoutSyncResult>;
   parseWebhook(body: string, signature: string): Promise<Stripe.Event>;
 }
 
@@ -92,6 +100,21 @@ class StripeBillingClient implements StripeBilling {
       return_url: input.returnUrl,
     });
     return { url: session.url };
+  }
+
+  async syncCheckoutSession(sessionId: string): Promise<CheckoutSyncResult> {
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription'],
+    });
+    const subscription = typeof session.subscription === 'object' && session.subscription && !('deleted' in session.subscription)
+      ? session.subscription as any
+      : null;
+    return {
+      billingStatus: subscription ? subscriptionStatus(subscription.status) : 'pending_checkout',
+      subscriptionId: typeof session.subscription === 'string' ? session.subscription : subscription?.id ?? null,
+      currentPeriodEnd: typeof subscription?.current_period_end === 'number' ? subscription.current_period_end : null,
+      cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+    };
   }
 
   async parseWebhook(body: string, signature: string): Promise<Stripe.Event> {

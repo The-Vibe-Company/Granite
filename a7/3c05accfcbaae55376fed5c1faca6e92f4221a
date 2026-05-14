@@ -1,0 +1,29 @@
+packages/cloudflare-mcp/src/neon-auth.ts
+  s_66253d97d3e290::t_30484734a080aa 10,16-21,45,56-61
+packages/cloudflare-mcp/src/routes/auth.ts
+  s_66253d97d3e290::t_67a6e047021c47 110-111,113-117,153
+src/index.ts
+  s_66253d97d3e290::t_9f7112bedcb40c 387-388
+docs/CLOUD_MCP.md
+  s_66253d97d3e290::t_6972bbd77ed75f 46
+packages/cloudflare-mcp/src/runtime.ts
+  s_66253d97d3e290::t_fa7a6d7e31acc1 694,699-700
+  s_66253d97d3e290::t_ba3f6e3e426ab8 701-702
+  s_66253d97d3e290::t_67a50c5aca1b40 695-698
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "a73c05accfcbaae55376fed5c1faca6e92f4221a",
+  "prompts": {},
+  "sessions": {
+    "s_66253d97d3e290": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2582-be0e-7a70-ac39-5d4dcf035c29",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

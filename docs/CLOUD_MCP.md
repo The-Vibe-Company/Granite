@@ -1,6 +1,6 @@
 # Granite Cloud MCP
 
-Granite Cloud MCP is the hosted, private MCP endpoint for cloud vaults.
+Granite Cloud MCP is the hosted, private MCP endpoint for paid cloud vaults.
 
 Official endpoint:
 
@@ -18,13 +18,13 @@ Vault selection is explicit. Prefer `vault_id` in the MCP URL for client configs
 
 ## CLI Setup
 
-Log in with GitHub:
+Log in with Neon Auth:
 
 ```bash
 granite cloud login
 ```
 
-The browser flow shows a short verification code after GitHub login. Paste that code back into the CLI; API keys are never placed in the browser URL.
+The browser flow shows a short verification code after Neon Auth login. Paste that code back into the CLI; API keys are never placed in the browser URL.
 
 Or store an existing API key:
 
@@ -32,12 +32,21 @@ Or store an existing API key:
 granite cloud login --api-key gsk_xxx --base-url https://granite.thevibecompany.co
 ```
 
-Create or import a vault:
+Create a paid vault:
 
 ```bash
 granite cloud create --name "My Vault"
+```
+
+The command opens Stripe Checkout. A vault becomes writable only after Stripe activates the subscription.
+
+Import into an active paid vault:
+
+```bash
 granite cloud import --from ~/my-granite-vault --name "My Vault"
 ```
+
+Each vault is billed separately at the Stripe price configured by `STRIPE_VAULT_1GB_PRICE_ID` and has a strict 1GB storage quota.
 
 Print the MCP URL:
 
@@ -49,6 +58,12 @@ Print a client config snippet:
 
 ```bash
 granite cloud mcp-config --client cursor --vault v_xxx
+```
+
+Open Stripe billing:
+
+```bash
+granite cloud billing
 ```
 
 ## Client Config
@@ -96,21 +111,22 @@ The hosted adapter lives in `packages/cloudflare-mcp`.
 
 Required Cloudflare bindings:
 
-- `ACCOUNTS_DB`: D1 database for users, API keys, sessions, and vault registry.
+- `DATABASE_URL` secret or `HYPERDRIVE`: Neon Postgres for users, API keys, sessions, vault registry, Stripe events, billing state, and quota counters.
 - `VAULT_BUCKET`: R2 bucket for markdown files and assets.
 - `VAULT_OBJECT`: Durable Object namespace for per-vault runtime/index state.
 - `BASE_URL`: public service URL, usually `https://granite.thevibecompany.co`.
-- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: OAuth app credentials.
+- `NEON_AUTH_BASE_URL` and `NEON_AUTH_JWKS_URL`: Neon Auth project endpoints.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_VAULT_1GB_PRICE_ID`: Stripe Billing configuration.
 - `CLOUDFLARE_ACCOUNT_ID`: set in the environment for non-interactive deploys when the local Wrangler session has multiple accounts.
 
-The repository does not commit production Cloudflare account or database IDs. Before deploy, set the real D1 `database_id` in the deployment environment's Wrangler config.
+Never commit Neon database URLs or Stripe secrets. If a database URL is pasted into chat or logs, rotate it before production.
 
 Deploy flow:
 
 ```bash
 cd packages/cloudflare-mcp
 npm install
-npm run db:migrate
+npm run db:schema # apply schema.sql to Neon with your migration tool
 npm run deploy
 ```
 

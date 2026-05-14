@@ -1,20 +1,9 @@
-interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-}
-
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  first<T = unknown>(): Promise<T | null>;
-  all<T = unknown>(): Promise<{ results?: T[] }>;
-  run(): Promise<unknown>;
-}
-
 interface R2Bucket {
   get(key: string): Promise<R2ObjectBody | null>;
   put(key: string, value: string | ArrayBuffer | ReadableStream, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
   delete(key: string): Promise<void>;
-  head(key: string): Promise<unknown | null>;
-  list(options?: { prefix?: string; cursor?: string }): Promise<{ objects: Array<{ key: string }>; truncated: boolean; cursor?: string }>;
+  head(key: string): Promise<{ size?: number } | null>;
+  list(options?: { prefix?: string; cursor?: string }): Promise<{ objects: Array<{ key: string; size?: number }>; truncated: boolean; cursor?: string }>;
 }
 
 interface R2ObjectBody {

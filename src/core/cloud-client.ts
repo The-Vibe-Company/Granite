@@ -3,6 +3,10 @@ import { requireCloudConfig, type ResolvedGraniteCloudConfig } from './cloud-con
 export interface CloudVault {
   vault_id: string;
   vault_name: string;
+  billing_status?: string;
+  checkout_url?: string;
+  storage_limit_bytes?: number;
+  storage_used_bytes?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -113,11 +117,15 @@ export class CloudClient {
   }
 
   async createVault(name: string): Promise<CloudVault> {
-    const data = await this.request<{ vault_id: string; vault_name: string }>('/vaults', {
+    const data = await this.request<CloudVault>('/vaults', {
       method: 'POST',
       body: JSON.stringify({ name }),
     });
     return data;
+  }
+
+  async billingPortal(): Promise<{ url: string }> {
+    return this.request('/billing/portal', { method: 'POST' });
   }
 
   async importVault(vaultId: string, payload: CloudImportPayload): Promise<{ note_count: number; asset_count: number }> {

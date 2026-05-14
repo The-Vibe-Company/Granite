@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   browserLaunchCommand,
+  cloudBillingCommand,
+  cloudCreateCommand,
   cloudLoginCommand,
   cloudImportCommand,
   cloudMcpConfigCommand,
@@ -91,6 +93,47 @@ describe('cloud commands', () => {
     expect(output.data.url).toBe('https://cloud.example/mcp?vault_id=v_demo');
     expect(output.data.headers.Authorization).toBe('Bearer gsk_test');
     expect(output.data.config).toContain('"Authorization": "Bearer gsk_test"');
+  });
+
+  it('cloud create returns a pending paid vault checkout payload', async () => {
+    await cloudLoginCommand({
+      apiKey: 'gsk_test',
+      baseUrl: 'https://cloud.example',
+    });
+    stubFetch(async (url) => {
+      expect(url).toBe('https://cloud.example/vaults');
+      return Response.json({
+        vault_id: 'v_paid',
+        vault_name: 'Paid',
+        billing_status: 'pending_checkout',
+        checkout_url: 'https://stripe.example/checkout',
+      }, { status: 201 });
+    });
+
+    await cloudCreateCommand({ name: 'Paid', json: true });
+    const output = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)?.[0] as string);
+
+    expect(output.data).toMatchObject({
+      vault_id: 'v_paid',
+      billing_status: 'pending_checkout',
+      checkout_url: 'https://stripe.example/checkout',
+    });
+  });
+
+  it('cloud billing returns the Stripe portal URL', async () => {
+    await cloudLoginCommand({
+      apiKey: 'gsk_test',
+      baseUrl: 'https://cloud.example',
+    });
+    stubFetch(async (url) => {
+      expect(url).toBe('https://cloud.example/billing/portal');
+      return Response.json({ url: 'https://stripe.example/portal' });
+    });
+
+    await cloudBillingCommand({ json: true });
+    const output = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)?.[0] as string);
+
+    expect(output.data.url).toBe('https://stripe.example/portal');
   });
 
   it('cloud status reports missing config with health probe result', async () => {

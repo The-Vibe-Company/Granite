@@ -28,6 +28,7 @@ import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
 import {
   cloudAddCommand,
+  cloudBillingCommand,
   cloudCreateCommand,
   cloudEditCommand,
   cloudImportCommand,
@@ -376,6 +377,15 @@ cloudCmd
   .option('--json', 'Output as JSON')
   .action(async (options: { name?: string; json?: boolean }) => {
     await cloudCreateCommand(options);
+  });
+
+cloudCmd
+  .command('billing')
+  .description('Open the Granite Cloud Stripe billing portal')
+  .option('--json', 'Output as JSON')
+  .option('--no-browser', 'Print the portal URL without opening a browser')
+  .action(async (options: { json?: boolean; noBrowser?: boolean }) => {
+    await cloudBillingCommand(options);
   });
 
 cloudCmd

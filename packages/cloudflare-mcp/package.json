@@ -5,16 +5,18 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:migrate": "wrangler d1 execute granite-accounts --remote --file=schema.sql",
-    "db:migrate:local": "wrangler d1 execute granite-accounts --local --file=schema.sql",
+    "db:schema": "cat schema.sql",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@neondatabase/serverless": "^1.1.0",
     "gray-matter": "^4.0.3",
     "hono": "^4.0.0",
+    "jose": "^6.2.3",
     "js-yaml": "^4.1.0",
     "nanoid": "^5.0.0",
+    "stripe": "^22.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

@@ -1,211 +1,122 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { AppVariables, Env } from '../env.js';
+import { database, upsertNeonUser } from '../db.js';
 import { generateApiKey, getKeyPrefix, hashApiKey } from '../lib/api-key.js';
-
-interface GitHubUser {
-  id: number;
-  login: string;
-  email: string | null;
-}
-
-interface GitHubTokenResponse {
-  access_token: string;
-}
+import { createWebSession, verifyNeonJwt } from '../neon-auth.js';
 
 type Bindings = { Bindings: Env; Variables: AppVariables };
 
 const auth = new Hono<Bindings>();
 
-auth.post('/auth/start', async (c) => {
-  if (!c.env.GITHUB_CLIENT_ID || !c.env.GITHUB_CLIENT_SECRET) {
-    return c.json({ error: 'GitHub OAuth is not configured.' }, 503);
-  }
+auth.post('/auth/neon/session', async (c) => {
+  const token = await tokenFromRequest(c.req.raw);
+  if (!token) return c.json({ error: 'Missing Neon Auth token.' }, 400);
+  const user = await upsertNeonUser(database(c.env), await verifyNeonJwt(c.env, token));
+  return c.json({ user }, 200, { 'Set-Cookie': await createWebSession(c, user) });
+});
 
+auth.post('/auth/start', async (c) => {
   const body = await c.req.json().catch(() => null);
-  const session = trimmedStringField(body, 'session');
-  const pollSecret = trimmedStringField(body, 'poll_secret');
+  const session = stringField(body, 'session');
+  const pollSecret = stringField(body, 'poll_secret');
   if (!session || !pollSecret) return c.json({ error: 'Missing login session.' }, 400);
 
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-  await c.env.ACCOUNTS_DB.prepare(`
-    INSERT OR REPLACE INTO auth_sessions (session_id, poll_secret_hash, expires_at)
-    VALUES (?, ?, ?)
-  `).bind(session, await hashApiKey(pollSecret), expiresAt).run();
+  await database(c.env).execute(`
+    INSERT INTO cli_login_sessions (session_id, poll_secret_hash, expires_at)
+    VALUES ($1, $2, now() + interval '5 minutes')
+    ON CONFLICT (session_id) DO UPDATE SET
+      poll_secret_hash = EXCLUDED.poll_secret_hash,
+      user_id = NULL,
+      verification_code_hash = NULL,
+      api_key_value = NULL,
+      api_key_prefix = NULL,
+      expires_at = EXCLUDED.expires_at
+  `, [session, await hashApiKey(pollSecret)]);
 
   return c.json({
-    login_url: `${c.env.BASE_URL}/auth/github?session=${encodeURIComponent(session)}`,
-    expires_at: expiresAt,
+    login_url: `${c.env.BASE_URL}/app/login?cli_session=${encodeURIComponent(session)}`,
+    expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   });
 });
 
-auth.get('/auth/github', async (c) => {
-  if (!c.env.GITHUB_CLIENT_ID || !c.env.GITHUB_CLIENT_SECRET) {
-    return c.json({ error: 'GitHub OAuth is not configured.' }, 503);
-  }
+auth.post('/auth/complete-cli', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const session = stringField(body, 'session');
+  const token = stringField(body, 'token');
+  if (!session || !token) return c.json({ error: 'Missing login completion.' }, 400);
 
-  const session = c.req.query('session') || '';
-  const existing = await c.env.ACCOUNTS_DB.prepare(`
-    SELECT session_id
-    FROM auth_sessions
-    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(session).first<{ session_id: string }>();
-  if (!existing) return c.json({ error: 'Login session expired or not found.' }, 404);
-
-  const state = await signState(session, c.env.GITHUB_CLIENT_SECRET);
-  const url = new URL('https://github.com/login/oauth/authorize');
-  url.searchParams.set('client_id', c.env.GITHUB_CLIENT_ID);
-  url.searchParams.set('scope', 'read:user user:email');
-  url.searchParams.set('state', state);
-  url.searchParams.set('redirect_uri', `${c.env.BASE_URL}/auth/callback`);
-  return c.redirect(url.toString());
-});
-
-auth.get('/auth/callback', async (c) => {
-  const code = c.req.query('code');
-  const state = c.req.query('state') || '';
-  if (!code) return c.json({ error: 'Missing authorization code.' }, 400);
-  if (!c.env.GITHUB_CLIENT_ID || !c.env.GITHUB_CLIENT_SECRET) {
-    return c.json({ error: 'GitHub OAuth is not configured.' }, 503);
-  }
-
-  const session = await verifyState(state, c.env.GITHUB_CLIENT_SECRET);
-  if (session === null) return c.json({ error: 'Invalid OAuth state.' }, 400);
-  const activeSession = await c.env.ACCOUNTS_DB.prepare(`
-    SELECT session_id
-    FROM auth_sessions
-    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(session).first<{ session_id: string }>();
-  if (!activeSession) return c.json({ error: 'Login session expired or not found.' }, 400);
-
-  const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({
-      client_id: c.env.GITHUB_CLIENT_ID,
-      client_secret: c.env.GITHUB_CLIENT_SECRET,
-      code,
-    }),
-  });
-  const token = await tokenResponse.json() as GitHubTokenResponse;
-  if (!token.access_token) return c.json({ error: 'Failed to exchange GitHub OAuth code.' }, 400);
-
-  const userResponse = await fetch('https://api.github.com/user', {
-    headers: {
-      'Authorization': `Bearer ${token.access_token}`,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'granite-cloudflare-mcp',
-    },
-  });
-  if (!userResponse.ok) return c.json({ error: 'Failed to fetch GitHub user.' }, 500);
-  const ghUser = await userResponse.json() as GitHubUser;
-
-  const existing = await c.env.ACCOUNTS_DB.prepare(
-    'SELECT id FROM users WHERE github_id = ?',
-  ).bind(ghUser.id).first<{ id: string }>();
-
-  const userId = existing?.id ?? nanoid(16);
-  if (existing) {
-    await c.env.ACCOUNTS_DB.prepare(`
-      UPDATE users
-      SET github_username = ?, email = COALESCE(?, email), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      WHERE id = ?
-    `).bind(ghUser.login, ghUser.email, userId).run();
-  } else {
-    await c.env.ACCOUNTS_DB.prepare(`
-      INSERT INTO users (id, github_id, github_username, email)
-      VALUES (?, ?, ?, ?)
-    `).bind(userId, ghUser.id, ghUser.login, ghUser.email).run();
-
-    await c.env.ACCOUNTS_DB.prepare(`
-      INSERT INTO vaults (vault_id, user_id, vault_name)
-      VALUES (?, ?, ?)
-    `).bind(`v_${nanoid(12)}`, userId, `${ghUser.login}'s vault`).run();
-  }
-
-  const verificationCode = generateVerificationCode();
-  const update = await c.env.ACCOUNTS_DB.prepare(`
-    UPDATE auth_sessions
-    SET user_id = ?, username = ?, verification_code_hash = ?
-    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(userId, ghUser.login, await hashApiKey(verificationCode), session).run() as { meta?: { changes?: number } };
-  if ((update.meta?.changes ?? 0) === 0) return c.json({ error: 'Login session expired or not found.' }, 400);
-
-  return c.html(successPage(ghUser.login, verificationCode));
+  const user = await upsertNeonUser(database(c.env), await verifyNeonJwt(c.env, token));
+  const verificationCode = verification();
+  const apiKey = generateApiKey();
+  await database(c.env).execute(`
+    UPDATE cli_login_sessions
+    SET user_id = $2,
+      verification_code_hash = $3,
+      api_key_value = $4,
+      api_key_prefix = $5
+    WHERE session_id = $1 AND expires_at > now()
+  `, [
+    session,
+    user.id,
+    await hashApiKey(verificationCode),
+    apiKey,
+    getKeyPrefix(apiKey),
+  ]);
+  return c.json({ verification_code: verificationCode, username: user.display_name ?? user.email ?? user.id });
 });
 
 auth.post('/auth/poll', async (c) => {
   const body = await c.req.json().catch(() => null);
-  const session = trimmedStringField(body, 'session');
-  const pollSecret = trimmedStringField(body, 'poll_secret');
-  const verificationCode = trimmedStringField(body, 'verification_code');
+  const session = stringField(body, 'session');
+  const pollSecret = stringField(body, 'poll_secret');
+  const verificationCode = stringField(body, 'verification_code');
   if (!session || !pollSecret || !verificationCode) return c.json({ error: 'Missing login verification.' }, 400);
 
-  const row = await c.env.ACCOUNTS_DB.prepare(`
-    SELECT user_id, username, poll_secret_hash, verification_code_hash
-    FROM auth_sessions
-    WHERE session_id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(session).first<{
+  const row = await database(c.env).first<{
     user_id: string | null;
-    username: string | null;
     poll_secret_hash: string;
     verification_code_hash: string | null;
-  }>();
+    api_key_value: string | null;
+    api_key_prefix: string | null;
+  }>(`
+    SELECT user_id, poll_secret_hash, verification_code_hash, api_key_value, api_key_prefix
+    FROM cli_login_sessions
+    WHERE session_id = $1 AND expires_at > now()
+  `, [session]);
 
-  if (!row) return c.json({ pending: true }, 202);
-  if (!timingSafeEqual(await hashApiKey(pollSecret), row.poll_secret_hash)) {
-    return c.json({ error: 'Invalid login verification.' }, 401);
-  }
-  if (!row.user_id || !row.username || !row.verification_code_hash) {
+  if (!row?.user_id || !row.verification_code_hash || !row.api_key_value || !row.api_key_prefix) {
     return c.json({ pending: true }, 202);
   }
-  if (!timingSafeEqual(await hashApiKey(verificationCode), row.verification_code_hash)) {
+  if (!timingSafeEqual(await hashApiKey(pollSecret), row.poll_secret_hash)
+    || !timingSafeEqual(await hashApiKey(verificationCode), row.verification_code_hash)) {
     return c.json({ error: 'Invalid login verification.' }, 401);
   }
-  const consumed = await c.env.ACCOUNTS_DB.prepare(`
-    DELETE FROM auth_sessions
-    WHERE session_id = ? AND poll_secret_hash = ? AND verification_code_hash = ? AND user_id = ?
-  `).bind(
-    session,
-    row.poll_secret_hash,
-    row.verification_code_hash,
-    row.user_id,
-  ).run() as { meta?: { changes?: number } };
-  if ((consumed.meta?.changes ?? 0) === 0) {
-    return c.json({ error: 'Login session already consumed.' }, 409);
-  }
 
-  const apiKey = generateApiKey();
-  await c.env.ACCOUNTS_DB.prepare(`
+  await database(c.env).execute(`
     INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
-    VALUES (?, ?, ?, 'oauth-login')
-  `).bind(await hashApiKey(apiKey), row.user_id, getKeyPrefix(apiKey)).run();
-  return c.json({ api_key: apiKey, username: row.username });
+    VALUES ($1, $2, $3, 'oauth-login')
+  `, [await hashApiKey(row.api_key_value), row.user_id, row.api_key_prefix]);
+  await database(c.env).execute('DELETE FROM cli_login_sessions WHERE session_id = $1', [session]);
+  return c.json({ api_key: row.api_key_value, username: row.user_id });
 });
 
-async function signState(session: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(session));
-  return `${encodeURIComponent(session)}.${hex(signature)}`;
+async function tokenFromRequest(request: Request): Promise<string> {
+  const auth = request.headers.get('Authorization') ?? '';
+  const [scheme, ...rest] = auth.split(/\s+/);
+  if (scheme?.toLowerCase() === 'bearer') return rest.join(' ').trim();
+  const body = await request.json().catch(() => null) as { token?: unknown } | null;
+  return typeof body?.token === 'string' ? body.token : '';
 }
 
-async function verifyState(state: string, secret: string): Promise<string | null> {
-  const dot = state.lastIndexOf('.');
-  if (dot < 0) return null;
-  let session: string;
-  try {
-    session = decodeURIComponent(state.slice(0, dot));
-  } catch {
-    return null;
-  }
-  const expected = await signState(session, secret);
-  return timingSafeEqual(state.slice(dot + 1), expected.slice(expected.lastIndexOf('.') + 1)) ? session : null;
+function stringField(body: unknown, field: string): string {
+  if (!body || typeof body !== 'object') return '';
+  const value = (body as Record<string, unknown>)[field];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function verification(): string {
+  return nanoid(8).toUpperCase();
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -213,45 +124,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   let result = 0;
   for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return result === 0;
-}
-
-function trimmedStringField(body: unknown, field: string): string {
-  if (!body || typeof body !== 'object') return '';
-  const value = (body as Record<string, unknown>)[field];
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function hex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function generateVerificationCode(): string {
-  return nanoid(10).toUpperCase();
-}
-
-function successPage(username: string, verificationCode?: string): string {
-  const body = verificationCode
-    ? `<p>Enter this verification code in your Granite CLI:</p>
-  <pre>${escapeHtml(verificationCode)}</pre>`
-    : '<p>Login completed.</p>';
-  return `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Granite Cloud MCP</title></head>
-<body>
-  <h1>Granite Cloud MCP</h1>
-  <p>Logged in as ${escapeHtml(username)}.</p>
-  ${body}
-</body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export default auth;

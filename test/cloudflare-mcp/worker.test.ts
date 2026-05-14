@@ -68,7 +68,22 @@ describe('granite cloudflare worker routes', () => {
     expect(routedVaults).toEqual([]);
   });
 
-  it('defaults invalid vault names instead of throwing', async () => {
+  it('blocks MCP access for pending paid vaults', async () => {
+    const { env, routedVaults } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/mcp?vault_id=v_pending', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gsk_valid' },
+    }));
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Vault is not writable while billing status is pending_checkout.',
+    });
+    expect(routedVaults).toEqual([]);
+  });
+
+  it('creates pending paid vaults with checkout URLs', async () => {
     const { env } = await createEnv();
 
     const response = await fetchWorker(env, new Request('https://granite.test/vaults', {
@@ -78,8 +93,10 @@ describe('granite cloudflare worker routes', () => {
     }));
 
     expect(response.status).toBe(201);
-    const body = await response.json() as { vault_name: string };
+    const body = await response.json() as { vault_name: string; billing_status: string; checkout_url: string };
     expect(body.vault_name).toBe('Cloud Vault');
+    expect(body.billing_status).toBe('pending_checkout');
+    expect(body.checkout_url).toBe('https://stripe.test/checkout');
   });
 
   it('returns 400 for malformed import JSON', async () => {
@@ -171,6 +188,19 @@ describe('granite cloudflare worker routes', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ revoked: true, prefix: 'gsk_existing' });
   });
+
+  it('activates a pending vault from a Stripe checkout webhook', async () => {
+    const { env } = await createEnv();
+
+    const response = await fetchWorker(env, new Request('https://granite.test/stripe/webhook', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': 'sig' },
+      body: '{}',
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ received: true });
+  });
 });
 
 function fetchWorker(env: any, request: Request): Promise<Response> {
@@ -182,58 +212,69 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
   const routedVaults: string[] = [];
   const user = {
     id: 'u_1',
-    github_id: 123,
+    neon_user_id: 'neon_1',
     email: 'user@example.com',
-    github_username: 'user',
+    display_name: 'user',
+    stripe_customer_id: 'cus_1',
     created_at: '2026-05-13T00:00:00.000Z',
     updated_at: '2026-05-13T00:00:00.000Z',
   };
-  const vaults = new Set(['v_a', 'v_b']);
+  const vaults = new Map([
+    ['v_a', vaultRow('v_a', user.id, 'active')],
+    ['v_b', vaultRow('v_b', user.id, 'active')],
+    ['v_pending', vaultRow('v_pending', user.id, 'pending_checkout')],
+  ]);
+  const seenEvents = new Set<string>();
+  const db = {
+    async first(sql: string, args: unknown[] = []) {
+      if (sql.includes('JOIN users')) {
+        return args[0] === validHash ? user : null;
+      }
+      if (sql.includes('FROM vaults') && sql.includes('WHERE vault_id = $1 AND user_id = $2')) {
+        const vault = vaults.get(String(args[0]));
+        return vault && args[1] === user.id ? vault : null;
+      }
+      if (sql.includes('INSERT INTO stripe_events')) {
+        const id = String(args[0]);
+        if (seenEvents.has(id)) return null;
+        seenEvents.add(id);
+        return { event_id: id };
+      }
+      return null;
+    },
+    async query(sql: string, args: unknown[] = []) {
+      if (sql.includes('FROM vaults') && sql.includes('WHERE user_id = $1')) {
+        return [...vaults.values()].filter(v => v.user_id === args[0]);
+      }
+      if (sql.includes('FROM api_keys')) return [];
+      return [];
+    },
+    async execute(sql: string, args: unknown[] = []) {
+      if (sql.includes('INSERT INTO vaults')) {
+        const vaultId = String(args[0]);
+        vaults.set(vaultId, vaultRow(vaultId, String(args[1]), 'pending_checkout'));
+        return { rowCount: 1 };
+      }
+      if (sql.includes('SET revoked_at')) {
+        return { rowCount: options.revokeChanges ?? 1 };
+      }
+      if (sql.includes('UPDATE vaults') && sql.includes("billing_status = 'active'")) {
+        const vault = vaults.get(String(args[0]));
+        if (vault) vault.billing_status = 'active';
+        return { rowCount: vault ? 1 : 0 };
+      }
+      return { rowCount: 1 };
+    },
+  };
 
   const env = {
-    ACCOUNTS_DB: {
-      prepare(sql: string) {
-        return {
-          bind(...args: unknown[]) {
-            return {
-              async first() {
-                if (sql.includes('JOIN users')) {
-                  return args[0] === validHash ? user : null;
-                }
-                if (
-                  sql.includes('SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?')
-                ) {
-                  const vaultId = String(args[0]);
-                  const userId = String(args[1]);
-                  return vaults.has(vaultId) && userId === user.id ? { vault_id: vaultId } : null;
-                }
-                if (
-                  sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? AND vault_id = ?')
-                ) {
-                  const userId = String(args[0]);
-                  const vaultId = String(args[1]);
-                  return userId === user.id && vaults.has(vaultId) ? { vault_id: vaultId } : null;
-                }
-                if (sql.includes('SELECT vault_id FROM vaults WHERE user_id = ? ORDER BY created_at LIMIT 1')) {
-                  return { vault_id: 'v_a' };
-                }
-                return null;
-              },
-              async all() {
-                return { results: [] };
-              },
-              async run() {
-                if (sql.includes('INSERT INTO vaults')) {
-                  return { success: true, meta: { changes: 1 } };
-                }
-                if (sql.includes('SET revoked_at')) {
-                  return { success: true, meta: { changes: options.revokeChanges ?? 1 } };
-                }
-                return { success: true, meta: { changes: 1 } };
-              },
-            };
-          },
-        };
+    TEST_DB: db,
+    TEST_STRIPE: {
+      async createCustomer() { return 'cus_1'; },
+      async createVaultCheckout() { return { id: 'cs_1', url: 'https://stripe.test/checkout' }; },
+      async createPortal() { return { url: 'https://stripe.test/portal' }; },
+      async parseWebhook() {
+        return { id: 'evt_1', type: 'checkout.session.completed', data: { object: { metadata: { granite_vault_id: 'v_a' }, subscription: 'sub_1' } } };
       },
     },
     VAULT_OBJECT: {
@@ -258,9 +299,28 @@ async function createEnv(options: { revokeChanges?: number } = {}) {
     },
     VAULT_BUCKET: {},
     BASE_URL: 'https://granite.test',
-    GITHUB_CLIENT_ID: 'client',
-    GITHUB_CLIENT_SECRET: 'secret',
+    NEON_AUTH_JWKS_URL: 'https://neon.test/jwks.json',
+    STRIPE_VAULT_1GB_PRICE_ID: 'price_1gb',
   };
 
   return { env: env as any, routedVaults };
+}
+
+function vaultRow(vaultId: string, userId: string, status: string) {
+  return {
+    vault_id: vaultId,
+    user_id: userId,
+    vault_name: vaultId,
+    billing_status: status,
+    stripe_subscription_id: null,
+    stripe_checkout_session_id: null,
+    stripe_price_id: 'price_1gb',
+    current_period_end: null,
+    cancel_at_period_end: false,
+    storage_limit_bytes: 1000000000,
+    storage_used_bytes: 0,
+    activated_at: status === 'active' ? '2026-05-13T00:00:00.000Z' : null,
+    created_at: '2026-05-13T00:00:00.000Z',
+    updated_at: '2026-05-13T00:00:00.000Z',
+  };
 }

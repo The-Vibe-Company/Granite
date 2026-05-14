@@ -1,9 +1,11 @@
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
-import type { AppVariables, Env, User } from './env.js';
+import type { AppVariables, Env } from './env.js';
 import { hashApiKey } from './lib/api-key.js';
+import { database, findUserByApiKeyHash, ownedVault, touchApiKey, vaultCanRead, vaultCanWrite } from './db.js';
 
 type Bindings = { Bindings: Env; Variables: AppVariables };
+type AccessMode = 'read' | 'write';
 
 export const authMiddleware = createMiddleware<Bindings>(async (c, next) => {
   const authHeader = c.req.header('Authorization') ?? '';
@@ -15,34 +17,33 @@ export const authMiddleware = createMiddleware<Bindings>(async (c, next) => {
   }
 
   const keyHash = await hashApiKey(apiKey);
-  const result = await c.env.ACCOUNTS_DB.prepare(`
-    SELECT u.id, u.github_id, u.email, u.github_username, u.created_at, u.updated_at
-    FROM api_keys k
-    JOIN users u ON u.id = k.user_id
-    WHERE k.key_hash = ? AND k.revoked_at IS NULL
-  `).bind(keyHash).first<User>();
+  const db = database(c.env);
+  const result = await findUserByApiKeyHash(db, keyHash);
 
   if (!result) {
     return c.json({ error: 'Invalid API key.' }, 401);
   }
 
-  c.executionCtx.waitUntil(c.env.ACCOUNTS_DB.prepare(
-    "UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE key_hash = ?",
-  ).bind(keyHash).run());
+  c.executionCtx.waitUntil(touchApiKey(db, keyHash));
 
   c.set('user', result);
   await next();
 });
 
-export async function resolveVaultId(c: Context<Bindings>): Promise<string | Response> {
+export async function resolveVaultId(c: Context<Bindings>, mode: AccessMode = 'read'): Promise<string | Response> {
   const user = c.get('user');
   const requested = c.req.query('vault_id') || c.req.header('X-Vault-Id') || '';
 
   if (requested) {
-    const owned = await c.env.ACCOUNTS_DB.prepare(
-      'SELECT vault_id FROM vaults WHERE vault_id = ? AND user_id = ?',
-    ).bind(requested, user.id).first<{ vault_id: string }>();
+    const owned = await ownedVault(database(c.env), user.id, requested);
     if (!owned) return c.json({ error: 'Vault not found or access denied.' }, 404);
+    if (mode === 'write' && !vaultCanWrite(owned)) {
+      return c.json({ error: `Vault is not writable while billing status is ${owned.billing_status}.` }, 402);
+    }
+    if (mode === 'read' && !vaultCanRead(owned)) {
+      return c.json({ error: `Vault is not active yet. Billing status is ${owned.billing_status}.` }, 402);
+    }
+    c.set('vault', owned);
     return requested;
   }
 

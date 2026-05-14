@@ -5,19 +5,23 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 BASE_URL = "https://granite.thevibecompany.co"
+NEON_AUTH_BASE_URL = "https://replace-with-your-neon-auth-url"
+NEON_AUTH_JWKS_URL = "https://replace-with-your-neon-auth-jwks-url"
 
 # Secrets:
-# GITHUB_CLIENT_ID
-# GITHUB_CLIENT_SECRET
+# DATABASE_URL (or configure Hyperdrive and expose HYPERDRIVE.connectionString)
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
+# STRIPE_VAULT_1GB_PRICE_ID
 
 [[r2_buckets]]
 binding = "VAULT_BUCKET"
 bucket_name = "granite-vaults"
 
-[[d1_databases]]
-binding = "ACCOUNTS_DB"
-database_name = "granite-accounts"
-database_id = "replace-with-your-d1-database-id"
+# Optional production pooling for Neon:
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "replace-with-your-hyperdrive-id"
 
 [[durable_objects.bindings]]
 name = "VAULT_OBJECT"

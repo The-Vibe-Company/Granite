@@ -118,17 +118,24 @@ export async function cloudVaultsCommand(options: { json?: boolean }): Promise<v
     return;
   }
   for (const vault of vaults) {
-    console.log(`  ${vault.vault_id}  ${vault.vault_name}`);
+    const usage = vault.storage_limit_bytes
+      ? `  ${Math.round(((vault.storage_used_bytes ?? 0) / vault.storage_limit_bytes) * 100)}%`
+      : '';
+    const billing = vault.billing_status ? `  ${vault.billing_status}` : '';
+    console.log(`  ${vault.vault_id}  ${vault.vault_name}${billing}${usage}`);
   }
 }
 
 export async function cloudCreateCommand(options: { name?: string; json?: boolean }): Promise<void> {
   const vault = await new CloudClient().createVault(options.name ?? 'Cloud Vault');
-  updateCloudConfig({ default_vault_id: vault.vault_id });
   if (options.json) console.log(jsonSuccess(vault));
   else {
-    console.log(`Created cloud vault: ${vault.vault_name} (${vault.vault_id})`);
-    console.log('Set as default cloud vault.');
+    console.log(`Created pending cloud vault: ${vault.vault_name} (${vault.vault_id})`);
+    if (vault.checkout_url) {
+      console.log('Open Stripe Checkout to activate it:');
+      console.log(vault.checkout_url);
+      openBrowser(vault.checkout_url);
+    }
   }
 }
 
@@ -139,6 +146,18 @@ export async function cloudImportCommand(options: { from?: string; name?: string
   const vault = options.vault
     ? { vault_id: options.vault, vault_name: options.name ?? options.vault }
     : await client.createVault(options.name ?? (path.basename(from) || 'Imported Vault'));
+
+  if ('checkout_url' in vault && vault.checkout_url) {
+    if (options.json) {
+      console.log(jsonSuccess({ vault, pending_payment: true }));
+      return;
+    }
+    console.log(`Created pending cloud vault: ${vault.vault_name} (${vault.vault_id})`);
+    console.log('Open Stripe Checkout to activate it, then rerun import with --vault:');
+    console.log(vault.checkout_url);
+    openBrowser(vault.checkout_url);
+    return;
+  }
 
   const result = await client.importVault(vault.vault_id, payload);
   updateCloudConfig({ default_vault_id: vault.vault_id });
@@ -305,6 +324,16 @@ export function cloudMcpConfigCommand(options: { client?: string; vault?: string
     return;
   }
   console.log(snippet);
+}
+
+export async function cloudBillingCommand(options: { json?: boolean; noBrowser?: boolean }): Promise<void> {
+  const portal = await new CloudClient().billingPortal();
+  if (options.json) {
+    console.log(jsonSuccess(portal));
+    return;
+  }
+  console.log(portal.url);
+  if (!options.noBrowser) openBrowser(portal.url);
 }
 
 function buildImportPayload(vaultRoot: string) {

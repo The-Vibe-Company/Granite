@@ -43,7 +43,7 @@ The command opens Stripe Checkout. A vault becomes writable only after Stripe ac
 Import into an active paid vault:
 
 ```bash
-granite cloud import --from ~/my-granite-vault --name "My Vault"
+granite cloud import --from ~/my-granite-vault --vault v_xxx
 ```
 
 Each vault is billed separately at the Stripe price configured by `STRIPE_VAULT_1GB_PRICE_ID` and has a strict 1GB storage quota.

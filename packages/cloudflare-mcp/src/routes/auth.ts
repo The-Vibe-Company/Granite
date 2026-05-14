@@ -107,10 +107,14 @@ auth.post('/auth/poll', async (c) => {
     poll_secret_hash: string;
     verification_code_hash: string | null;
     expired: boolean;
+    display_name: string | null;
+    email: string | null;
   }>(`
-    SELECT user_id, poll_secret_hash, verification_code_hash, expires_at <= now() AS expired
-    FROM cli_login_sessions
-    WHERE session_id = $1
+    SELECT s.user_id, s.poll_secret_hash, s.verification_code_hash, s.expires_at <= now() AS expired,
+      u.display_name, u.email
+    FROM cli_login_sessions s
+    LEFT JOIN users u ON u.id = s.user_id
+    WHERE s.session_id = $1
   `, [session]);
 
   if (!row) return c.json({ pending: true }, 202);
@@ -146,7 +150,7 @@ auth.post('/auth/poll', async (c) => {
     SELECT key_hash FROM inserted
   `, [await hashApiKey(apiKey), row.user_id, keyPrefix, session, pollSecretHash, verificationCodeHash]);
   if (!inserted) return c.json({ error: 'Login session is no longer available.' }, 409);
-  return c.json({ api_key: apiKey, username: row.user_id });
+  return c.json({ api_key: apiKey, username: row.display_name ?? row.email ?? row.user_id });
 });
 
 async function tokenFromRequest(request: Request): Promise<string> {

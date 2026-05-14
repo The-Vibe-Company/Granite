@@ -691,19 +691,15 @@ export class VaultSqlIndex {
     }
 
     try {
-      sql.exec('BEGIN');
-      sql.exec('DELETE FROM links');
-      sql.exec('DELETE FROM notes');
-      sql.exec('INSERT INTO notes SELECT * FROM notes_import');
-      sql.exec('INSERT INTO links SELECT * FROM links_import');
-      sql.exec('COMMIT');
-    } catch (error) {
-      try {
-        sql.exec('ROLLBACK');
-      } catch {
-        // Transaction may not have started if the storage engine rejected BEGIN.
-      }
-      throw error;
+      const replace = () => {
+        sql.exec('DELETE FROM links');
+        sql.exec('DELETE FROM notes');
+        sql.exec('INSERT INTO notes SELECT * FROM notes_import');
+        sql.exec('INSERT INTO links SELECT * FROM links_import');
+      };
+      const storage = this.sqlStorage as DurableObjectStorage & { transactionSync?: <T>(callback: () => T) => T };
+      if (typeof storage.transactionSync !== 'function') throw new Error('Durable Object transactionSync is required.');
+      storage.transactionSync(replace);
     } finally {
       sql.exec('DROP TABLE IF EXISTS notes_import');
       sql.exec('DROP TABLE IF EXISTS links_import');

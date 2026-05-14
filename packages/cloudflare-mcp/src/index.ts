@@ -34,6 +34,7 @@ app.get('/health', c => c.json({
     vault_object: !!c.env.VAULT_OBJECT,
   },
 }));
+app.get('/', c => c.redirect('/app'));
 app.route('/', authRoutes);
 app.route('/', dashboardRoutes);
 
@@ -64,6 +65,7 @@ app.post('/vaults', async (c) => {
   const body = await safeJson<{ name?: string }>(c.req.raw);
   const vaultId = `v_${nanoid(12)}`;
   const name = (typeof body?.name === 'string' && body.name.trim() ? body.name : 'Cloud Vault').slice(0, 100);
+  if (!c.env.STRIPE_VAULT_1GB_PRICE_ID) return c.json({ error: 'Stripe price is not configured.' }, 500);
   const db = database(c.env);
   const billing = stripeBilling(c.env);
   const customerId = await ensureStripeCustomer(db, billing, user);
@@ -74,7 +76,7 @@ app.post('/vaults', async (c) => {
       stripe_price_id, storage_limit_bytes, storage_used_bytes
     )
     VALUES ($1, $2, $3, 'pending_checkout', $4, $5, 1000000000, 0)
-  `, [vaultId, user.id, name, checkout.id, c.env.STRIPE_VAULT_1GB_PRICE_ID ?? 'test_price']);
+  `, [vaultId, user.id, name, checkout.id, c.env.STRIPE_VAULT_1GB_PRICE_ID]);
   return c.json({ vault_id: vaultId, vault_name: name, billing_status: 'pending_checkout', checkout_url: checkout.url }, 201);
 });
 

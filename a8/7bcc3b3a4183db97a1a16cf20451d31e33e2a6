@@ -1,0 +1,68 @@
+src/index.ts
+  s_bc3dd13b908a9d::t_c7ce27c28890f1 31,382-388
+docs/CLOUD_MCP.md
+  s_bc3dd13b908a9d::t_b221b3a621cc3e 3,21,27,35,39-45,49,114,118-119,122,129
+  s_bc3dd13b908a9d::t_32d09e1aa62941 63-68
+packages/cloudflare-mcp/src/index.ts
+  s_bc3dd13b908a9d::t_a5a557c7242fa0 44
+  s_bc3dd13b908a9d::t_5ec859d4b70dc4 8,12-13,30-32,38,51-54,56,58-59,67-78,83,85,95-119,121,127,133,139,145,151,157,163,185-187,260-302
+src/core/cloud-client.ts
+  s_bc3dd13b908a9d::t_e94131faf72d2b 6-9,120,127-128
+test/cloudflare-mcp/worker.test.ts
+  s_bc3dd13b908a9d::t_669edfca0e6ee1 71-85,191-202,225
+  s_bc3dd13b908a9d::t_7947ec96386d4d 86,96,98-99,215,217-218,222-224,226-268,271-277,302-303,308-325
+packages/cloudflare-mcp/src/env.ts
+  s_bc3dd13b908a9d::t_9ec14f4b83e44e 5-13,18,20-21,28,35-43,47-58
+packages/cloudflare-mcp/src/db.ts
+  s_bc3dd13b908a9d::t_271d1f4088ce0a 1-96
+packages/cloudflare-mcp/src/billing.ts
+  s_bc3dd13b908a9d::t_8053b4b21911f6 46,99-105
+  s_bc3dd13b908a9d::t_3375d2bb1f068e 1-45,47-98,106-123
+test/commands/cloud.test.ts
+  s_bc3dd13b908a9d::t_5a00b6a049c09a 7-8,98-136
+packages/cloudflare-mcp/wrangler.toml
+  s_bc3dd13b908a9d::t_ecac0ac4b36164 21-24
+  s_bc3dd13b908a9d::t_cde949bc462d22 8-9,12-15
+packages/cloudflare-mcp/src/auth.ts
+  s_bc3dd13b908a9d::t_348c7214a03eb1 3,5,8,20-21,27,33,38,40-46
+packages/cloudflare-mcp/src/worker-types.d.ts
+  s_bc3dd13b908a9d::t_e085376aaac4c1 5-6
+packages/cloudflare-mcp/schema.sql
+  s_bc3dd13b908a9d::t_5f1d26a92e6589 1,6,8-11,19-21,26-35,39-43,50-61,65-71
+packages/cloudflare-mcp/src/routes/keys.ts
+  s_bc3dd13b908a9d::t_27732e7f7a79e5 4,12,18-23,25,38,40-41,49,51-53,55
+src/commands/cloud.ts
+  s_bc3dd13b908a9d::t_697a00915fe8db 121-125,133-138,150-161,329-336
+packages/cloudflare-mcp/src/routes/dashboard.ts
+  s_bc3dd13b908a9d::t_a31b12ffe4d61c 34-37,119,122,130-131
+  s_bc3dd13b908a9d::t_c4954633a01d34 1-4,7-31,33,38,40-118,132-148
+  s_bc3dd13b908a9d::t_468cf4eb9104cf 5-6,32,39,120-121,123-129
+packages/cloudflare-mcp/src/routes/auth.ts
+  s_bc3dd13b908a9d::t_3bb0d51e0419d8 32,56,80,83,88,99,101
+  s_bc3dd13b908a9d::t_bcdc403fd56d17 4,6,12-17,19,21-22,25-31,33-35,38-39,43-47,49-55,57-62,64-66,71-73,76,81-82,84-87,91-92,96,98,100,104-109,112,118-119,122-126
+  s_bc3dd13b908a9d::t_80910c426d5610 63
+packages/cloudflare-mcp/src/storage/r2.ts
+  s_bc3dd13b908a9d::t_9cfaa5e27de5c8 18-20,32-34
+  s_bc3dd13b908a9d::t_658deca3a25805 5,15-17,21-24,28-31,35-38,42,44,67-76
+packages/cloudflare-mcp/package.json
+  s_bc3dd13b908a9d::t_6e76edb4ee22d2 8
+  s_bc3dd13b908a9d::t_be99767bd8ec86 13,16,19
+packages/cloudflare-mcp/src/neon-auth.ts
+  s_bc3dd13b908a9d::t_2c36fd3c6689ed 1-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "a87bcc3b3a4183db97a1a16cf20451d31e33e2a6",
+  "prompts": {},
+  "sessions": {
+    "s_bc3dd13b908a9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2201-9060-7910-9a43-5a995dacad10",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

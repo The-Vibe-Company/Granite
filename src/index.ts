@@ -26,6 +26,18 @@ import { wakeupCommand } from './commands/wakeup.js';
 import { attachCommand } from './commands/attach.js';
 import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
+import {
+  syncConfigCommand,
+  syncPullCommand,
+  syncPushCommand,
+  syncRemoteAddCommand,
+  syncRemoteListCommand,
+  syncRemoteRemoveCommand,
+  syncRunCommand,
+  syncServeCommand,
+  syncStatusCommand,
+  syncWatchCommand,
+} from './commands/sync.js';
 import { GRANITE_VERSION } from './version.js';
 
 const program = new Command();
@@ -319,6 +331,136 @@ daemonCmd
   .option('-n, --lines <count>', 'Number of tail lines', '100')
   .action((options: { vault?: string; lines?: string }) => {
     daemonLogsCommand(options);
+  });
+
+// ─── Sync ─────────────────────────────────────────────────────────────
+// Direct machine-to-machine vault sync over LAN/Tailscale/private DNS.
+
+const syncCmd = program
+  .command('sync')
+  .description('Sync a vault directly with another machine over LAN, Tailscale, or private DNS');
+
+syncCmd
+  .command('status')
+  .description('Show local sync identity, token, policy, and remotes')
+  .option('--vault <path>', 'Vault root')
+  .option('--json', 'Output as JSON')
+  .action((options: { vault?: string; json?: boolean }) => {
+    syncStatusCommand(options);
+  });
+
+syncCmd
+  .command('config')
+  .description('Configure conflict resolution for this vault')
+  .option('--vault <path>', 'Vault root')
+  .option('--policy <policy>', 'Conflict policy: manual or primary-wins')
+  .option('--primary-device <device_id>', 'Device that wins conflicts when policy is primary-wins')
+  .option('--primary-this-device', 'Make this machine the primary device')
+  .option('--json', 'Output as JSON')
+  .action((options: {
+    vault?: string;
+    policy?: string;
+    primaryDevice?: string;
+    primaryThisDevice?: boolean;
+    json?: boolean;
+  }) => {
+    syncConfigCommand(options);
+  });
+
+const syncRemoteCmd = syncCmd
+  .command('remote')
+  .description('Manage direct sync remotes');
+
+syncRemoteCmd
+  .command('list')
+  .alias('ls')
+  .description('List configured sync remotes')
+  .option('--vault <path>', 'Vault root')
+  .option('--json', 'Output as JSON')
+  .action((options: { vault?: string; json?: boolean }) => {
+    syncRemoteListCommand(options);
+  });
+
+syncRemoteCmd
+  .command('add')
+  .description('Add a remote by IP, Tailscale DNS name, or private domain')
+  .argument('<name-or-address>', 'Remote name, or address when address is omitted')
+  .argument('[address]', 'Remote address, e.g. http://100.x.y.z:8765')
+  .option('--vault <path>', 'Vault root')
+  .option('--port <port>', 'Port to add when the address has no port', '8765')
+  .option('--token <token>', 'Remote sync token')
+  .option('--json', 'Output as JSON')
+  .action((nameOrAddress: string, address: string | undefined, options: {
+    vault?: string;
+    port?: string;
+    token?: string;
+    json?: boolean;
+  }) => {
+    syncRemoteAddCommand(nameOrAddress, address, options);
+  });
+
+syncRemoteCmd
+  .command('remove')
+  .alias('rm')
+  .description('Remove a sync remote')
+  .argument('<name>', 'Remote name')
+  .option('--vault <path>', 'Vault root')
+  .option('--json', 'Output as JSON')
+  .action((name: string, options: { vault?: string; json?: boolean }) => {
+    syncRemoteRemoveCommand(name, options);
+  });
+
+syncCmd
+  .command('serve')
+  .description('Serve this vault for direct sync from another machine')
+  .option('--vault <path>', 'Vault root')
+  .option('--host <host>', 'Host to bind to', '0.0.0.0')
+  .option('--port <port>', 'Port to listen on', '8765')
+  .action((options: { vault?: string; host?: string; port?: string }) => {
+    syncServeCommand(options);
+  });
+
+syncCmd
+  .command('pull')
+  .description('Pull changes from a direct sync remote')
+  .argument('<remote>', 'Remote name')
+  .option('--vault <path>', 'Vault root')
+  .option('--token <token>', 'Override remote token')
+  .option('--json', 'Output as JSON')
+  .action(async (remote: string, options: { vault?: string; token?: string; json?: boolean }) => {
+    await syncPullCommand(remote, options);
+  });
+
+syncCmd
+  .command('push')
+  .description('Push changes to a direct sync remote')
+  .argument('<remote>', 'Remote name')
+  .option('--vault <path>', 'Vault root')
+  .option('--token <token>', 'Override remote token')
+  .option('--json', 'Output as JSON')
+  .action(async (remote: string, options: { vault?: string; token?: string; json?: boolean }) => {
+    await syncPushCommand(remote, options);
+  });
+
+syncCmd
+  .command('run')
+  .description('Pull then push changes with a direct sync remote')
+  .argument('<remote>', 'Remote name')
+  .option('--vault <path>', 'Vault root')
+  .option('--token <token>', 'Override remote token')
+  .option('--json', 'Output as JSON')
+  .action(async (remote: string, options: { vault?: string; token?: string; json?: boolean }) => {
+    await syncRunCommand(remote, options);
+  });
+
+syncCmd
+  .command('watch')
+  .description('Continuously run direct sync with a remote')
+  .argument('<remote>', 'Remote name')
+  .option('--vault <path>', 'Vault root')
+  .option('--interval <seconds>', 'Seconds between sync runs', '30')
+  .action(async (remote: string, options: { vault?: string; interval?: string }) => {
+    await syncWatchCommand(remote, options);
   });
 
 await program.parseAsync();

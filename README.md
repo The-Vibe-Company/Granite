@@ -168,6 +168,26 @@ Your agent reads these before writing and sets them as it works. You inherit a f
 - `git init` your vault and you have versioning for free
 - `granite serve` gives you a local web UI — browse, search, explore the graph
 
+## Direct sync
+
+Granite sync is direct machine-to-machine. Run it over LAN, Tailscale, or a private DNS name; there is no relay, hosted worker, billing tier, or cloud authority.
+
+```bash
+# Machine A
+granite sync serve --host 0.0.0.0 --port 8765
+
+# Machine B
+granite sync remote add macbook http://100.x.y.z:8765 --token <machine-a-token>
+granite sync run macbook
+granite sync watch macbook --interval 30
+```
+
+Conflicts default to manual preservation with `.conflict.<device>.<timestamp>.md` files. For a personal multi-device setup, pick the device that wins conflicts:
+
+```bash
+granite sync config --policy primary-wins --primary-this-device
+```
+
 For the full CLI, run `granite --help`. For development, see [CLAUDE.md](CLAUDE.md).
 
 ## Philosophy

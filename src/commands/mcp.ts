@@ -4,7 +4,6 @@ import { spawn } from 'node:child_process';
 import { requireVaultRoot, getGraniteDir } from '../core/vault.js';
 import { startGraniteMcpHttpServer, startGraniteMcpStdioServer } from '../mcp/server.js';
 import { GraniteMcpRuntime } from '../mcp/runtime.js';
-import { startTunnel, stopTunnel, type TunnelProvider } from '../tunnel.js';
 
 interface McpCommandOptions {
   vault?: string;
@@ -13,7 +12,6 @@ interface McpCommandOptions {
   port?: string;
   allowOrigin?: string[];
   jsonResponse?: boolean;
-  tunnel?: TunnelProvider;
   background?: boolean;
 }
 
@@ -57,14 +55,13 @@ function cleanupFiles(vaultRoot: string): void {
 // ---- Commands --------------------------------------------------------------
 
 export async function mcpCommand(options: McpCommandOptions): Promise<void> {
-  const tunnel = options.tunnel;
-  const transport = tunnel ? 'http' : parseTransport(options.transport);
+  const transport = parseTransport(options.transport);
   const vaultRoot = resolveVaultRoot(options.vault);
 
   // --background: re-spawn ourselves as a detached child
   if (options.background) {
     if (transport !== 'http') {
-      console.error('--background requires --transport http or --tunnel');
+      console.error('--background requires --transport http');
       process.exit(1);
     }
 
@@ -103,10 +100,8 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
   // In daemon mode, --background flag is still in argv but we skip it via env var
   const isDaemon = process.env.GRANITE_MCP_DAEMONIZED === '1';
   const runtime = new GraniteMcpRuntime(vaultRoot);
-  let tunnelProcess: import('node:child_process').ChildProcess | null = null;
 
   const shutdown = () => {
-    if (tunnelProcess) stopTunnel(tunnelProcess);
     if (isDaemon) cleanupFiles(vaultRoot);
     runtime.close();
     process.exit(0);
@@ -128,24 +123,6 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
     });
 
     if (isDaemon) writeDaemonState(vaultRoot, process.pid, localUrl);
-
-    if (tunnel) {
-      try {
-        console.error(`\nStarting ${tunnel} tunnel...`);
-        const result = await startTunnel({ provider: tunnel, port, host });
-        tunnelProcess = result.process;
-        const publicMcpUrl = `${result.url}/mcp`;
-        console.error(`\n🚇 Tunnel active!\n`);
-        console.error(`  Public MCP endpoint: ${publicMcpUrl}`);
-        console.error(`  Provider: ${tunnel}`);
-        console.error(`\nUse this URL in your remote MCP client configuration.\n`);
-
-        if (isDaemon) writeDaemonState(vaultRoot, process.pid, publicMcpUrl);
-      } catch (err) {
-        console.error(`\nFailed to start tunnel: ${err instanceof Error ? err.message : err}`);
-        shutdown();
-      }
-    }
 
     return;
   }

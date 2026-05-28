@@ -21,11 +21,5 @@ jobs:
         run: npm run build
       - name: Typecheck
         run: npm run lint
-      - name: Install Cloudflare MCP dependencies
-        run: npm ci
-        working-directory: packages/cloudflare-mcp
-      - name: Typecheck Cloudflare MCP
-        run: npm run lint
-        working-directory: packages/cloudflare-mcp
       - name: Run tests with coverage
         run: npm run test:coverage

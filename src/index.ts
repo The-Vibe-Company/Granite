@@ -242,7 +242,6 @@ const mcpCmd = program
   .option('--port <port>', 'Port for HTTP transport', '3321')
   .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
-  .option('--tunnel <provider>', 'Expose MCP over internet via tunnel (cloudflare or tailscale)')
   .option('--background', 'Run MCP server as a background daemon')
   .action(async (options: {
     vault?: string;
@@ -251,7 +250,6 @@ const mcpCmd = program
     port?: string;
     allowOrigin?: string[];
     jsonResponse?: boolean;
-    tunnel?: 'cloudflare' | 'tailscale';
     background?: boolean;
   }) => {
     await mcpCommand(options);

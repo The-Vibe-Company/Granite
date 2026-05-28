@@ -1,0 +1,9 @@
+src/commands/mcp.ts
+  ai_agent 58,64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "074d672d1c5b729e6fc4400bb5c99f7b199839b2",
+  "prompts": {}
+}

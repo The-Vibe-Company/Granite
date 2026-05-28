@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.10](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.9...granite-mem-v0.1.10) (2026-05-28)
+
+
+### Features
+
+* **cloud:** add paid hosted vault platform ([#34](https://github.com/The-Vibe-Company/Granite/issues/34)) ([74c8532](https://github.com/The-Vibe-Company/Granite/commit/74c853268959b577d2fbc9e709aad96d5d8f5158))
+* **cloud:** expose hosted private mcp endpoint ([#33](https://github.com/The-Vibe-Company/Granite/issues/33)) ([b80f2af](https://github.com/The-Vibe-Company/Granite/commit/b80f2afe0aae306e932abba87c33276fb3c63f4e))
+* **cloud:** improve auth and API key dashboard ([#36](https://github.com/The-Vibe-Company/Granite/issues/36)) ([982e35b](https://github.com/The-Vibe-Company/Granite/commit/982e35be6206d1d4dadaf8dbc3ac2a9ceb1ef532))
+* **sync:** add direct local vault sync ([c0d8483](https://github.com/The-Vibe-Company/Granite/commit/c0d8483cb5fa16db7a3a0495438990129aaa334a))
+
 ## [0.1.9](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.8...granite-mem-v0.1.9) (2026-04-24)
 
 

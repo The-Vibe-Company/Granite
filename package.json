@@ -1,7 +1,7 @@
 {
   "name": "granite-mem",
-  "version": "0.1.8",
-  "description": "A local-first markdown memory system for humans and agents",
+  "version": "0.1.9",
+  "description": "Local-first markdown memory system for humans and AI agents: MCP server, typed knowledge graph, deterministic garden planning.",
   "type": "module",
   "bin": {
     "granite": "./dist/index.js"
@@ -15,11 +15,20 @@
     "notes",
     "markdown",
     "zettelkasten",
-    "cli",
     "local-first",
-    "claude-code"
+    "mcp",
+    "mcp-server",
+    "agent-native",
+    "knowledge-graph",
+    "claude",
+    "claude-code",
+    "cursor"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/The-Vibe-Company/Granite#readme",
+  "bugs": {
+    "url": "https://github.com/The-Vibe-Company/Granite/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/The-Vibe-Company/Granite"

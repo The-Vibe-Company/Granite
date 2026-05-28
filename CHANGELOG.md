@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.1.9](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.8...granite-mem-v0.1.9) (2026-04-24)
+
+
+### Features
+
+* add `granite wakeup` command + MCP tool ([085006d](https://github.com/The-Vibe-Company/Granite/commit/085006d97c46f42534939d04e046ed015ea05277))
+* add asset attachments (images, videos, PDFs) ([0c310be](https://github.com/The-Vibe-Company/Granite/commit/0c310becec4ee62d624b5322ced30954d7f745a7))
+* add deterministic garden planning ([b51f3a0](https://github.com/The-Vibe-Company/Granite/commit/b51f3a01e86df0c797310c2a0812d705fdc919b9))
+* add document import and doc-aware MCP workflows ([7dc9c91](https://github.com/The-Vibe-Company/Granite/commit/7dc9c91a1cb3d01ddac8e62fb8bba0f55e490f65))
+* add explicit document extraction ([572124e](https://github.com/The-Vibe-Company/Granite/commit/572124e20371f0e5219888e39c8e5c4b5d09ec69))
+* add vault-garden skill + fix graph visualization ([ef81a88](https://github.com/The-Vibe-Company/Granite/commit/ef81a88fbb2cd9d798e17e0b34d38c0a7207b17e))
+* commitzen ([0986ce8](https://github.com/The-Vibe-Company/Granite/commit/0986ce8daac7895ebaa9fceb651e83f11ab3295c))
+* **conductor:** add turnkey config ([#30](https://github.com/The-Vibe-Company/Granite/issues/30)) ([31a9820](https://github.com/The-Vibe-Company/Granite/commit/31a9820720fd38b15206421698d9ffbf0737f287))
+* **daemon:** unified background service for MCP + web UI ([5a9a6c5](https://github.com/The-Vibe-Company/Granite/commit/5a9a6c558cba12c3cbb6ba11737e4aacac723e5e))
+* **garden:** add explicit opportunity adjudication ([95c07a3](https://github.com/The-Vibe-Company/Granite/commit/95c07a35d82b64c6333c848305e1273090aea17e))
+* improve graph preview interactions ([0451074](https://github.com/The-Vibe-Company/Granite/commit/0451074d2430a34bc786c1b67ea374f817ea018f))
+* **mcp:** expose vault type registry and enforce type contracts ([#28](https://github.com/The-Vibe-Company/Granite/issues/28)) ([2ca6330](https://github.com/The-Vibe-Company/Granite/commit/2ca6330517a4ac056883420bb45aeab2b1dfb48c))
+* **query:** support cross-type filters when no type is passed ([9c951c9](https://github.com/The-Vibe-Company/Granite/commit/9c951c95fd20153d01820d2672c62540fafa4ac8))
+* redesign graph visualization — monochrome, organic, spread-out ([09dc8d7](https://github.com/The-Vibe-Company/Granite/commit/09dc8d73ea569aaac436b3970f182ae1706838d0))
+* refactor Granite MCP around workflow tools ([8a14c27](https://github.com/The-Vibe-Company/Granite/commit/8a14c27ec03afe6cb0dba9b89f173c5bb9c48d7f))
+* refine graph atlas UX ([1574ade](https://github.com/The-Vibe-Company/Granite/commit/1574ade847506bb67148d97ac70cc862d8345f89))
+* refine graph-first web ui ([e17b4b5](https://github.com/The-Vibe-Company/Granite/commit/e17b4b5eec439d5d40952aba6178b93a955eb7d0))
+* store imported document content ([1d3cae1](https://github.com/The-Vibe-Company/Granite/commit/1d3cae1b915857ea53520dd0c1202bd8d0f7b484))
+* tighten graph clustering ([f3df958](https://github.com/The-Vibe-Company/Granite/commit/f3df95893a31ba690831a1b2aa6400eefa8f9d04))
+* **types:** active contracts with hooks, typed queries, compile context ([#27](https://github.com/The-Vibe-Company/Granite/issues/27)) ([94d32b5](https://github.com/The-Vibe-Company/Granite/commit/94d32b5d0a3e6bb4070ca3b2e8efe1a3fa1ba81b))
+* **web:** constellation home with live graph + floating reader ([a316332](https://github.com/The-Vibe-Company/Granite/commit/a31633280ab5885bc7edb4dce9b304a2eca275d3))
+
+
+### Bug Fixes
+
+* better node size scaling in graph visualization ([4389fa3](https://github.com/The-Vibe-Company/Granite/commit/4389fa3f9c4884b63cb3e1768c120c8c0959a602))
+* **daemon:** prefer default vault for daemon subcommands ([f102d0e](https://github.com/The-Vibe-Company/Granite/commit/f102d0e98d7e8815b51490bd4849a0522df85441))
+* make index rebuild atomic ([1be56a5](https://github.com/The-Vibe-Company/Granite/commit/1be56a5d3546d9547ac0df862b862c82eddfb5d8))
+* search uses OR instead of AND for multi-word queries ([f47ca42](https://github.com/The-Vibe-Company/Granite/commit/f47ca424600a9a215c5d1aa23306ea527a39f3d7))
+* sync index after CLI edit/append so wikilinks are tracked ([1153c93](https://github.com/The-Vibe-Company/Granite/commit/1153c9312e8b1f3e95a19b627fd0cf08ef892fe5))
+* **web:** type filters actually dim non-matching nodes ([3c75133](https://github.com/The-Vibe-Company/Granite/commit/3c751334f41fc3f88990a3f975adbc863d66522c))
+* z.record needs two args in wakeup schema ([4180911](https://github.com/The-Vibe-Company/Granite/commit/4180911d6c750d9ebc93d1436b8fa2597a6dd265))
+
+
+### Performance Improvements
+
+* **web:** idle-skip main loop, minify assets, preload fonts ([644785f](https://github.com/The-Vibe-Company/Granite/commit/644785fe9a528cd5bb263320c0e5d59354e05ac6))
+
 ## [0.1.8](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.7...granite-mem-v0.1.8) (2026-04-04)
 
 

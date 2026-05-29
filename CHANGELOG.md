@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.10...granite-mem-v0.1.11) (2026-05-29)
+
+
+### Features
+
+* **sync:** add readonly vault access control ([#38](https://github.com/The-Vibe-Company/Granite/issues/38)) ([a326c42](https://github.com/The-Vibe-Company/Granite/commit/a326c42a9df1570b857622a2354338e44441dc05))
+
 ## [0.1.10](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.9...granite-mem-v0.1.10) (2026-05-28)
 
 

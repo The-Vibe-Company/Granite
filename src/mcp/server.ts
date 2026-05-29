@@ -48,17 +48,27 @@ export interface GraniteMcpHttpServerOptions {
   port: number;
   allowedOrigins?: string[];
   jsonResponse?: boolean;
+  role?: McpAccessRole;
 }
 
-function buildServerInstructions(runtime: GraniteMcpRuntime): string {
+export type McpAccessRole = 'read' | 'write';
+
+export interface GraniteMcpServerOptions {
+  role?: McpAccessRole;
+}
+
+function buildServerInstructions(runtime: GraniteMcpRuntime, role: McpAccessRole): string {
   const types = runtime.listNoteTypes();
   const signature = runtime.getTypeRegistrySignature();
   const defaultType = runtime.getDefaultNoteType();
+  const canWrite = role === 'write';
 
   const lines: string[] = [
     '# Granite — Knowledge Compilation System',
     '',
-    'You are operating a local-first markdown knowledge base. You are the primary writer and gardener of this vault — the human rarely edits notes directly.',
+    canWrite
+      ? 'You are operating a local-first markdown knowledge base. You are the primary writer and gardener of this vault — the human rarely edits notes directly.'
+      : 'You are operating a local-first markdown knowledge base in read-only mode. Inspect and compile context from the vault, but do not attempt to mutate it.',
     '',
     '## Public Interface',
     '',
@@ -70,16 +80,18 @@ function buildServerInstructions(runtime: GraniteMcpRuntime): string {
     '- **granite_query** — run structured queries over typed notes and indexed fields',
     '- **granite_compile_context** — compile a typed brief for a topic or slug using the graph',
     '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
-    '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
     '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
-    '- **granite_capture_knowledge** — capture new knowledge into the vault',
     '- **granite_extract_document** — read a local document into raw extracted text without importing it',
-    '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
     '- **granite_understand_note** — inspect a note in context, not in isolation',
-    '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
-    '- **granite_dispose_note** — archive by default, delete only when intentional',
-    '',
-    'Use prompts for the higher-level workflows: refine notes, compile topics, and process the inbox.',
+    ...(canWrite ? [
+      '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
+      '- **granite_capture_knowledge** — capture new knowledge into the vault',
+      '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
+      '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
+      '- **granite_dispose_note** — archive by default, delete only when intentional',
+      '',
+      'Use prompts for the higher-level workflows: refine notes, compile topics, and process the inbox.',
+    ] : []),
     '',
     `## Note Types (vault registry, sig=${signature})`,
     '',
@@ -107,17 +119,25 @@ function buildServerInstructions(runtime: GraniteMcpRuntime): string {
     '## Working Principles',
     '',
     '- **Read in context.** Prefer granite_understand_note over piecing together note, backlinks, and suggestions manually.',
-    '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
-    '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
-    '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
-    '- **Respect the type registry.** Every note\'s type must exist in the vault config; write tools reject unknown types and report validation issues in their response.',
+    ...(canWrite ? [
+      '- **Capture first, refine second.** Capture quickly, then use workflow prompts to turn captures into durable knowledge.',
+      '- **Link aggressively.** Use [[wikilinks]] in note bodies and follow recommendations after each revision.',
+      '- **Archive before delete.** Knowledge systems should prefer reversible lifecycle transitions.',
+    ] : []),
+    canWrite
+      ? '- **Respect the type registry.** Every note\'s type must exist in the vault config; write tools reject unknown types and report validation issues in their response.'
+      : '- **Respect the type registry.** Every note\'s type is governed by the vault config exposed in granite://vault/types.',
     '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.',
   );
 
   return lines.join('\n');
 }
 
-export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
+export function createGraniteMcpServer(
+  runtime: GraniteMcpRuntime,
+  options: GraniteMcpServerOptions = {},
+): McpServer {
+  const role = options.role ?? 'write';
   const server = new McpServer(
     {
       name: 'granite',
@@ -126,19 +146,24 @@ export function createGraniteMcpServer(runtime: GraniteMcpRuntime): McpServer {
     },
     {
       capabilities: { logging: {} },
-      instructions: buildServerInstructions(runtime),
+      instructions: buildServerInstructions(runtime, role),
     },
   );
 
-  registerTools(server, runtime);
+  registerTools(server, runtime, role);
   registerResources(server, runtime);
-  registerPrompts(server, runtime);
+  if (role === 'write') {
+    registerPrompts(server, runtime);
+  }
 
   return server;
 }
 
-export async function startGraniteMcpStdioServer(runtime: GraniteMcpRuntime): Promise<void> {
-  const server = createGraniteMcpServer(runtime);
+export async function startGraniteMcpStdioServer(
+  runtime: GraniteMcpRuntime,
+  options: GraniteMcpServerOptions = {},
+): Promise<void> {
+  const server = createGraniteMcpServer(runtime, options);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`Granite MCP server listening on stdio for ${runtime.vaultRoot}`);
@@ -220,7 +245,9 @@ function buildTypeSchema(runtime: GraniteMcpRuntime, describe: string) {
   );
 }
 
-function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
+function registerTools(server: McpServer, runtime: GraniteMcpRuntime, role: McpAccessRole): void {
+  const canWrite = role === 'write';
+
   server.registerTool('granite_wakeup', {
     title: 'Granite Wakeup',
     description: 'Load a compressed AAAK snapshot of the entire vault into context. Call this at the start of every session to know what exists, how notes cluster, and what changed recently. Costs ~200-500 tokens instead of reading every note.',
@@ -256,7 +283,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(renderGardenPlanMarkdown(result));
   });
 
-  server.registerTool('granite_adjudicate_garden_opportunity', {
+  if (canWrite) server.registerTool('granite_adjudicate_garden_opportunity', {
     title: 'Adjudicate Granite Garden Opportunity',
     description: 'Record an explicit operator adjudication for a specific garden opportunity. Use this when a deterministic signal is real but should be downranked locally, or when an old adjudication should be cleared.',
     inputSchema: {
@@ -297,7 +324,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(renderGardenAdjudicationsMarkdown(adjudications));
   });
 
-  server.registerTool('granite_capture_knowledge', {
+  if (canWrite) server.registerTool('granite_capture_knowledge', {
     title: 'Capture Granite Knowledge',
     description: 'Capture new knowledge into the vault. Use this for raw captures, semi-structured notes, or deliberately titled note drafts. Returns recommendations for what to connect or write next.',
     inputSchema: {
@@ -352,7 +379,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(renderMutationResultMarkdown('Captured', result.note, result.recommendations, result.validation));
   });
 
-  server.registerTool('granite_import_document', {
+  if (canWrite) server.registerTool('granite_import_document', {
     title: 'Import Granite Document',
     description: 'Import a local document into the vault by attaching the file, creating a linked source note, and storing caller-provided document content in that note. This tool does not read, clean, or summarize the document for you.',
     inputSchema: {
@@ -402,7 +429,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     };
   });
 
-  server.registerTool('granite_revise_note', {
+  if (canWrite) server.registerTool('granite_revise_note', {
     title: 'Revise Granite Note',
     description: 'Make a targeted revision to an existing note. Use this when a workflow prompt tells you exactly what to change, or when you need a precise manual intervention.',
     inputSchema: {
@@ -488,7 +515,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime): void {
     return toolResult(summary);
   });
 
-  server.registerTool('granite_dispose_note', {
+  if (canWrite) server.registerTool('granite_dispose_note', {
     title: 'Dispose Granite Note',
     description: 'Remove a note from the active knowledge loop. Archive by default; delete only when you are intentionally discarding the note.',
     inputSchema: {
@@ -768,6 +795,7 @@ function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcp
   const app = new Hono();
   const allowedHosts = buildAllowedHosts(options.host, options.port);
   const allowedOrigins = buildAllowedOrigins(options.host, options.port, options.allowedOrigins ?? []);
+  const role = options.role ?? 'write';
 
   app.use('/mcp', async (c, next) => {
     const requestHost = (c.req.header('host') ?? '').toLowerCase();
@@ -802,7 +830,7 @@ function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcp
 
   app.all('/mcp', async (c) => {
     const origin = c.req.header('origin');
-    const server = createGraniteMcpServer(runtime);
+    const server = createGraniteMcpServer(runtime, { role });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: options.jsonResponse ?? false,

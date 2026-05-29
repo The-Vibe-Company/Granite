@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { parsePort, parseTransport } from '../../src/commands/mcp.js';
+import { parseMcpRole, parsePort, parseTransport } from '../../src/commands/mcp.js';
 
 const originalMcpPort = process.env.MCP_PORT;
 
@@ -27,5 +27,12 @@ describe('mcp command helpers', () => {
 
   it('rejects invalid transport values', () => {
     expect(() => parseTransport('streamable-http' as 'stdio')).toThrow('Invalid MCP transport');
+  });
+
+  it('parses MCP access roles', () => {
+    expect(parseMcpRole()).toBe('write');
+    expect(parseMcpRole('read')).toBe('read');
+    expect(parseMcpRole('write')).toBe('write');
+    expect(() => parseMcpRole('admin')).toThrow('Invalid MCP role');
   });
 });

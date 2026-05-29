@@ -68,6 +68,33 @@ describe('granite MCP server', () => {
     expect(client.getInstructions()).toContain('Knowledge Compilation System');
   });
 
+  it('hides mutating tools and prompts in read-only MCP mode', async () => {
+    const readServer = createGraniteMcpServer(runtime, { role: 'read' });
+    const readClient = new Client({ name: 'granite-read-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await readServer.connect(serverTransport);
+    await readClient.connect(clientTransport);
+
+    try {
+      const tools = await readClient.listTools();
+      const toolNames = tools.tools.map(tool => tool.name);
+
+      expect(toolNames).toContain('granite_wakeup');
+      expect(toolNames).toContain('granite_extract_document');
+      expect(toolNames).toContain('granite_understand_note');
+      expect(toolNames).not.toContain('granite_capture_knowledge');
+      expect(toolNames).not.toContain('granite_import_document');
+      expect(toolNames).not.toContain('granite_revise_note');
+      expect(toolNames).not.toContain('granite_dispose_note');
+      expect(toolNames).not.toContain('granite_adjudicate_garden_opportunity');
+      expect(readClient.getInstructions()).toContain('read-only mode');
+      expect(readClient.getInstructions()).not.toContain('granite_capture_knowledge');
+    } finally {
+      await readClient.close();
+      await readServer.close();
+    }
+  });
+
   it('serves note resources and prompt templates', async () => {
     const resource = await client.readResource({ uri: 'granite://notes/mcp-note' });
     const typeResource = await client.readResource({ uri: 'granite://vault/types' });
@@ -293,4 +320,3 @@ function extractTextContent(result: Awaited<ReturnType<Client['callTool']>>) {
   }
   return textContent.text;
 }
-

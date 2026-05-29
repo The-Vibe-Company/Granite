@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import type { ServerType } from '@hono/node-server';
 import { loadConfig } from '../core/config.js';
 import { openDatabase, rebuildIndex } from '../core/index-db.js';
 import { requireVaultRoot } from '../core/vault.js';
@@ -11,6 +12,7 @@ import {
   applyIncomingFile,
   buildSyncManifest,
   detectLocalDeletions,
+  grantSyncAccess,
   getSyncFileHash,
   getSyncStatePath,
   loadSyncState,
@@ -18,9 +20,12 @@ import {
   normalizeSyncPath,
   normalizeRemoteUrl,
   readSyncFilePayload,
+  resolveSyncAccessRole,
+  revokeSyncAccess,
   saveSyncState,
   setSyncConflictPolicy,
   suggestedRemoteName,
+  type SyncAccessRole,
   type SyncApplyAction,
   type SyncApplyResult,
   type SyncConflictPolicy,
@@ -61,6 +66,11 @@ interface SyncRemoteOptions extends CommonOptions {
 
 interface SyncWatchOptions extends CommonOptions {
   interval?: string;
+  direction?: string;
+}
+
+interface SyncAccessGrantOptions extends CommonOptions {
+  role?: string;
 }
 
 interface SyncSummary {
@@ -85,7 +95,8 @@ export function syncStatusCommand(options: CommonOptions = {}): void {
       state_file: getSyncStatePath(vaultRoot),
       device_id: state.device_id,
       device_name: state.device_name,
-      local_token: state.local_token,
+      local_token_hint: maskToken(state.local_token),
+      access_tokens: listSafeAccessTokens(state),
       conflict_policy: state.conflict_policy,
       primary_device_id: state.primary_device_id,
       remotes: state.remotes,
@@ -98,8 +109,9 @@ export function syncStatusCommand(options: CommonOptions = {}): void {
   console.log('Granite sync');
   console.log(`  Vault:          ${vaultRoot}`);
   console.log(`  Device:         ${state.device_name} (${state.device_id})`);
-  console.log(`  Token:          ${state.local_token}`);
+  console.log(`  Write token:    ${maskToken(getDefaultWriteGrant(state)?.token ?? '')}`);
   console.log(`  Policy:         ${formatPolicy(state)}`);
+  console.log(`  Access grants:  ${Object.keys(state.access_tokens).length}`);
   console.log(`  Files:          ${manifest.files.length}`);
   if (manifest.deletions.length > 0) {
     console.log(`  Pending deletes:${manifest.deletions.length}`);
@@ -167,6 +179,63 @@ export function syncRemoteListCommand(options: CommonOptions = {}): void {
   }
 }
 
+export function syncAccessListCommand(options: CommonOptions = {}): void {
+  const vaultRoot = resolveVaultRoot(options.vault);
+  const state = loadSyncState(vaultRoot);
+  const grants = listSafeAccessTokens(state);
+
+  if (options.json) {
+    console.log(jsonSuccess(grants));
+    return;
+  }
+
+  if (grants.length === 0) {
+    console.log('No sync access grants configured.');
+    return;
+  }
+
+  for (const grant of grants) {
+    console.log(`${grant.name}\t${grant.role}\t${grant.token_hint}\t${grant.created_at}`);
+  }
+}
+
+export function syncAccessGrantCommand(
+  name: string,
+  options: SyncAccessGrantOptions = {},
+): void {
+  const vaultRoot = resolveVaultRoot(options.vault);
+  const state = loadSyncState(vaultRoot);
+  const grant = grantSyncAccess(state, name, parseAccessRole(options.role));
+  saveSyncState(vaultRoot, state);
+
+  if (options.json) {
+    console.log(jsonSuccess(grant));
+    return;
+  }
+
+  console.log(`Granted ${grant.role} sync access "${grant.name}"`);
+  console.log(`Token: ${grant.token}`);
+}
+
+export function syncAccessRevokeCommand(name: string, options: CommonOptions = {}): void {
+  const vaultRoot = resolveVaultRoot(options.vault);
+  const state = loadSyncState(vaultRoot);
+
+  if (!revokeSyncAccess(state, name)) {
+    console.error(`Unknown sync access grant: ${name}`);
+    process.exit(1);
+  }
+
+  saveSyncState(vaultRoot, state);
+
+  if (options.json) {
+    console.log(jsonSuccess({ revoked: name }));
+    return;
+  }
+
+  console.log(`Revoked sync access "${name}"`);
+}
+
 export function syncRemoteAddCommand(
   nameOrAddress: string,
   addressMaybe?: string,
@@ -215,7 +284,7 @@ export function syncRemoteRemoveCommand(name: string, options: CommonOptions = {
   console.log(`Removed remote "${name}"`);
 }
 
-export function syncServeCommand(options: SyncServeOptions = {}): void {
+export function syncServeCommand(options: SyncServeOptions = {}): ServerType {
   const vaultRoot = resolveVaultRoot(options.vault);
   const state = loadSyncState(vaultRoot);
   const host = options.host ?? '0.0.0.0';
@@ -226,12 +295,16 @@ export function syncServeCommand(options: SyncServeOptions = {}): void {
   console.log(`  Vault:    ${vaultRoot}`);
   console.log(`  Device:   ${state.device_name} (${state.device_id})`);
   console.log(`  Listen:   http://${host}:${port}/sync`);
-  console.log(`  Token:    ${state.local_token}`);
+  console.log(`  Grants:   ${Object.keys(state.access_tokens).length}`);
   console.log('');
-  console.log('On the other machine:');
-  console.log(`  granite sync remote add ${state.device_name} http://<tailscale-ip-or-dns>:${port} --token ${state.local_token}`);
+  console.log('Create a token to share:');
+  console.log('  granite sync access grant <name> --role read   # pull-only replicas');
+  console.log('  granite sync access grant <name> --role write  # bidirectional sync');
+  console.log('');
+  console.log('Then on the other machine:');
+  console.log(`  granite sync remote add ${state.device_name} http://<tailscale-ip-or-dns>:${port} --token <token>`);
 
-  serve({ fetch: app.fetch, hostname: host, port });
+  return serve({ fetch: app.fetch, hostname: host, port });
 }
 
 export async function syncPullCommand(remoteName: string, options: SyncRemoteOptions = {}): Promise<SyncSummary> {
@@ -350,10 +423,15 @@ export async function syncRunCommand(remoteName: string, options: SyncRemoteOpti
 
 export async function syncWatchCommand(remoteName: string, options: SyncWatchOptions = {}): Promise<void> {
   const intervalSeconds = parsePort(options.interval, 30);
-  console.error(`Granite sync watch running every ${intervalSeconds}s for remote "${remoteName}".`);
+  const direction = parseWatchDirection(options.direction);
+  console.error(`Granite sync watch ${direction} running every ${intervalSeconds}s for remote "${remoteName}".`);
   while (true) {
     try {
-      await syncRunCommand(remoteName, { ...options, json: false });
+      if (direction === 'pull') {
+        await syncPullCommand(remoteName, { ...options, json: false });
+      } else {
+        await syncRunCommand(remoteName, { ...options, json: false });
+      }
     } catch (error) {
       console.error(`Sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -378,8 +456,12 @@ export function createSyncApp(vaultRoot: string): Hono {
   app.use('/sync/*', async (c, next) => {
     const state = loadSyncState(vaultRoot);
     const token = readBearerToken(c.req.header('authorization'));
-    if (!state.local_token || !token || token !== state.local_token) {
+    const role = resolveSyncAccessRole(state, token);
+    if (!role) {
       return c.json({ error: 'Unauthorized' }, 401);
+    }
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && role !== 'write') {
+      return c.json({ error: 'Forbidden: write sync access is required' }, 403);
     }
     await next();
   });
@@ -460,11 +542,52 @@ function parsePolicy(value: string): SyncConflictPolicy {
   throw new Error('Invalid sync policy. Expected manual or primary-wins.');
 }
 
+export function parseAccessRole(value?: string): SyncAccessRole {
+  const role = value ?? 'read';
+  if (role === 'read' || role === 'write') return role;
+  throw new Error('Invalid sync access role. Expected read or write.');
+}
+
+export function parseWatchDirection(value?: string): 'pull' | 'run' {
+  const direction = value ?? 'run';
+  if (direction === 'pull' || direction === 'run') return direction;
+  throw new Error('Invalid sync watch direction. Expected pull or run.');
+}
+
 function formatPolicy(state: SyncState): string {
   if (state.conflict_policy === 'primary_wins') {
     return `primary-wins (${state.primary_device_id})`;
   }
   return 'manual';
+}
+
+function listSafeAccessTokens(state: SyncState): Array<{
+  name: string;
+  role: SyncAccessRole;
+  created_at: string;
+  token_hint: string;
+}> {
+  return Object.values(state.access_tokens)
+    .map(grant => ({
+      name: grant.name,
+      role: grant.role,
+      created_at: grant.created_at,
+      token_hint: maskToken(grant.token),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getDefaultWriteGrant(state: SyncState): { token: string } | null {
+  const defaultGrant = state.access_tokens.default;
+  if (defaultGrant?.role === 'write') return defaultGrant;
+  return Object.values(state.access_tokens)
+    .find(grant => grant.role === 'write') ?? null;
+}
+
+function maskToken(token: string): string {
+  if (!token) return '(none)';
+  if (token.length <= 8) return '********';
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
 }
 
 function resolveRemote(state: SyncState, remoteName: string, tokenOverride?: string): SyncRemote {

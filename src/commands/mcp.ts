@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { requireVaultRoot, getGraniteDir } from '../core/vault.js';
 import { startGraniteMcpHttpServer, startGraniteMcpStdioServer } from '../mcp/server.js';
+import type { McpAccessRole } from '../mcp/server.js';
 import { GraniteMcpRuntime } from '../mcp/runtime.js';
 
 interface McpCommandOptions {
@@ -13,6 +14,7 @@ interface McpCommandOptions {
   allowOrigin?: string[];
   jsonResponse?: boolean;
   background?: boolean;
+  role?: string;
 }
 
 // ---- PID / URL file helpers ------------------------------------------------
@@ -56,6 +58,7 @@ function cleanupFiles(vaultRoot: string): void {
 
 export async function mcpCommand(options: McpCommandOptions): Promise<void> {
   const transport = parseTransport(options.transport);
+  const role = parseMcpRole(options.role);
   const vaultRoot = resolveVaultRoot(options.vault);
 
   // --background: re-spawn ourselves as a detached child
@@ -120,6 +123,7 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
       port,
       allowedOrigins: options.allowOrigin ?? [],
       jsonResponse: options.jsonResponse ?? false,
+      role,
     });
 
     if (isDaemon) writeDaemonState(vaultRoot, process.pid, localUrl);
@@ -127,7 +131,7 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
     return;
   }
 
-  await startGraniteMcpStdioServer(runtime);
+  await startGraniteMcpStdioServer(runtime, { role });
 }
 
 export function mcpStopCommand(options: { vault?: string }): void {
@@ -185,4 +189,10 @@ export function parsePort(value?: string): number {
     throw new Error(`Invalid MCP port: ${raw}`);
   }
   return parsed;
+}
+
+export function parseMcpRole(value?: string): McpAccessRole {
+  const role = value ?? 'write';
+  if (role === 'read' || role === 'write') return role;
+  throw new Error(`Invalid MCP role: ${role}. Expected "read" or "write".`);
 }

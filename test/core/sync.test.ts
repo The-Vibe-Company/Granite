@@ -9,10 +9,13 @@ import {
   buildSyncManifest,
   createDefaultSyncState,
   detectLocalDeletions,
+  grantSyncAccess,
   getSyncStatePath,
   loadSyncState,
   normalizeRemoteUrl,
   readSyncFilePayload,
+  resolveSyncAccessRole,
+  revokeSyncAccess,
   saveSyncState,
   type SyncFilePayload,
   type SyncState,
@@ -47,6 +50,89 @@ describe('sync core', () => {
   it('normalizes remote addresses for direct machine sync', () => {
     expect(normalizeRemoteUrl('100.64.0.10', '8765')).toBe('http://100.64.0.10:8765');
     expect(normalizeRemoteUrl('http://macbook.tailnet.ts.net:8765/sync')).toBe('http://macbook.tailnet.ts.net:8765');
+  });
+
+  it('migrates the legacy local sync token as write access', () => {
+    writeFile('.granite/sync.json', JSON.stringify({
+      version: 1,
+      device_id: 'legacy-device',
+      device_name: 'legacy',
+      local_token: 'legacy-token',
+      conflict_policy: 'manual',
+      primary_device_id: 'legacy-device',
+      remotes: {},
+      baselines: {},
+      tombstones: {},
+    }));
+
+    const state = loadSyncState(tmpDir);
+
+    expect(resolveSyncAccessRole(state, 'legacy-token')).toBe('write');
+    expect(Object.values(state.access_tokens)).toContainEqual(expect.objectContaining({
+      token: 'legacy-token',
+      role: 'write',
+    }));
+  });
+
+  it('recovers legacy local token when access token state is malformed', () => {
+    writeFile('.granite/sync.json', JSON.stringify({
+      version: 1,
+      device_id: 'legacy-device',
+      device_name: 'legacy',
+      local_token: 'legacy-token',
+      conflict_policy: 'manual',
+      primary_device_id: 'legacy-device',
+      remotes: {},
+      access_tokens: { default: { token: '', role: 'read' } },
+      baselines: {},
+      tombstones: {},
+    }));
+
+    const state = loadSyncState(tmpDir);
+
+    expect(resolveSyncAccessRole(state, 'legacy-token')).toBe('write');
+  });
+
+  it('grants and revokes named read/write sync access tokens', () => {
+    const state = createState('local');
+    const readGrant = grantSyncAccess(state, 'ipad', 'read', new Date('2026-05-28T12:00:00.000Z'));
+    const writeGrant = grantSyncAccess(state, 'desktop', 'write', new Date('2026-05-28T12:01:00.000Z'));
+
+    expect(resolveSyncAccessRole(state, readGrant.token)).toBe('read');
+    expect(resolveSyncAccessRole(state, writeGrant.token)).toBe('write');
+    expect(revokeSyncAccess(state, 'ipad')).toBe(true);
+    expect(resolveSyncAccessRole(state, readGrant.token)).toBeNull();
+    expect(revokeSyncAccess(state, 'missing')).toBe(false);
+  });
+
+  it('recovers legacy local token when access token state is empty', () => {
+    writeFile('.granite/sync.json', JSON.stringify({
+      version: 1,
+      device_id: 'legacy-device',
+      device_name: 'legacy',
+      local_token: 'legacy-token',
+      conflict_policy: 'manual',
+      primary_device_id: 'legacy-device',
+      remotes: {},
+      access_tokens: {},
+      baselines: {},
+      tombstones: {},
+    }));
+
+    const state = loadSyncState(tmpDir);
+
+    expect(resolveSyncAccessRole(state, 'legacy-token')).toBe('write');
+  });
+
+  it('persists revocation of named sync access tokens', () => {
+    const state = createState('local');
+    const readGrant = grantSyncAccess(state, 'reader', 'read');
+    expect(revokeSyncAccess(state, 'reader')).toBe(true);
+    saveSyncState(tmpDir, state);
+
+    const reloaded = loadSyncState(tmpDir);
+
+    expect(resolveSyncAccessRole(reloaded, readGrant.token)).toBeNull();
   });
 
   it('creates a conflict copy when both devices changed the same file manually', () => {

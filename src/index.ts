@@ -27,6 +27,9 @@ import { attachCommand } from './commands/attach.js';
 import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
 import {
+  syncAccessGrantCommand,
+  syncAccessListCommand,
+  syncAccessRevokeCommand,
   syncConfigCommand,
   syncPullCommand,
   syncPushCommand,
@@ -255,6 +258,7 @@ const mcpCmd = program
   .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
   .option('--background', 'Run MCP server as a background daemon')
+  .option('--role <role>', 'MCP access role: read or write', 'write')
   .action(async (options: {
     vault?: string;
     transport?: 'stdio' | 'http';
@@ -263,6 +267,7 @@ const mcpCmd = program
     allowOrigin?: string[];
     jsonResponse?: boolean;
     background?: boolean;
+    role?: string;
   }) => {
     await mcpCommand(options);
   });
@@ -410,6 +415,41 @@ syncRemoteCmd
     syncRemoteRemoveCommand(name, options);
   });
 
+const syncAccessCmd = syncCmd
+  .command('access')
+  .description('Manage read/write sync access grants');
+
+syncAccessCmd
+  .command('list')
+  .alias('ls')
+  .description('List sync access grants without revealing full tokens')
+  .option('--vault <path>', 'Vault root')
+  .option('--json', 'Output as JSON')
+  .action((options: { vault?: string; json?: boolean }) => {
+    syncAccessListCommand(options);
+  });
+
+syncAccessCmd
+  .command('grant')
+  .description('Create or replace a named sync access grant')
+  .argument('<name>', 'Grant name, e.g. ipad or teammate-alice')
+  .option('--vault <path>', 'Vault root')
+  .option('--role <role>', 'Access role: read or write', 'read')
+  .option('--json', 'Output as JSON')
+  .action((name: string, options: { vault?: string; role?: string; json?: boolean }) => {
+    syncAccessGrantCommand(name, options);
+  });
+
+syncAccessCmd
+  .command('revoke')
+  .description('Revoke a named sync access grant')
+  .argument('<name>', 'Grant name')
+  .option('--vault <path>', 'Vault root')
+  .option('--json', 'Output as JSON')
+  .action((name: string, options: { vault?: string; json?: boolean }) => {
+    syncAccessRevokeCommand(name, options);
+  });
+
 syncCmd
   .command('serve')
   .description('Serve this vault for direct sync from another machine')
@@ -459,7 +499,8 @@ syncCmd
   .argument('<remote>', 'Remote name')
   .option('--vault <path>', 'Vault root')
   .option('--interval <seconds>', 'Seconds between sync runs', '30')
-  .action(async (remote: string, options: { vault?: string; interval?: string }) => {
+  .option('--direction <direction>', 'Watch direction: pull or run', 'run')
+  .action(async (remote: string, options: { vault?: string; interval?: string; direction?: string }) => {
     await syncWatchCommand(remote, options);
   });
 

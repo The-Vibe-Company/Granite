@@ -183,10 +183,17 @@ Granite sync is direct machine-to-machine. Run it over LAN, Tailscale, or a priv
 
 ```bash
 # Machine A
+granite sync access grant ipad --role read
+granite sync access grant desktop --role write
 granite sync serve --host 0.0.0.0 --port 8765
 
-# Machine B
-granite sync remote add macbook http://100.x.y.z:8765 --token <machine-a-token>
+# Read-only Machine B
+granite sync remote add macbook http://100.x.y.z:8765 --token <read-token>
+granite sync pull macbook
+granite sync watch macbook --direction pull --interval 30
+
+# Write-capable Machine C
+granite sync remote add macbook http://100.x.y.z:8765 --token <write-token>
 granite sync run macbook
 granite sync watch macbook --interval 30
 ```
@@ -195,6 +202,13 @@ Conflicts default to manual preservation with `.conflict.<device>.<timestamp>.md
 
 ```bash
 granite sync config --policy primary-wins --primary-this-device
+```
+
+MCP is scoped to one vault per server. Launch a read-only MCP server when an agent should inspect a synced vault without mutating it:
+
+```bash
+granite mcp --vault ~/.granite --role read
+granite mcp --vault ~/.granite --role write
 ```
 
 For the full CLI, run `granite --help`. For development, see [CLAUDE.md](CLAUDE.md).

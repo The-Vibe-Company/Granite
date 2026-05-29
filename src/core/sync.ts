@@ -8,10 +8,18 @@ const SYNC_STATE_FILENAME = 'sync.json';
 const SYNC_PROTOCOL_VERSION = 1;
 
 export type SyncConflictPolicy = 'manual' | 'primary_wins';
+export type SyncAccessRole = 'read' | 'write';
 
 export interface SyncRemote {
   url: string;
   token?: string;
+}
+
+export interface SyncAccessToken {
+  name: string;
+  token: string;
+  role: SyncAccessRole;
+  created_at: string;
 }
 
 export interface SyncBaseline {
@@ -33,6 +41,7 @@ export interface SyncState {
   conflict_policy: SyncConflictPolicy;
   primary_device_id: string;
   remotes: Record<string, SyncRemote>;
+  access_tokens: Record<string, SyncAccessToken>;
   baselines: Record<string, SyncBaseline>;
   tombstones: Record<string, SyncTombstone>;
 }
@@ -116,14 +125,16 @@ export function loadSyncState(vaultRoot: string): SyncState {
     return state;
   }
   const deviceId = parsed.device_id || createDeviceId();
+  const localToken = parsed.local_token || createToken();
   const state: SyncState = {
     version: SYNC_PROTOCOL_VERSION,
     device_id: deviceId,
     device_name: parsed.device_name || os.hostname(),
-    local_token: parsed.local_token || createToken(),
+    local_token: localToken,
     conflict_policy: normalizeConflictPolicy(parsed.conflict_policy),
     primary_device_id: parsed.primary_device_id || deviceId,
     remotes: parsed.remotes ?? {},
+    access_tokens: normalizeAccessTokens(parsed.access_tokens, localToken),
     baselines: parsed.baselines ?? {},
     tombstones: parsed.tombstones ?? {},
   };
@@ -143,17 +154,62 @@ export function saveSyncState(vaultRoot: string, state: SyncState): void {
 
 export function createDefaultSyncState(): SyncState {
   const deviceId = createDeviceId();
+  const localToken = createToken();
   return {
     version: SYNC_PROTOCOL_VERSION,
     device_id: deviceId,
     device_name: os.hostname(),
-    local_token: createToken(),
+    local_token: localToken,
     conflict_policy: 'manual',
     primary_device_id: deviceId,
     remotes: {},
+    access_tokens: {
+      default: {
+        name: 'default',
+        token: localToken,
+        role: 'write',
+        created_at: new Date().toISOString(),
+      },
+    },
     baselines: {},
     tombstones: {},
   };
+}
+
+export function grantSyncAccess(
+  state: SyncState,
+  name: string,
+  role: SyncAccessRole,
+  now = new Date(),
+): SyncAccessToken {
+  const safeName = normalizeAccessName(name);
+  const grant: SyncAccessToken = {
+    name: safeName,
+    token: createToken(),
+    role,
+    created_at: now.toISOString(),
+  };
+  state.access_tokens[safeName] = grant;
+  return grant;
+}
+
+export function revokeSyncAccess(state: SyncState, name: string): boolean {
+  const safeName = normalizeAccessName(name);
+  if (!state.access_tokens[safeName]) {
+    return false;
+  }
+  delete state.access_tokens[safeName];
+  return true;
+}
+
+export function resolveSyncAccessRole(state: SyncState, token: string | null | undefined): SyncAccessRole | null {
+  if (!token) return null;
+
+  for (const grant of Object.values(state.access_tokens)) {
+    if (grant.token === token) return grant.role;
+  }
+
+  return null;
 }
 
 export function setSyncConflictPolicy(
@@ -514,6 +570,68 @@ function createToken(): string {
 
 function normalizeConflictPolicy(value: unknown): SyncConflictPolicy {
   return value === 'primary_wins' ? 'primary_wins' : 'manual';
+}
+
+function normalizeAccessTokens(
+  value: unknown,
+  localToken: string,
+): Record<string, SyncAccessToken> {
+  const grants: Record<string, SyncAccessToken> = {};
+  let shouldMigrateLocalToken = value === undefined;
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const entries = Object.entries(value);
+    shouldMigrateLocalToken = true;
+    for (const [rawName, rawGrant] of entries) {
+      if (!rawGrant || typeof rawGrant !== 'object' || Array.isArray(rawGrant)) continue;
+      const grant = rawGrant as Partial<SyncAccessToken>;
+      const token = typeof grant.token === 'string' && grant.token ? grant.token : null;
+      if (!token) continue;
+      const name = normalizeOptionalAccessName(grant.name) ?? normalizeOptionalAccessName(rawName);
+      if (!name) continue;
+      grants[name] = {
+        name,
+        token,
+        role: normalizeAccessRole(grant.role),
+        created_at: typeof grant.created_at === 'string' && grant.created_at
+          ? grant.created_at
+          : new Date(0).toISOString(),
+      };
+      shouldMigrateLocalToken = false;
+    }
+  } else if (value !== undefined) {
+    shouldMigrateLocalToken = true;
+  }
+
+  if (shouldMigrateLocalToken && !Object.values(grants).some(grant => grant.token === localToken)) {
+    grants.default = {
+      name: 'default',
+      token: localToken,
+      role: 'write',
+      created_at: new Date(0).toISOString(),
+    };
+  }
+
+  return grants;
+}
+
+function normalizeAccessRole(value: unknown): SyncAccessRole {
+  return value === 'read' ? 'read' : 'write';
+}
+
+function normalizeAccessName(name: string): string {
+  const normalized = normalizeOptionalAccessName(name);
+  if (!normalized) {
+    throw new Error(`Invalid sync access name: ${name}`);
+  }
+  return normalized;
+}
+
+function normalizeOptionalAccessName(name: unknown): string | null {
+  if (typeof name !== 'string') return null;
+  const normalized = name.trim();
+  if (!/^[a-zA-Z0-9._-]+$/.test(normalized)) return null;
+  return normalized;
 }
 
 function preserveCorruptSyncState(statePath: string, raw: string): void {

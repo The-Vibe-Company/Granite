@@ -4,7 +4,7 @@
   "description": "Local-first markdown memory system for humans and AI agents: MCP server, typed knowledge graph, deterministic garden planning.",
   "type": "module",
   "bin": {
-    "granite": "./dist/index.js"
+    "granite": "dist/index.js"
   },
   "files": [
     "dist",
@@ -31,7 +31,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/The-Vibe-Company/Granite"
+    "url": "git+https://github.com/The-Vibe-Company/Granite.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup && node scripts/build-web.mjs && rm -rf dist/templates && cp -r templates dist/templates",

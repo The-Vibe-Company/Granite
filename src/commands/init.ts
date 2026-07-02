@@ -7,8 +7,8 @@ export interface InitVaultOptions {
   template?: string;
 }
 
-export function initVault(dir = getDefaultVaultRoot(), options: InitVaultOptions = {}): void {
-  const targetDir = path.resolve(dir);
+export function initVault(dir?: string, options: InitVaultOptions = {}): void {
+  const targetDir = path.resolve(dir ?? process.env.GRANITE_VAULT ?? getDefaultVaultRoot());
   fs.mkdirSync(targetDir, { recursive: true });
 
   if (fs.existsSync(path.join(targetDir, CONFIG_FILENAME))) {

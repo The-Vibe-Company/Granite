@@ -12,6 +12,7 @@ interface McpCommandOptions {
   host?: string;
   port?: string;
   allowOrigin?: string[];
+  authToken?: string;
   jsonResponse?: boolean;
   background?: boolean;
   role?: string;
@@ -116,12 +117,14 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
   if (transport === 'http') {
     const port = parsePort(options.port);
     const host = options.host ?? '127.0.0.1';
+    const authToken = resolveAuthToken(options.authToken);
     const localUrl = `http://${host}:${port}/mcp`;
 
     startGraniteMcpHttpServer(runtime, {
       host,
       port,
       allowedOrigins: options.allowOrigin ?? [],
+      authToken,
       jsonResponse: options.jsonResponse ?? false,
       role,
     });
@@ -195,4 +198,15 @@ export function parseMcpRole(value?: string): McpAccessRole {
   const role = value ?? 'write';
   if (role === 'read' || role === 'write') return role;
   throw new Error(`Invalid MCP role: ${role}. Expected "read" or "write".`);
+}
+
+export function resolveAuthToken(value?: string): string | undefined {
+  const raw = value ?? process.env.GRANITE_MCP_TOKEN;
+  if (raw === undefined) return undefined;
+
+  const token = raw.trim();
+  if (!token) {
+    throw new Error('Invalid MCP auth token: token cannot be empty.');
+  }
+  return token;
 }

@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import net from 'node:net';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
@@ -47,6 +48,7 @@ export interface GraniteMcpHttpServerOptions {
   host: string;
   port: number;
   allowedOrigins?: string[];
+  authToken?: string;
   jsonResponse?: boolean;
   role?: McpAccessRole;
 }
@@ -170,6 +172,10 @@ export async function startGraniteMcpStdioServer(
 }
 
 export function startGraniteMcpHttpServer(runtime: GraniteMcpRuntime, options: GraniteMcpHttpServerOptions): void {
+  if (requiresMcpHttpAuth(options.host) && !options.authToken?.trim()) {
+    throw new Error('Refusing to bind Granite MCP HTTP server outside localhost without --auth-token or GRANITE_MCP_TOKEN.');
+  }
+
   const app = createGraniteMcpHttpApp(runtime, options);
 
   console.error(`Granite MCP server listening on http://${options.host}:${options.port}/mcp`);
@@ -791,10 +797,11 @@ function formatCompileTopicNote(note: { title: string; slug: string; type: strin
   ].join('\n');
 }
 
-function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcpHttpServerOptions): Hono {
+export function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcpHttpServerOptions): Hono {
   const app = new Hono();
   const allowedHosts = buildAllowedHosts(options.host, options.port);
   const allowedOrigins = buildAllowedOrigins(options.host, options.port, options.allowedOrigins ?? []);
+  const authToken = options.authToken?.trim();
   const role = options.role ?? 'write';
 
   app.use('/mcp', async (c, next) => {
@@ -821,6 +828,17 @@ function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcp
         status: 204,
         headers: corsHeaders(origin, allowedOrigins),
       });
+    }
+
+    if (authToken) {
+      const token = readBearerToken(c.req.header('authorization'));
+      if (token !== authToken) {
+        return c.json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Unauthorized.' },
+          id: null,
+        }, 401);
+      }
     }
 
     await next();
@@ -854,7 +872,7 @@ function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: GraniteMcp
 
 function buildAllowedHosts(host: string, port: number): Set<string> {
   const normalizedHost = host.toLowerCase();
-  if (normalizedHost === '0.0.0.0' || normalizedHost === '::' || normalizedHost === '[::]') {
+  if (isWildcardBindHost(normalizedHost)) {
     return new Set<string>();
   }
 
@@ -870,6 +888,25 @@ function buildAllowedHosts(host: string, port: number): Set<string> {
   }
 
   return allowed;
+}
+
+function isWildcardBindHost(host: string): boolean {
+  const normalizedHost = host.toLowerCase();
+  return normalizedHost === '0.0.0.0' || normalizedHost === '::' || normalizedHost === '[::]';
+}
+
+export function requiresMcpHttpAuth(host: string): boolean {
+  return !isLoopbackBindHost(host);
+}
+
+function isLoopbackBindHost(host: string): boolean {
+  const normalizedHost = host.toLowerCase();
+  if (normalizedHost === 'localhost' || normalizedHost === '::1' || normalizedHost === '[::1]') {
+    return true;
+  }
+
+  const ipv4 = net.isIP(normalizedHost) === 4 ? normalizedHost : '';
+  return ipv4.startsWith('127.');
 }
 
 function buildAllowedOrigins(host: string, port: number, extraOrigins: string[]): Set<string> {
@@ -909,9 +946,15 @@ function corsHeaders(origin: string | undefined, allowedOrigins: Set<string>): H
   if (origin && allowedOrigins.has(origin)) {
     headers.set('Access-Control-Allow-Origin', origin);
     headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    headers.set('Access-Control-Allow-Headers', 'Content-Type, MCP-Protocol-Version, Last-Event-ID');
+    headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, MCP-Protocol-Version, Last-Event-ID');
     headers.set('Access-Control-Expose-Headers', 'MCP-Session-Id, MCP-Protocol-Version');
     headers.set('Vary', 'Origin');
   }
   return headers;
+}
+
+function readBearerToken(header: string | undefined): string | null {
+  if (!header) return null;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
 }

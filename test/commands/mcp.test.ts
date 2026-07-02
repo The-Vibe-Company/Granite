@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseMcpRole, parsePort, parseTransport } from '../../src/commands/mcp.js';
+import { parseMcpRole, parsePort, parseTransport, resolveAuthToken } from '../../src/commands/mcp.js';
 
 const originalMcpPort = process.env.MCP_PORT;
+const originalGraniteMcpToken = process.env.GRANITE_MCP_TOKEN;
 
 describe('mcp command helpers', () => {
   afterEach(() => {
@@ -9,6 +10,11 @@ describe('mcp command helpers', () => {
       delete process.env.MCP_PORT;
     } else {
       process.env.MCP_PORT = originalMcpPort;
+    }
+    if (originalGraniteMcpToken === undefined) {
+      delete process.env.GRANITE_MCP_TOKEN;
+    } else {
+      process.env.GRANITE_MCP_TOKEN = originalGraniteMcpToken;
     }
   });
 
@@ -34,5 +40,16 @@ describe('mcp command helpers', () => {
     expect(parseMcpRole('read')).toBe('read');
     expect(parseMcpRole('write')).toBe('write');
     expect(() => parseMcpRole('admin')).toThrow('Invalid MCP role');
+  });
+
+  it('resolves the MCP auth token from explicit options and GRANITE_MCP_TOKEN', () => {
+    process.env.GRANITE_MCP_TOKEN = 'env-token';
+
+    expect(resolveAuthToken('explicit-token')).toBe('explicit-token');
+    expect(resolveAuthToken()).toBe('env-token');
+
+    delete process.env.GRANITE_MCP_TOKEN;
+    expect(resolveAuthToken()).toBeUndefined();
+    expect(() => resolveAuthToken('   ')).toThrow('Invalid MCP auth token');
   });
 });

@@ -256,6 +256,7 @@ const mcpCmd = program
   .option('--host <host>', 'Host for HTTP transport', '127.0.0.1')
   .option('--port <port>', 'Port for HTTP transport', '3321')
   .option('--allow-origin <origin>', 'Allow an HTTP Origin for browser-based HTTP clients', collectValues, [])
+  .option('--auth-token <token>', 'Bearer token required for HTTP MCP requests. Defaults to $GRANITE_MCP_TOKEN')
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
   .option('--background', 'Run MCP server as a background daemon')
   .option('--role <role>', 'MCP access role: read or write', 'write')
@@ -265,6 +266,7 @@ const mcpCmd = program
     host?: string;
     port?: string;
     allowOrigin?: string[];
+    authToken?: string;
     jsonResponse?: boolean;
     background?: boolean;
     role?: string;

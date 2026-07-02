@@ -177,6 +177,36 @@ Your agent reads these before writing and sets them as it works. You inherit a f
 - `granite serve` gives you a local web UI — browse, search, explore the graph
 - `granite daemon start` runs MCP + web UI in one background process
 
+## Remote MCP / self-hosting
+
+Granite can also expose the MCP server over HTTP for a private remote vault. When binding outside localhost, require a bearer token:
+
+```bash
+export GRANITE_MCP_TOKEN="$(openssl rand -hex 32)"
+granite mcp --vault ~/.granite \
+  --transport http \
+  --host 0.0.0.0 \
+  --port 3321
+```
+
+Clients must send the token on every MCP request:
+
+```bash
+claude mcp add --transport http granite https://granite.example.com/mcp \
+  --header "Authorization: Bearer $GRANITE_MCP_TOKEN"
+```
+
+The Docker image auto-initializes `/vault` on first boot and serves only MCP on port 3321:
+
+```bash
+docker run --rm -p 3321:3321 \
+  -e GRANITE_MCP_TOKEN="$GRANITE_MCP_TOKEN" \
+  -v granite-vault:/vault \
+  ghcr.io/the-vibe-company/granite:latest
+```
+
+Use `GRANITE_INIT_TEMPLATE=founder-os` to initialize a new mounted vault from a template. The `/health` endpoint is unauthenticated for platform checks. Do not expose `granite serve` or the web UI port `4321` on the public internet; the web UI is local-only and has no authentication.
+
 ## Direct sync
 
 Granite sync is direct machine-to-machine. Run it over LAN, Tailscale, or a private DNS name; there is no relay, hosted worker, billing tier, or cloud authority.

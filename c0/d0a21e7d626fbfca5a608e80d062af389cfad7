@@ -1,0 +1,68 @@
+docker-entrypoint.sh
+  s_97c3948598f9db::t_27e51e9e9521fc 1-22
+src/commands/init.ts
+  s_97c3948598f9db::t_b2dc6f7aaacc63 10-11
+test/mcp/server-auth.test.ts
+  s_97c3948598f9db::t_38dab2ffcea115 7-11,104-120
+  s_97c3948598f9db::t_18d457ceb322c8 1-6,12-103,121-150
+Dockerfile
+  s_97c3948598f9db::t_27e51e9e9521fc 1-4,7-20,24-37
+  s_97c3948598f9db::t_4d77570d429536 5-6,21-23
+.github/workflows/docker.yml
+  s_97c3948598f9db::t_5625b0df152aa8 1-30,34-48
+  s_97c3948598f9db::t_eae7848078e402 31-33
+README.md
+  s_97c3948598f9db::t_28e578c7c7b276 180-188,190-209
+  s_97c3948598f9db::t_0942f5a15e732b 189
+src/commands/mcp.ts
+  s_97c3948598f9db::t_4f3a08bb35e09f 15,120,127,202-211
+  s_13d5274c057a4c::t_b7e21e99710b54 212
+test/commands/init.test.ts
+  s_97c3948598f9db::t_ecbb413b210800 13,20,23,36-40,60-68
+  s_13d5274c057a4c::t_3210a02d066aee 69
+src/index.ts
+  s_97c3948598f9db::t_dc750a9ae7ca6b 259,269
+src/mcp/server.ts
+  s_97c3948598f9db::t_cfe09ad8b806b3 3,175-176,875,893,896-909
+  s_97c3948598f9db::t_62cb17db695962 51,177-178,800,834,836-841,894-895,910-911,949,955-960
+  s_97c3948598f9db::t_51b4442181b93a 804,833,835
+  s_4aca1f7f1b535e::t_493e348d28c223 842-843
+.dockerignore
+  s_97c3948598f9db::t_27e51e9e9521fc 1-5,12-13
+  s_97c3948598f9db::t_5ca78a9328c744 6-11
+test/commands/mcp.test.ts
+  s_97c3948598f9db::t_fcd6dd459c1836 2,5,14-18,44-53
+  s_13d5274c057a4c::t_864f35d7399ea2 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c0d0a21e7d626fbfca5a608e80d062af389cfad7",
+  "prompts": {},
+  "sessions": {
+    "s_13d5274c057a4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f21f7-3b33-7d32-a39c-a5fd07e60de8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    },
+    "s_4aca1f7f1b535e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f239fd9-f198-4dac-b8ee-990da7b13a33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    },
+    "s_97c3948598f9db": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2232-dbc8-73c0-8c28-973570a68087",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

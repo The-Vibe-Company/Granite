@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.12](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.11...granite-mem-v0.1.12) (2026-07-06)
+
+
+### Features
+
+* **deploy:** one-command serverless Granite on Fly.io Sprites ([#46](https://github.com/The-Vibe-Company/Granite/issues/46)) ([b4a3782](https://github.com/The-Vibe-Company/Granite/commit/b4a37825c1ef2287b2e260645d0b6237a82256e2))
+* **mcp:** secure remote HTTP transport ([#45](https://github.com/The-Vibe-Company/Granite/issues/45)) ([987cf14](https://github.com/The-Vibe-Company/Granite/commit/987cf14d5f5d32aeafdc8429d77da2fae7e79ddd))
+
+
+### Bug Fixes
+
+* **cli:** derive version from package metadata ([#42](https://github.com/The-Vibe-Company/Granite/issues/42)) ([6efdadc](https://github.com/The-Vibe-Company/Granite/commit/6efdadc298321cc987f5ab9463101fe77575244d))
+* **release:** publish granite-mem through trusted publishing ([#40](https://github.com/The-Vibe-Company/Granite/issues/40)) ([ab9ed2c](https://github.com/The-Vibe-Company/Granite/commit/ab9ed2cfb44f2059549eea80c830a717414c8cd3))
+* **release:** publish npm without legacy token ([#43](https://github.com/The-Vibe-Company/Granite/issues/43)) ([fc4d3b7](https://github.com/The-Vibe-Company/Granite/commit/fc4d3b7223f233a42c7ea5d6ac80044867fa75c7))
+* **release:** rely on npm trusted publishing ([bbe36e2](https://github.com/The-Vibe-Company/Granite/commit/bbe36e2116116ff7da023ab2e65980f2bd75a781))
+
 ## [0.1.11](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.10...granite-mem-v0.1.11) (2026-05-29)
 
 

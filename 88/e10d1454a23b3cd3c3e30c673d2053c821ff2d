@@ -1,0 +1,23 @@
+docs/SYNC.md
+  s_fda7a4e40fc85d::t_2ba207458db115 59
+docs/DEPLOY.md
+  s_fda7a4e40fc85d::t_cf11594b471655 20-21
+README.md
+  s_fda7a4e40fc85d::t_69c5a23763b35e 306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "88e10d1454a23b3cd3c3e30c673d2053c821ff2d",
+  "prompts": {},
+  "sessions": {
+    "s_fda7a4e40fc85d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "94440efb-4731-4e4a-8618-5904a847390a",
+        "model": "claude-fable-5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

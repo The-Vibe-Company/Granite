@@ -1,0 +1,88 @@
+test/web/instance-proxy.test.ts
+  s_76ee340129432f::t_0bea46e36eb52b 1-15,17-48,50-70,72-87,89-101,103-127,129-143,145-156,158-164,166-174,176-189,192-201,239-240
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 16
+  s_51e8e3052acb6d::t_0cada19fe8e3bc 49,71,88,102,128,144,157,165,175,190-191,202-238
+src/web/instances.ts
+  s_76ee340129432f::t_bac06644675bd2 1-29
+test/mcp/server-webapi.test.ts
+  s_76ee340129432f::t_652b92bee9d82e 1-97
+src/web/public/app.js
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 1121
+  s_76ee340129432f::t_d7c8dbd91d2551 236-249,251
+  s_76ee340129432f::t_3d6c7057f5d86b 799
+  s_76ee340129432f::t_ddb4db69c576b3 1120
+  s_76ee340129432f::t_1399b187789d72 138-180,183-188,190-191
+src/core/deploy/deploy.ts
+  s_76ee340129432f::t_065a822f3ec8a6 297-302,310
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 24
+  s_76ee340129432f::t_39f45a0da69d90 22-23,25-41
+  s_76ee340129432f::t_6f564ffbd524cf 201
+  s_76ee340129432f::t_5688dfdfcaf6ab 228-238,247-251
+src/index.ts
+  s_76ee340129432f::t_548ee8815e2d52 251,253-255
+  s_76ee340129432f::t_66f57bf9254c3f 270,281
+src/web/public/style.css
+  s_76ee340129432f::t_6ce1c738815c0f 137-151
+src/web/api-routes.ts
+  s_76ee340129432f::t_4da61764dfc6c0 108-115
+  s_76ee340129432f::t_60c32bbfc9030a 1-107,116-142
+src/mcp/server.ts
+  s_76ee340129432f::t_05e53d491e6307 3
+  s_76ee340129432f::t_29f1bde4e6e1f3 25
+  s_76ee340129432f::t_3436a574a2b821 57-58
+  s_76ee340129432f::t_5a97c41d65869e 826,864-877
+README.md
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 181,213-220,224,236-237,247
+src/web/public/markdown-renderer.js
+  s_76ee340129432f::t_669c014bf3725d 43-49
+src/commands/serve.ts
+  s_76ee340129432f::t_9e0da3ef1a44d7 2-3,5-30,33
+src/commands/mcp.ts
+  s_76ee340129432f::t_45ea488c9a27a8 136
+  s_76ee340129432f::t_89eeb96973016d 19
+  s_76ee340129432f::t_cc5a6629bf4463 66-70
+src/web/server.ts
+  s_76ee340129432f::t_10cd233a9f6806 2
+  s_76ee340129432f::t_f5e69444be87f3 8-13,15-23,25-29,31,33-37,39-51,53-54,56-60,63-65,72,74-79,82-84,86-119,121,155-228,233,235-247
+  s_51e8e3052acb6d::t_0cada19fe8e3bc 14,32,38,52,55,229-232
+  s_76ee340129432f::t_5087b43a2e39fd 66-69
+src/web/public/index.html
+  s_76ee340129432f::t_cd535be3554da6 37
+src/mcp/runtime.ts
+  s_76ee340129432f::t_8f2f00f41bc633 334-337
+test/core/deploy.test.ts
+  s_76ee340129432f::t_d54e86d5b0dc14 253-257,259-264,266-282
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 258
+  s_76ee340129432f::t_04a351db573904 149
+  s_76ee340129432f::t_fbf97264e01595 1
+  s_76ee340129432f::t_9b671bf7b41173 14
+test/commands/mcp.test.ts
+  s_76ee340129432f::t_a70be990bf20b5 1-2
+  s_76ee340129432f::t_e4e1cefcc8a983 34-49
+scripts/deploy-smoke.md
+  s_51e8e3052acb6d::t_74c8a42b93bdb2 11,42-52,57,67,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8cdf6eaa74de00293723890be620dd682b5c9b86",
+  "prompts": {},
+  "sessions": {
+    "s_51e8e3052acb6d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f386d-93aa-78c2-a825-871effb9d50a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    },
+    "s_76ee340129432f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a6460941-1088-44cd-a777-64cfd262ded8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

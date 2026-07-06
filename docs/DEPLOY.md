@@ -37,7 +37,7 @@ Manage instances from any machine after `deploy login`, or with `SPRITES_TOKEN`:
 ```bash
 granite deploy work            # a second instance (own vault, own token, own URL)
 granite deploy list            # all instances: version, health, MCP URL
-granite deploy status --show-token
+granite deploy status --show-token   # prints the live MCP bearer token — don't paste it in public channels or CI logs
 granite deploy                 # re-run = upgrade that instance to your CLI version
 granite deploy --all           # bulk remote update of every instance
 granite deploy destroy work    # permanent — asks for confirmation

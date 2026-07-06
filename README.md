@@ -303,7 +303,7 @@ Nothing. It's a folder of markdown files. The index is derived and disposable; `
 <details>
 <summary><b>Does anything phone home?</b></summary>
 
-No. No telemetry, no account, no network calls — unless you explicitly deploy to your own sprite or sync to your own machines.
+No. No telemetry, no account, no network calls — unless you explicitly deploy to your own sprite, sync to your own machines, or run `granite serve` with cloud credentials configured (use `--no-cloud` to stay fully offline).
 
 </details>
 

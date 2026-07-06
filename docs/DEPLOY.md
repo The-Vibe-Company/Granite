@@ -17,6 +17,8 @@ Or store the Sprites API token once in a user-scoped credentials file:
 granite deploy login --token <sprites-token>
 ```
 
+On a shared machine, prefer `SPRITES_TOKEN=<token> granite deploy login` so the secret doesn't land in shell history or `ps` output.
+
 That writes `~/.granite/config/sprites.json` (mode `0600` where supported). It works on macOS, Linux, and Windows via the user's home directory. Commands resolve credentials in this order: `--token`, `SPRITES_TOKEN`, then the stored file. Remove it with `granite deploy logout`.
 
 Shell examples on this page assume a POSIX shell (macOS, Linux, WSL, Git Bash). On Windows PowerShell, set the environment variable with `$env:SPRITES_TOKEN = "…"` instead of `export`.

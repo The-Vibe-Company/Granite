@@ -19,6 +19,10 @@
   <b>Install it with your agent.</b> Or run it standalone as a local markdown knowledge graph.
 </p>
 
+<p align="center">
+  <a href="#your-vault-in-the-cloud"><img src="https://img.shields.io/badge/☁️_Deploy_your_Granite-one_command,_sleeps_when_idle-111111?style=for-the-badge" alt="Deploy your Granite"></a>
+</p>
+
 ---
 
 ## The wow moment
@@ -174,19 +178,73 @@ Your agent reads these before writing and sets them as it works. You inherit a f
 - Markdown files are the source of truth; the SQLite index in `~/.granite/index.db` is derived state and can be rebuilt at any time
 - no cloud, no telemetry, no account
 - `git init` your vault and you have versioning for free
-- `granite serve` gives you a local web UI — browse, search, explore the graph
+- `granite serve` gives you a local web UI — browse, search, explore local and cloud graphs
 - `granite daemon start` runs MCP + web UI in one background process
 
-## Remote MCP / self-hosting
+## Your vault in the cloud
 
-Granite can also expose the MCP server over HTTP for a private remote vault. When binding outside localhost, require a bearer token:
+One command deploys a personal serverless Granite on [Fly.io Sprites](https://sprites.dev): a real persistent filesystem, an MCP endpoint that **wakes on request** (100–500 ms warm) and **sleeps when idle**. Idle cost ≈ storage only — a markdown vault is a few MB, so cents per month.
+
+```bash
+export SPRITES_TOKEN=…   # from sprites.dev — your account, your sprite, your data
+npx granite-mem deploy
+```
+
+Or store the Sprites API token once in a user-scoped Granite credentials file:
+
+```bash
+granite deploy login --token <sprites-token>
+```
+
+That writes `~/.granite/config/sprites.json` (mode `0600` where supported). It works on macOS, Linux, and Windows via the user's home directory. Commands resolve credentials in this order: `--token`, `SPRITES_TOKEN`, then the stored file. Remove it with `granite deploy logout`.
+
+That prints an MCP URL + bearer token ready to paste into Claude Code or Cursor:
+
+```bash
+claude mcp add --transport http granite https://<your-sprite>.sprites.app/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+There is no central admin, no Granite cloud account, no relay: `granite deploy` provisions a sprite **you** own and pay for directly.
+
+Manage instances from any machine after `deploy login`, or with `SPRITES_TOKEN`:
+
+```bash
+granite deploy login --token <sprites-token>
+granite deploy work            # a second instance (own vault, own token, own URL)
+granite deploy list            # all instances: version, health, MCP URL
+granite deploy status --show-token
+granite deploy                 # re-run = upgrade that instance to your CLI version
+granite deploy --all           # bulk remote update of every instance
+granite deploy destroy work    # permanent — asks for confirmation
+```
+
+Browse local and deployed vaults from the same local UI:
+
+```bash
+SPRITES_TOKEN=… granite serve
+```
+
+`granite serve` discovers your managed Sprites using `SPRITES_TOKEN` or the stored `~/.granite/config/sprites.json` token. It keeps MCP bearer tokens on the local server and proxies read-only graph/search/note requests to the selected cloud instance. Use `granite serve --no-cloud` to browse only the local vault.
+
+Notes:
+
+- Document parsing (PDF/DOCX/XLSX/PPTX) is **disabled in cloud deployments** (`GRANITE_DISABLE_DOCUMENT_PARSING=1`). Extract and import documents on your local Granite.
+- Cloud instances expose MCP plus an authenticated read-only web API for the local UI switcher; note creation in the web UI remains local-only.
+- The Sprites API token is local user configuration at `~/.granite/config/sprites.json`; it is not written to the vault notes and is excluded from Granite sync manifests.
+- The vault lives at `/home/sprite/.granite` on the sprite, on durable object-storage-backed disk. There is no export/backup command in v1 — treat the sprite as the single copy for now.
+
+### Advanced: run the HTTP MCP server yourself
+
+Granite can expose the MCP server over HTTP anywhere you can run Node. When binding outside localhost, a bearer token is required:
 
 ```bash
 export GRANITE_MCP_TOKEN="$(openssl rand -hex 32)"
 granite mcp --vault ~/.granite \
   --transport http \
   --host 0.0.0.0 \
-  --port 3321
+  --port 3321 \
+  --web-api
 ```
 
 Clients must send the token on every MCP request:
@@ -196,16 +254,7 @@ claude mcp add --transport http granite https://granite.example.com/mcp \
   --header "Authorization: Bearer $GRANITE_MCP_TOKEN"
 ```
 
-The Docker image auto-initializes `/vault` on first boot and serves only MCP on port 3321:
-
-```bash
-docker run --rm -p 3321:3321 \
-  -e GRANITE_MCP_TOKEN="$GRANITE_MCP_TOKEN" \
-  -v granite-vault:/vault \
-  ghcr.io/the-vibe-company/granite:latest
-```
-
-Use `GRANITE_INIT_TEMPLATE=founder-os` to initialize a new mounted vault from a template. The `/health` endpoint is unauthenticated for platform checks. Do not expose `granite serve` or the web UI port `4321` on the public internet; the web UI is local-only and has no authentication.
+A generic `Dockerfile` is included for self-hosting on your own infra (build it yourself; no public image is published). The `/health` endpoint is unauthenticated for platform checks. Do not expose `granite serve` or the web UI port `4321` on the public internet; the web UI is local-only and has no authentication. If `--web-api` is enabled on the HTTP MCP server, `/api/*` and `/assets/*` are guarded by the same bearer token as `/mcp`.
 
 ## Direct sync
 

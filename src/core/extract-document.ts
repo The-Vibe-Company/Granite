@@ -34,6 +34,11 @@ export interface ExtractDocumentResult {
   user_prompt?: string;
 }
 
+export function isDocumentParsingDisabled(): boolean {
+  const value = process.env.GRANITE_DISABLE_DOCUMENT_PARSING?.trim().toLowerCase();
+  return value === '1' || value === 'true';
+}
+
 const FERRULES_RELEASES_URL = 'https://github.com/aminediro/ferrules/releases';
 const FERRULES_VERIFY_COMMAND = 'ferrules --version';
 const PPTX_XML_PARSER = new XMLParser({

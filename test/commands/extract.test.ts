@@ -20,6 +20,22 @@ describe('extract command', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it('refuses to run when document parsing is disabled', async () => {
+    vi.stubEnv('GRANITE_DISABLE_DOCUMENT_PARSING', '1');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code ?? 0})`);
+    }) as never);
+
+    try {
+      await expect(extractDocumentCommand(path.join(tmpDir, 'any.docx'), {})).rejects.toThrow('process.exit(1)');
+      expect(String(errorSpy.mock.calls[0]?.[0])).toContain('GRANITE_DISABLE_DOCUMENT_PARSING');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('extracts raw text from DOCX without importing anything', async () => {
     const inputFile = path.join(tmpDir, 'sample.docx');
     createDocxFixture(inputFile, ['Hello Granite', 'Second paragraph']);

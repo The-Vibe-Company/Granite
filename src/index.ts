@@ -23,6 +23,14 @@ import {
   daemonLogsCommand,
 } from './commands/daemon.js';
 import { wakeupCommand } from './commands/wakeup.js';
+import {
+  deployCommand,
+  deployDestroyCommand,
+  deployLoginCommand,
+  deployListCommand,
+  deployLogoutCommand,
+  deployStatusCommand,
+} from './commands/deploy.js';
 import { attachCommand } from './commands/attach.js';
 import { extractDocumentCommand } from './commands/extract.js';
 import { importDocumentCommand } from './commands/import.js';
@@ -242,10 +250,11 @@ program
 
 program
   .command('serve')
-  .description('Start the local web UI — browse, search, and visualize the knowledge graph')
+  .description('Start the local web UI — browse local and cloud vaults, search, and visualize the knowledge graph')
   .option('-p, --port <port>', 'Port number', '4321')
-  .action((options: { port: string }) => {
-    serveCommand(options);
+  .option('--no-cloud', 'Skip cloud instance discovery even when Sprites credentials are available')
+  .action(async (options: { port: string; cloud?: boolean }) => {
+    await serveCommand(options);
   });
 
 const mcpCmd = program
@@ -260,6 +269,7 @@ const mcpCmd = program
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
   .option('--background', 'Run MCP server as a background daemon')
   .option('--role <role>', 'MCP access role: read or write', 'write')
+  .option('--web-api', 'Also expose the read-only vault web API (requires --transport http)')
   .action(async (options: {
     vault?: string;
     transport?: 'stdio' | 'http';
@@ -270,6 +280,7 @@ const mcpCmd = program
     jsonResponse?: boolean;
     background?: boolean;
     role?: string;
+    webApi?: boolean;
   }) => {
     await mcpCommand(options);
   });
@@ -288,6 +299,73 @@ mcpCmd
   .option('--vault <path>', 'Vault root')
   .action((options: { vault?: string }) => {
     mcpStatusCommand(options);
+  });
+
+// ─── Deploy ────────────────────────────────────────────────────────────
+// One-command serverless Granite on Fly.io Sprites. The sprite is the source
+// of truth for instances; the optional Sprites API credential is user-scoped.
+
+const deployCmd = program
+  .command('deploy')
+  .description('Deploy a personal serverless Granite (MCP over HTTP) to Fly.io Sprites')
+  .argument('[name]', 'Instance name (each instance is its own sprite + vault)', undefined)
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
+  .option('--template <name>', 'Vault template used on first deploy (e.g. founder-os)')
+  .option('--rotate-token', 'Generate a new MCP bearer token for this instance')
+  .option('--force', 'Adopt an existing sprite that was not created by granite deploy')
+  .option('--all', 'Reconcile every managed instance (bulk remote update)')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string | undefined, options: { token?: string; template?: string; rotateToken?: boolean; force?: boolean; all?: boolean; json?: boolean }) => {
+    await deployCommand(name, options);
+  });
+
+deployCmd
+  .command('login')
+  .description('Store a Sprites API token in ~/.granite/config/sprites.json')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .action((options: { token?: string }) => {
+    deployLoginCommand(options);
+  });
+
+deployCmd
+  .command('logout')
+  .description('Remove the stored Sprites API token')
+  .action(() => {
+    deployLogoutCommand();
+  });
+
+// Options placed after the subcommand (e.g. `deploy destroy x --force`) are
+// captured by the parent `deploy` command's identically-named options — merge
+// parent options into each subcommand's.
+deployCmd
+  .command('list')
+  .alias('ls')
+  .description('List deployed Granite instances (version, health, MCP URL)')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { token?: string; json?: boolean }) => {
+    await deployListCommand({ ...deployCmd.opts(), ...options });
+  });
+
+deployCmd
+  .command('status')
+  .description('Show details for a deployed instance')
+  .argument('[name]', 'Instance name')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
+  .option('--show-token', 'Include the MCP bearer token in the output')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string | undefined, options: { token?: string; showToken?: boolean; json?: boolean }) => {
+    await deployStatusCommand(name, { ...deployCmd.opts(), ...options });
+  });
+
+deployCmd
+  .command('destroy')
+  .description('Permanently delete a deployed instance and its cloud vault')
+  .argument('[name]', 'Instance name')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
+  .option('--force', 'Skip the confirmation prompt')
+  .action(async (name: string | undefined, options: { token?: string; force?: boolean }) => {
+    await deployDestroyCommand(name, { ...deployCmd.opts(), ...options });
   });
 
 // ─── Daemon ────────────────────────────────────────────────────────────

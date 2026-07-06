@@ -331,6 +331,10 @@ export class GraniteMcpRuntime {
     this.indexCheckIntervalMs = options.indexCheckIntervalMs ?? 1500;
   }
 
+  getConfig(): GraniteConfig {
+    return this.config;
+  }
+
   close(): void {
     this.db.close();
   }

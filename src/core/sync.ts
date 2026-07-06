@@ -524,6 +524,7 @@ export function isIgnoredSyncPath(relativePath: string): boolean {
   if (normalized === '.DS_Store') return true;
 
   const rootDerivedFiles = new Set([
+    'config/sprites.json',
     'index.db',
     'mcp.pid',
     'mcp.url',

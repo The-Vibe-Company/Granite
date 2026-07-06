@@ -16,6 +16,7 @@ interface McpCommandOptions {
   jsonResponse?: boolean;
   background?: boolean;
   role?: string;
+  webApi?: boolean;
 }
 
 // ---- PID / URL file helpers ------------------------------------------------
@@ -61,6 +62,11 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
   const transport = parseTransport(options.transport);
   const role = parseMcpRole(options.role);
   const vaultRoot = resolveVaultRoot(options.vault);
+
+  if (options.webApi && transport !== 'http') {
+    console.error('--web-api requires --transport http');
+    process.exit(1);
+  }
 
   // --background: re-spawn ourselves as a detached child
   if (options.background) {
@@ -127,6 +133,7 @@ export async function mcpCommand(options: McpCommandOptions): Promise<void> {
       authToken,
       jsonResponse: options.jsonResponse ?? false,
       role,
+      webApi: options.webApi ?? false,
     });
 
     if (isDaemon) writeDaemonState(vaultRoot, process.pid, localUrl);

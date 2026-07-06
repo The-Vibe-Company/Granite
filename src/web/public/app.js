@@ -135,11 +135,60 @@
   //  Boot
   // ======================================================================
 
+  // ---- Instance selection (local vault vs deployed cloud instances) ------
+  const INSTANCE_KEY = 'granite.instance';
+  let currentInstance = localStorage.getItem(INSTANCE_KEY);
+
+  // All API calls go through this wrapper so the gateway knows which instance
+  // to serve. <img> assets can't carry headers — see markdown-renderer.js.
+  function apiFetch(url) {
+    const headers = currentInstance ? { 'X-Granite-Instance': currentInstance } : {};
+    return fetch(url, { headers });
+  }
+
+  async function loadInstances() {
+    const res = await fetch('/api/instances');
+    const data = await res.json();
+    const instances = data.instances || [];
+    const known = new Set(instances.map(i => i.id));
+
+    if (!currentInstance || !known.has(currentInstance)) {
+      currentInstance = data.default || 'local';
+      localStorage.removeItem(INSTANCE_KEY);
+    }
+    window.GRANITE_INSTANCE = currentInstance === 'local' ? null : currentInstance;
+
+    const select = document.getElementById('instance-switcher');
+    if (select && instances.length > 1) {
+      select.innerHTML = '';
+      for (const instance of instances) {
+        const option = document.createElement('option');
+        option.value = instance.id;
+        option.textContent = instance.kind === 'cloud'
+          ? `☁ ${instance.label}${instance.web_api ? '' : ' (outdated)'}`
+          : instance.label;
+        option.selected = instance.id === currentInstance;
+        select.appendChild(option);
+      }
+      select.hidden = false;
+      select.addEventListener('change', () => {
+        localStorage.setItem(INSTANCE_KEY, select.value);
+        location.reload();
+      });
+    }
+  }
+
   async function boot() {
     try {
+      try {
+        await loadInstances();
+      } catch (err) {
+        console.error('[granite] instance discovery failed', err);
+      }
+
       const [graphRes, typesRes] = await Promise.all([
-        fetch('/api/graph').then(r => r.json()),
-        fetch('/api/types').then(r => r.json()),
+        apiFetch('/api/graph').then(r => readApiResponse(r)),
+        apiFetch('/api/types').then(r => readApiResponse(r)),
       ]);
 
       nodes = graphRes.nodes || [];
@@ -184,8 +233,22 @@
       }
     } catch (err) {
       console.error('[granite] boot failed', err);
-      subEl.textContent = 'Could not load the vault. Is the API running?';
+      subEl.textContent = err && err.graniteMessage
+        ? err.graniteMessage
+        : 'Could not load the vault. Is the API running?';
     }
+  }
+
+  // Parse an API response; surface gateway errors (502/504 with a code) with
+  // their human message so instance problems are actionable from the UI.
+  async function readApiResponse(res) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || ('API error ' + res.status));
+      if (data.code) err.graniteMessage = data.error;
+      throw err;
+    }
+    return data;
   }
 
   // ======================================================================
@@ -733,7 +796,7 @@
   }
 
   async function fetchNote(slug) {
-    const res = await fetch('/api/notes/' + encodeURIComponent(slug));
+    const res = await apiFetch('/api/notes/' + encodeURIComponent(slug));
     if (!res.ok) throw new Error('fetch ' + slug + ': ' + res.status);
     const note = await res.json();
     noteCache.set(slug, note);
@@ -1054,8 +1117,8 @@
     const token = ++cmdToken;
     cmdTimer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/search?q=' + encodeURIComponent(q));
-        const data = await res.json();
+        const res = await apiFetch('/api/search?q=' + encodeURIComponent(q));
+        const data = await readApiResponse(res);
         if (token !== cmdToken) return;
         renderCommandResults(data.results || []);
       } catch (err) {

@@ -31,6 +31,22 @@ describe('import command', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it('refuses to run when document parsing is disabled', () => {
+    vi.stubEnv('GRANITE_DISABLE_DOCUMENT_PARSING', 'true');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code ?? 0})`);
+    }) as never);
+
+    try {
+      expect(() => importDocumentCommand('whatever.pdf', { content: 'text' })).toThrow('process.exit(1)');
+      expect(String(errorSpy.mock.calls[0]?.[0])).toContain('GRANITE_DISABLE_DOCUMENT_PARSING');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('imports a document as a source note with required content and linked asset', () => {
     const inputFile = path.join(tmpDir, 'attention-is-all-you-need.pdf');
     fs.writeFileSync(inputFile, '%PDF-1.4\nfake\n');

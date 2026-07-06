@@ -134,6 +134,21 @@ button { font: inherit; color: inherit; }
 .dirA-brand-name { font-family: var(--font-display); font-size: 1.1rem; letter-spacing: -0.03em; color: #fff8ef; line-height: 1; }
 .dirA-brand-sub { font-size: 0.54rem; text-transform: uppercase; letter-spacing: 0.16em; color: rgba(255,236,220,0.52); margin-top: 3px; }
 
+.dirA-instance {
+  appearance: none;
+  padding: 10px 32px 10px 14px;
+  border-radius: 10px;
+  background: rgba(26,19,16,0.62) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f1c49e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid rgba(255,236,220,0.09);
+  backdrop-filter: blur(10px);
+  color: rgba(255,236,220,0.78);
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.dirA-instance:hover { background-color: rgba(26,19,16,0.82); border-color: rgba(255,236,220,0.16); }
+.dirA-instance option { background: #1a1310; color: #fff8ef; }
+
 .dirA-search {
   flex: 0 1 440px;
   display: flex; align-items: center; gap: 10px;

@@ -8,7 +8,7 @@ not a FlyV1 macaroon).
 
 ⚠ `granite deploy` installs the **published** granite-mem at the CLI's own version.
 The security checks below (401 without token, extract/import hidden) only pass when
-the published version includes HTTP bearer auth and the document-parsing kill switch
+the published version includes HTTP bearer auth, `--web-api`, and the document-parsing kill switch
 (> 0.1.11). To smoke-test unreleased code, `npm pack`, upload the tarball to the
 sprite (fs/write with `Content-Type: application/octet-stream`), `npm i -g` it there,
 then stop/start the service.
@@ -39,12 +39,22 @@ curl -s https://<sprite-url>/mcp \
       disabled in cloud deployments).
 - [ ] Optional end-to-end: `claude mcp add --transport http granite <mcp-url> --header "Authorization: Bearer <token>"`, then call `granite_wakeup` from Claude Code.
 
-## 3. Wake-on-request
+## 3. Read-only web API
+
+```bash
+curl -s https://<sprite-url>/api/graph \
+  -H "Authorization: Bearer <token>"
+```
+
+- [ ] Returns JSON with `nodes` and `edges`; without the Authorization header it returns 401.
+- [ ] `SPRITES_TOKEN=… npx tsx src/index.ts serve --port 4322` lists the smoke instance in the UI switcher and can load its graph.
+
+## 4. Wake-on-request
 
 - [ ] Wait until the sprite goes idle (a few minutes), then hit `/health` again:
       first response may take 1–2 s (cold wake) and must still be 200.
 
-## 4. Idempotent re-deploy
+## 5. Idempotent re-deploy
 
 ```bash
 npx tsx src/index.ts deploy smoke
@@ -54,7 +64,7 @@ npx tsx src/index.ts deploy smoke
 - [ ] Token is unchanged; `--rotate-token` changes it.
 - [ ] Vault survives: notes captured before the re-deploy are still there.
 
-## 5. Fleet commands
+## 6. Fleet commands
 
 ```bash
 npx tsx src/index.ts deploy list
@@ -65,7 +75,7 @@ npx tsx src/index.ts deploy --all
 - [ ] `list` shows the instance with version + health; unmanaged sprites are absent.
 - [ ] `--all` reconciles every instance and prints a per-instance recap.
 
-## 6. Destroy
+## 7. Destroy
 
 ```bash
 npx tsx src/index.ts deploy destroy smoke

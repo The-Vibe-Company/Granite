@@ -248,10 +248,11 @@ program
 
 program
   .command('serve')
-  .description('Start the local web UI — browse, search, and visualize the knowledge graph')
+  .description('Start the local web UI — browse local and cloud vaults, search, and visualize the knowledge graph')
   .option('-p, --port <port>', 'Port number', '4321')
-  .action((options: { port: string }) => {
-    serveCommand(options);
+  .option('--no-cloud', 'Skip cloud instance discovery even when SPRITES_TOKEN is set')
+  .action(async (options: { port: string; cloud?: boolean }) => {
+    await serveCommand(options);
   });
 
 const mcpCmd = program
@@ -266,6 +267,7 @@ const mcpCmd = program
   .option('--json-response', 'Prefer JSON HTTP responses instead of SSE streams')
   .option('--background', 'Run MCP server as a background daemon')
   .option('--role <role>', 'MCP access role: read or write', 'write')
+  .option('--web-api', 'Also expose the read-only vault web API (requires --transport http)')
   .action(async (options: {
     vault?: string;
     transport?: 'stdio' | 'http';
@@ -276,6 +278,7 @@ const mcpCmd = program
     jsonResponse?: boolean;
     background?: boolean;
     role?: string;
+    webApi?: boolean;
   }) => {
     await mcpCommand(options);
   });

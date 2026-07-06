@@ -178,7 +178,7 @@ Your agent reads these before writing and sets them as it works. You inherit a f
 - Markdown files are the source of truth; the SQLite index in `~/.granite/index.db` is derived state and can be rebuilt at any time
 - no cloud, no telemetry, no account
 - `git init` your vault and you have versioning for free
-- `granite serve` gives you a local web UI — browse, search, explore the graph
+- `granite serve` gives you a local web UI — browse, search, explore local and cloud graphs
 - `granite daemon start` runs MCP + web UI in one background process
 
 ## Your vault in the cloud
@@ -210,10 +210,18 @@ granite deploy --all           # bulk remote update of every instance
 granite deploy destroy work    # permanent — asks for confirmation
 ```
 
+Browse local and deployed vaults from the same local UI:
+
+```bash
+SPRITES_TOKEN=… granite serve
+```
+
+`granite serve` discovers your managed Sprites, keeps MCP bearer tokens on the local server, and proxies read-only graph/search/note requests to the selected cloud instance. Use `granite serve --no-cloud` to browse only the local vault.
+
 Notes:
 
 - Document parsing (PDF/DOCX/XLSX/PPTX) is **disabled in cloud deployments** (`GRANITE_DISABLE_DOCUMENT_PARSING=1`). Extract and import documents on your local Granite.
-- Cloud instances expose MCP only — the web UI stays local.
+- Cloud instances expose MCP plus an authenticated read-only web API for the local UI switcher; note creation in the web UI remains local-only.
 - The vault lives at `/home/sprite/.granite` on the sprite, on durable object-storage-backed disk. There is no export/backup command in v1 — treat the sprite as the single copy for now.
 
 ### Advanced: run the HTTP MCP server yourself
@@ -225,7 +233,8 @@ export GRANITE_MCP_TOKEN="$(openssl rand -hex 32)"
 granite mcp --vault ~/.granite \
   --transport http \
   --host 0.0.0.0 \
-  --port 3321
+  --port 3321 \
+  --web-api
 ```
 
 Clients must send the token on every MCP request:
@@ -235,7 +244,7 @@ claude mcp add --transport http granite https://granite.example.com/mcp \
   --header "Authorization: Bearer $GRANITE_MCP_TOKEN"
 ```
 
-A generic `Dockerfile` is included for self-hosting on your own infra (build it yourself; no public image is published). The `/health` endpoint is unauthenticated for platform checks. Do not expose `granite serve` or the web UI port `4321` on the public internet; the web UI is local-only and has no authentication.
+A generic `Dockerfile` is included for self-hosting on your own infra (build it yourself; no public image is published). The `/health` endpoint is unauthenticated for platform checks. Do not expose `granite serve` or the web UI port `4321` on the public internet; the web UI is local-only and has no authentication. If `--web-api` is enabled on the HTTP MCP server, `/api/*` and `/assets/*` are guarded by the same bearer token as `/mcp`.
 
 ## Direct sync
 

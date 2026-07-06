@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DeployError,
   MARKER_PATH,
@@ -11,6 +11,7 @@ import {
   instanceNameFromSprite,
   listManagedInstances,
   resolveSpriteName,
+  supportsWebApi,
 } from '../../src/core/deploy/deploy.js';
 import type { SpriteInfo, SpriteServiceDefinition, SpritesClient } from '../../src/core/deploy/sprites-client.js';
 
@@ -145,7 +146,7 @@ describe('deployInstance', () => {
     const state = client.sprites.get('granite')!;
     const service = state.services.get(SERVICE_NAME)!;
     expect(service.cmd).toBe('/usr/local/bin/node');
-    expect(service.args).toEqual(['/usr/local/lib/node/bin/granite', 'mcp', '--transport', 'http', '--host', '0.0.0.0', '--port', String(MCP_PORT)]);
+    expect(service.args).toEqual(['/usr/local/lib/node/bin/granite', 'mcp', '--transport', 'http', '--host', '0.0.0.0', '--port', String(MCP_PORT), '--web-api']);
     expect(service.env.GRANITE_VAULT).toBe(VAULT_PATH);
     expect(service.env.GRANITE_MCP_TOKEN).toBe(result.mcp_token);
     expect(service.env.GRANITE_DISABLE_DOCUMENT_PARSING).toBe('1');
@@ -249,7 +250,36 @@ describe('deployInstance', () => {
   });
 });
 
+describe('supportsWebApi', () => {
+  it('gates on the minimum web-api version', () => {
+    expect(supportsWebApi(null)).toBe(false);
+    expect(supportsWebApi('pending')).toBe(false);
+    expect(supportsWebApi('0.1.11')).toBe(false);
+    expect(supportsWebApi('0.1.12')).toBe(true);
+    expect(supportsWebApi('0.2.0')).toBe(true);
+    expect(supportsWebApi('0.2.1')).toBe(true);
+    expect(supportsWebApi('1.0.0')).toBe(true);
+  });
+});
+
 describe('listManagedInstances', () => {
+  it('copies tokens and skips health probes when asked', async () => {
+    const client = new FakeSpritesClient();
+    client.addSprite('granite-work', { managed: true, token: 'secret-token' });
+    const healthSpy = vi.spyOn(client, 'checkHealth');
+
+    const instances = await listManagedInstances(client, { includeToken: true, checkHealth: false });
+
+    expect(instances).toHaveLength(1);
+    expect(instances[0].mcp_token).toBe('secret-token');
+    expect(instances[0].healthy).toBe(false); // unknown without a probe
+    expect(healthSpy).not.toHaveBeenCalled();
+
+    const withoutToken = await listManagedInstances(client);
+    expect(withoutToken[0].mcp_token).toBeUndefined();
+    expect(healthSpy).toHaveBeenCalled(); // default behavior probes health
+  });
+
   it('lists only sprites carrying the deploy marker', async () => {
     const client = new FakeSpritesClient();
     client.addSprite('granite', { managed: true, version: '0.1.5' });

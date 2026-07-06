@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import net from 'node:net';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -21,6 +22,7 @@ import {
 } from '../../shared/mcp-markdown.js';
 import { GRANITE_VERSION } from '../version.js';
 import { isDocumentParsingDisabled } from '../core/extract-document.js';
+import { registerReadOnlyApiRoutes } from '../web/api-routes.js';
 import type { GraniteMcpRuntime } from './runtime.js';
 import type { Query } from '../core/query.js';
 
@@ -52,6 +54,8 @@ export interface GraniteMcpHttpServerOptions {
   authToken?: string;
   jsonResponse?: boolean;
   role?: McpAccessRole;
+  /** Also expose the read-only vault web API (/api/*, /assets/*) behind the same auth. */
+  webApi?: boolean;
 }
 
 export type McpAccessRole = 'read' | 'write';
@@ -819,7 +823,7 @@ export function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: Gra
   const authToken = options.authToken?.trim();
   const role = options.role ?? 'write';
 
-  app.use('/mcp', async (c, next) => {
+  const guard: MiddlewareHandler = async (c, next) => {
     const requestHost = (c.req.header('host') ?? '').toLowerCase();
     if (allowedHosts.size > 0 && !allowedHosts.has(requestHost)) {
       return c.json({
@@ -857,7 +861,20 @@ export function createGraniteMcpHttpApp(runtime: GraniteMcpRuntime, options: Gra
     }
 
     await next();
-  });
+  };
+
+  app.use('/mcp', guard);
+
+  if (options.webApi) {
+    // Read-only vault API for the local UI's instance switcher — same host,
+    // origin, and bearer guard as /mcp; writes are never mounted here.
+    app.use('/api/*', guard);
+    app.use('/assets/*', guard);
+    registerReadOnlyApiRoutes(app, {
+      vaultRoot: runtime.vaultRoot,
+      getConfig: () => runtime.getConfig(),
+    });
+  }
 
   app.get('/health', c => c.json({ status: 'ok', name: 'granite-mcp', version: GRANITE_VERSION }));
 

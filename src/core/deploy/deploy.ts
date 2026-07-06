@@ -19,6 +19,26 @@ export const MCP_PORT = 8080;
 const EXEC_OK_MARKER = '__GRANITE_STEP_OK__';
 const RESERVED_INSTANCE_NAMES = new Set(['list', 'status', 'destroy']);
 
+// First release whose `granite mcp --web-api` exposes the read-only web API
+// used by the local UI's instance switcher.
+export const WEB_API_MIN_VERSION = '0.1.12';
+
+export function supportsWebApi(version: string | null): boolean {
+  if (!version) return false;
+  const parse = (value: string): number[] | null => {
+    const match = value.trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+    return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+  };
+  const parsed = parse(version);
+  const min = parse(WEB_API_MIN_VERSION);
+  if (!parsed || !min) return false;
+  for (let i = 0; i < 3; i++) {
+    if (parsed[i] > min[i]) return true;
+    if (parsed[i] < min[i]) return false;
+  }
+  return true;
+}
+
 export interface DeployMarker {
   granite_version: string;
   mcp_token: string;
@@ -178,7 +198,7 @@ export async function deployInstance(
   // are not on the sprite's default PATH, and services don't get a login shell.
   await client.putService(spriteName, SERVICE_NAME, {
     cmd: nodeBin,
-    args: [graniteBin, 'mcp', '--transport', 'http', '--host', '0.0.0.0', '--port', String(MCP_PORT)],
+    args: [graniteBin, 'mcp', '--transport', 'http', '--host', '0.0.0.0', '--port', String(MCP_PORT), '--web-api'],
     env: {
       GRANITE_VAULT: VAULT_PATH,
       GRANITE_MCP_TOKEN: mcpToken,
@@ -205,7 +225,17 @@ export async function deployInstance(
   };
 }
 
-export async function listManagedInstances(client: SpritesClient): Promise<InstanceStatus[]> {
+export interface ListManagedInstancesOptions {
+  /** Copy each instance's MCP bearer token onto the status (server-side use only). */
+  includeToken?: boolean;
+  /** Set false to skip health probes — probes wake cold sprites. Defaults to true. */
+  checkHealth?: boolean;
+}
+
+export async function listManagedInstances(
+  client: SpritesClient,
+  options: ListManagedInstancesOptions = {},
+): Promise<InstanceStatus[]> {
   const names = await client.listSpriteNames(SPRITE_NAME_PREFIX);
   const instances: InstanceStatus[] = [];
 
@@ -214,7 +244,11 @@ export async function listManagedInstances(client: SpritesClient): Promise<Insta
     if (!marker) continue;
     const sprite = await client.getSprite(spriteName);
     if (!sprite) continue;
-    instances.push(await buildStatus(client, sprite, marker));
+    const status = await buildStatus(client, sprite, marker, options.checkHealth ?? true);
+    if (options.includeToken) {
+      status.mcp_token = marker.mcp_token;
+    }
+    instances.push(status);
   }
 
   return instances;
@@ -260,7 +294,12 @@ export async function destroyInstance(client: SpritesClient, instanceName: strin
   return spriteName;
 }
 
-async function buildStatus(client: SpritesClient, sprite: SpriteInfo, marker: DeployMarker): Promise<InstanceStatus> {
+async function buildStatus(
+  client: SpritesClient,
+  sprite: SpriteInfo,
+  marker: DeployMarker,
+  checkHealth = true,
+): Promise<InstanceStatus> {
   return {
     instance: instanceNameFromSprite(sprite.name),
     sprite: sprite.name,
@@ -268,7 +307,7 @@ async function buildStatus(client: SpritesClient, sprite: SpriteInfo, marker: De
     mcp_url: `${sprite.url}/mcp`,
     status: sprite.status,
     granite_version: marker.granite_version,
-    healthy: sprite.url ? await client.checkHealth(`${sprite.url}/health`) : false,
+    healthy: checkHealth && sprite.url ? await client.checkHealth(`${sprite.url}/health`) : false,
   };
 }
 

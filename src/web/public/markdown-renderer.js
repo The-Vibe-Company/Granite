@@ -40,8 +40,13 @@ const MarkdownRenderer = (() => {
         // Image: ![alt](src)
         const alt = match[13];
         const src = match[14];
-        // Resolve relative paths to /assets/
-        const resolvedSrc = src.startsWith('http') ? src : `/assets/${src.replace(/^\.?\/?assets\//, '')}`;
+        // Resolve relative paths to /assets/. <img> requests can't carry the
+        // X-Granite-Instance header, so the active cloud instance rides along
+        // as a query param for the local gateway to route.
+        let resolvedSrc = src.startsWith('http') ? src : `/assets/${src.replace(/^\.?\/?assets\//, '')}`;
+        if (!src.startsWith('http') && window.GRANITE_INSTANCE) {
+          resolvedSrc += (resolvedSrc.includes('?') ? '&' : '?') + 'instance=' + encodeURIComponent(window.GRANITE_INSTANCE);
+        }
         result += `<img class="md-image" src="${escapeAttr(resolvedSrc)}" alt="${escapeAttr(alt)}" loading="lazy">`;
       }
       lastIndex = match.index + match[0].length;

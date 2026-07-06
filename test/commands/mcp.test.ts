@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { parseMcpRole, parsePort, parseTransport, resolveAuthToken } from '../../src/commands/mcp.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mcpCommand, parseMcpRole, parsePort, parseTransport, resolveAuthToken } from '../../src/commands/mcp.js';
 
 const originalMcpPort = process.env.MCP_PORT;
 const originalGraniteMcpToken = process.env.GRANITE_MCP_TOKEN;
@@ -29,6 +29,22 @@ describe('mcp command helpers', () => {
 
     delete process.env.MCP_PORT;
     expect(parsePort()).toBe(3321);
+  });
+
+  it('rejects --web-api on stdio transport', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code ?? 0})`);
+    }) as never);
+
+    try {
+      await expect(mcpCommand({ transport: 'stdio', webApi: true, vault: '/tmp/nonexistent-vault' }))
+        .rejects.toThrow('process.exit(1)');
+      expect(String(errorSpy.mock.calls[0]?.[0])).toContain('--web-api requires --transport http');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('rejects invalid transport values', () => {

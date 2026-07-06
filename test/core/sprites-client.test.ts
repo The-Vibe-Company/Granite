@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { HttpSpritesClient, SpritesApiError } from '../../src/core/deploy/sprites-client.js';
+import { HttpSpritesClient, SpritesApiError, SpritesExecError } from '../../src/core/deploy/sprites-client.js';
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -113,11 +113,39 @@ describe('HttpSpritesClient', () => {
     expect(await client.exec('granite', 'locate')).toBe('/usr/bin/node\n/usr/lib/bin/granite\n');
   });
 
+  it('throws with captured output when framed exec output reports a non-zero exit code', async () => {
+    const framed = new Uint8Array([
+      0x01, ...new TextEncoder().encode('stdout before failure\n'),
+      0x02, ...new TextEncoder().encode('stderr detail\n'),
+      0x03, 0x7f,
+    ]);
+    const fetchMock = vi.fn(async () => new Response(framed, { status: 200 }));
+    const client = createClient(fetchMock as unknown as typeof fetch);
+
+    const error = await client.exec('granite', 'false').catch(e => e);
+
+    expect(error).toBeInstanceOf(SpritesExecError);
+    expect(error.exitCode).toBe(127);
+    expect(error.output).toContain('stdout before failure');
+    expect(error.output).toContain('stderr detail');
+  });
+
   it('unwraps JSON-encoded exec output when present', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ stdout: 'ok', stderr: '' }));
     const client = createClient(fetchMock as unknown as typeof fetch);
 
     expect(await client.exec('granite', 'true')).toBe('ok\n');
+  });
+
+  it('throws when JSON-encoded exec output reports a non-zero exit code', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ stdout: 'nope', exit_code: 2 }));
+    const client = createClient(fetchMock as unknown as typeof fetch);
+
+    const error = await client.exec('granite', 'false').catch(e => e);
+
+    expect(error).toBeInstanceOf(SpritesExecError);
+    expect(error.exitCode).toBe(2);
+    expect(error.output).toBe('nope');
   });
 
   it('writes files with mode and mkdir', async () => {

@@ -41,6 +41,20 @@ export class SpritesApiError extends Error {
   }
 }
 
+export class SpritesExecError extends Error {
+  constructor(
+    readonly sprite: string,
+    readonly exitCode: number,
+    readonly output: string,
+  ) {
+    super(
+      `Sprites exec failed in "${sprite}" (exit ${exitCode})`
+      + (output.trim() ? `: ${truncate(output)}` : '.'),
+    );
+    this.name = 'SpritesExecError';
+  }
+}
+
 export interface HttpSpritesClientOptions {
   token: string;
   baseUrl?: string;
@@ -117,7 +131,11 @@ export class HttpSpritesClient implements SpritesClient {
         new TextDecoder().decode(body),
       );
     }
-    return decodeExecOutput(body);
+    const decoded = decodeExecOutput(body);
+    if (decoded.exitCode !== null && decoded.exitCode !== 0) {
+      throw new SpritesExecError(name, decoded.exitCode, decoded.output);
+    }
+    return decoded.output;
   }
 
   async readFile(name: string, filePath: string): Promise<string | null> {
@@ -225,33 +243,45 @@ function toSpriteInfo(payload: unknown): SpriteInfo {
   };
 }
 
+interface DecodedExecOutput {
+  output: string;
+  exitCode: number | null;
+}
+
 // The exec POST endpoint streams 1-byte stream-ID frames (0=stdin, 1=stdout,
 // 2=stderr, 3=exit code) concatenated into the HTTP body. Frame boundaries are
-// lost once concatenated, so drop the trailing exit frame and strip the ID
-// bytes — they can never occur in text output. Falls back to JSON-wrapped
-// output if the API ever switches encodings.
-function decodeExecOutput(bytes: Uint8Array): string {
+// lost once concatenated, so read the trailing exit frame when present and strip
+// stream ID bytes from text output. Falls back to JSON-wrapped output if the API
+// ever switches encodings.
+function decodeExecOutput(bytes: Uint8Array): DecodedExecOutput {
   const text = new TextDecoder().decode(bytes);
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     if (parsed && typeof parsed === 'object') {
       const parts = [parsed.stdout, parsed.stderr, parsed.output]
         .filter((part): part is string => typeof part === 'string');
-      if (parts.length > 0) return parts.join('\n');
+      const exitCode = typeof parsed.exit_code === 'number'
+        ? parsed.exit_code
+        : typeof parsed.exitCode === 'number'
+          ? parsed.exitCode
+          : null;
+      if (parts.length > 0) return { output: parts.join('\n'), exitCode };
     }
   } catch {
     // Framed or raw text output.
   }
 
   let end = bytes.length;
+  let exitCode: number | null = null;
   if (end >= 2 && bytes[end - 2] === 0x03) {
+    exitCode = bytes[end - 1];
     end -= 2; // exit frame: 0x03 + exit-code byte
   }
   const kept: number[] = [];
   for (let i = 0; i < end; i++) {
     if (bytes[i] > 0x04) kept.push(bytes[i]);
   }
-  return new TextDecoder().decode(new Uint8Array(kept));
+  return { output: new TextDecoder().decode(new Uint8Array(kept)), exitCode };
 }
 
 function truncate(text: string, max = 300): string {

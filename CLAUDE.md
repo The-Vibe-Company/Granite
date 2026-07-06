@@ -54,7 +54,7 @@ npx tsx src/index.ts <command>
   - `slugify.ts` — Title-to-slug conversion
   - `search.ts`, `backlinks.ts`, `suggest.ts`, `doctor.ts` — Query/validation logic
 - **`src/commands/`** — Thin CLI wrappers that call into `src/core/`
-- **`src/core/deploy/`** — `granite deploy`: one-command serverless Granite on Fly.io Sprites. `sprites-client.ts` is the only file that knows Sprites API shapes; `deploy.ts` orchestrates against the injected `SpritesClient` interface. The sprite is the source of truth (marker file `/home/sprite/.granite-deploy/deploy.json`, kept outside the vault because it holds the MCP token; sprite names prefixed `granite`/`granite-<instance>`); no local state.
+- **`src/core/deploy/`** — `granite deploy`: one-command serverless Granite on Fly.io Sprites. `sprites-client.ts` is the only file that knows Sprites API shapes; `deploy.ts` orchestrates against the injected `SpritesClient` interface. The sprite is the source of truth for instances (marker file `/home/sprite/.granite-deploy/deploy.json`, kept outside the vault because it holds the MCP token; sprite names prefixed `granite`/`granite-<instance>`). The optional Sprites API credential is user-scoped local config at `~/.granite/config/sprites.json`, not instance state, and is excluded from sync manifests.
 - **`src/web/`** — Hono-based local web UI served by `granite serve`
 
 ## Key Patterns

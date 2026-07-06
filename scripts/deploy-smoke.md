@@ -4,7 +4,11 @@ Not run in CI (needs a real, billed Sprites account). Run this checklist before
 releasing changes to `src/core/deploy/` or `src/commands/deploy.ts`.
 
 Prereqs: `export SPRITES_TOKEN=…` from https://sprites.dev (format `org/id/hex/hex`,
-not a FlyV1 macaroon).
+not a FlyV1 macaroon), or store it once with:
+
+```bash
+npx tsx src/index.ts deploy login --token <sprites-token>
+```
 
 ⚠ `granite deploy` installs the **published** granite-mem at the CLI's own version.
 The security checks below (401 without token, extract/import hidden) only pass when
@@ -48,6 +52,7 @@ curl -s https://<sprite-url>/api/graph \
 
 - [ ] Returns JSON with `nodes` and `edges`; without the Authorization header it returns 401.
 - [ ] `SPRITES_TOKEN=… npx tsx src/index.ts serve --port 4322` lists the smoke instance in the UI switcher and can load its graph.
+- [ ] `unset SPRITES_TOKEN` after `deploy login`; `npx tsx src/index.ts serve --port 4322` still discovers the smoke instance from `~/.granite/config/sprites.json`.
 
 ## 4. Wake-on-request
 

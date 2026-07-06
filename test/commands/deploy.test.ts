@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deployCommand, deployDestroyCommand, deployListCommand } from '../../src/commands/deploy.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { deployCommand, deployDestroyCommand, deployListCommand, deployLoginCommand, deployLogoutCommand } from '../../src/commands/deploy.js';
 import { MARKER_PATH, VAULT_PATH } from '../../src/core/deploy/deploy.js';
+import { getSpritesCredentialsPath, saveSpritesToken } from '../../src/core/deploy/credentials.js';
 import type { SpriteInfo, SpriteServiceDefinition, SpritesClient } from '../../src/core/deploy/sprites-client.js';
 
 const OK = '__GRANITE_STEP_OK__';
@@ -76,8 +80,13 @@ describe('deploy commands', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  let tmpHome: string;
+  let previousHome: string | undefined;
 
   beforeEach(() => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'granite-deploy-home-'));
+    previousHome = process.env.HOME;
+    process.env.HOME = tmpHome;
     vi.stubEnv('SPRITES_TOKEN', '');
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -89,6 +98,12 @@ describe('deploy commands', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    fs.rmSync(tmpHome, { recursive: true, force: true });
   });
 
   function loggedText(): string {
@@ -103,6 +118,30 @@ describe('deploy commands', () => {
     expect(factory).not.toHaveBeenCalled();
     expect(loggedText()).toContain('SPRITES_TOKEN');
     expect(loggedText()).toContain('sprites.dev');
+  });
+
+  it('uses the stored Sprites token when no explicit token or env var is provided', async () => {
+    const client = new FakeSpritesClient();
+    saveSpritesToken('stored-token');
+    const factory = vi.fn(() => client);
+
+    await deployListCommand({ json: true }, factory);
+
+    expect(factory).toHaveBeenCalledWith('stored-token');
+  });
+
+  it('stores and removes the Sprites token with login/logout', () => {
+    deployLoginCommand({ token: 'login-token' });
+
+    const filePath = getSpritesCredentialsPath();
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(fs.readFileSync(filePath, 'utf-8')).toContain('login-token');
+    expect(loggedText()).toContain('Saved Sprites token');
+
+    deployLogoutCommand();
+
+    expect(fs.existsSync(filePath)).toBe(false);
+    expect(loggedText()).toContain('Removed Sprites token');
   });
 
   it('deploys the default instance and prints connection info', async () => {

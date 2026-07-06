@@ -190,6 +190,14 @@ export SPRITES_TOKEN=…   # from sprites.dev — your account, your sprite, you
 npx granite-mem deploy
 ```
 
+Or store the Sprites API token once in a user-scoped Granite credentials file:
+
+```bash
+granite deploy login --token <sprites-token>
+```
+
+That writes `~/.granite/config/sprites.json` (mode `0600` where supported). It works on macOS, Linux, and Windows via the user's home directory. Commands resolve credentials in this order: `--token`, `SPRITES_TOKEN`, then the stored file. Remove it with `granite deploy logout`.
+
 That prints an MCP URL + bearer token ready to paste into Claude Code or Cursor:
 
 ```bash
@@ -199,9 +207,10 @@ claude mcp add --transport http granite https://<your-sprite>.sprites.app/mcp \
 
 There is no central admin, no Granite cloud account, no relay: `granite deploy` provisions a sprite **you** own and pay for directly.
 
-Manage instances from any machine with your `SPRITES_TOKEN`:
+Manage instances from any machine after `deploy login`, or with `SPRITES_TOKEN`:
 
 ```bash
+granite deploy login --token <sprites-token>
 granite deploy work            # a second instance (own vault, own token, own URL)
 granite deploy list            # all instances: version, health, MCP URL
 granite deploy status --show-token
@@ -216,12 +225,13 @@ Browse local and deployed vaults from the same local UI:
 SPRITES_TOKEN=… granite serve
 ```
 
-`granite serve` discovers your managed Sprites, keeps MCP bearer tokens on the local server, and proxies read-only graph/search/note requests to the selected cloud instance. Use `granite serve --no-cloud` to browse only the local vault.
+`granite serve` discovers your managed Sprites using `SPRITES_TOKEN` or the stored `~/.granite/config/sprites.json` token. It keeps MCP bearer tokens on the local server and proxies read-only graph/search/note requests to the selected cloud instance. Use `granite serve --no-cloud` to browse only the local vault.
 
 Notes:
 
 - Document parsing (PDF/DOCX/XLSX/PPTX) is **disabled in cloud deployments** (`GRANITE_DISABLE_DOCUMENT_PARSING=1`). Extract and import documents on your local Granite.
 - Cloud instances expose MCP plus an authenticated read-only web API for the local UI switcher; note creation in the web UI remains local-only.
+- The Sprites API token is local user configuration at `~/.granite/config/sprites.json`; it is not written to the vault notes and is excluded from Granite sync manifests.
 - The vault lives at `/home/sprite/.granite` on the sprite, on durable object-storage-backed disk. There is no export/backup command in v1 — treat the sprite as the single copy for now.
 
 ### Advanced: run the HTTP MCP server yourself

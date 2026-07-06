@@ -26,7 +26,9 @@ import { wakeupCommand } from './commands/wakeup.js';
 import {
   deployCommand,
   deployDestroyCommand,
+  deployLoginCommand,
   deployListCommand,
+  deployLogoutCommand,
   deployStatusCommand,
 } from './commands/deploy.js';
 import { attachCommand } from './commands/attach.js';
@@ -250,7 +252,7 @@ program
   .command('serve')
   .description('Start the local web UI — browse local and cloud vaults, search, and visualize the knowledge graph')
   .option('-p, --port <port>', 'Port number', '4321')
-  .option('--no-cloud', 'Skip cloud instance discovery even when SPRITES_TOKEN is set')
+  .option('--no-cloud', 'Skip cloud instance discovery even when Sprites credentials are available')
   .action(async (options: { port: string; cloud?: boolean }) => {
     await serveCommand(options);
   });
@@ -301,13 +303,13 @@ mcpCmd
 
 // ─── Deploy ────────────────────────────────────────────────────────────
 // One-command serverless Granite on Fly.io Sprites. The sprite is the source
-// of truth — no local state; works from any machine with SPRITES_TOKEN.
+// of truth for instances; the optional Sprites API credential is user-scoped.
 
 const deployCmd = program
   .command('deploy')
   .description('Deploy a personal serverless Granite (MCP over HTTP) to Fly.io Sprites')
   .argument('[name]', 'Instance name (each instance is its own sprite + vault)', undefined)
-  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
   .option('--template <name>', 'Vault template used on first deploy (e.g. founder-os)')
   .option('--rotate-token', 'Generate a new MCP bearer token for this instance')
   .option('--force', 'Adopt an existing sprite that was not created by granite deploy')
@@ -317,6 +319,21 @@ const deployCmd = program
     await deployCommand(name, options);
   });
 
+deployCmd
+  .command('login')
+  .description('Store a Sprites API token in ~/.granite/config/sprites.json')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .action((options: { token?: string }) => {
+    deployLoginCommand(options);
+  });
+
+deployCmd
+  .command('logout')
+  .description('Remove the stored Sprites API token')
+  .action(() => {
+    deployLogoutCommand();
+  });
+
 // Options placed after the subcommand (e.g. `deploy destroy x --force`) are
 // captured by the parent `deploy` command's identically-named options — merge
 // parent options into each subcommand's.
@@ -324,7 +341,7 @@ deployCmd
   .command('list')
   .alias('ls')
   .description('List deployed Granite instances (version, health, MCP URL)')
-  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
   .option('--json', 'Output as JSON')
   .action(async (options: { token?: string; json?: boolean }) => {
     await deployListCommand({ ...deployCmd.opts(), ...options });
@@ -334,7 +351,7 @@ deployCmd
   .command('status')
   .description('Show details for a deployed instance')
   .argument('[name]', 'Instance name')
-  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
   .option('--show-token', 'Include the MCP bearer token in the output')
   .option('--json', 'Output as JSON')
   .action(async (name: string | undefined, options: { token?: string; showToken?: boolean; json?: boolean }) => {
@@ -345,7 +362,7 @@ deployCmd
   .command('destroy')
   .description('Permanently delete a deployed instance and its cloud vault')
   .argument('[name]', 'Instance name')
-  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN')
+  .option('--token <token>', 'Sprites API token. Defaults to $SPRITES_TOKEN or ~/.granite/config/sprites.json')
   .option('--force', 'Skip the confirmation prompt')
   .action(async (name: string | undefined, options: { token?: string; force?: boolean }) => {
     await deployDestroyCommand(name, { ...deployCmd.opts(), ...options });

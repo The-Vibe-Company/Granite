@@ -14,6 +14,12 @@ import {
 import type { DeployInstanceResult, InstanceStatus } from '../core/deploy/deploy.js';
 import { HttpSpritesClient, SpritesApiError } from '../core/deploy/sprites-client.js';
 import type { SpritesClient } from '../core/deploy/sprites-client.js';
+import {
+  deleteStoredSpritesToken,
+  getSpritesCredentialsPath,
+  resolveSpritesToken,
+  saveSpritesToken,
+} from '../core/deploy/credentials.js';
 
 interface DeployCommandOptions {
   token?: string;
@@ -38,6 +44,10 @@ interface DeployDestroyOptions {
 interface DeployListOptions {
   token?: string;
   json?: boolean;
+}
+
+interface DeployLoginOptions {
+  token?: string;
 }
 
 // Injectable for tests; production always talks to the real Sprites API.
@@ -182,6 +192,25 @@ export async function deployDestroyCommand(
   }
 }
 
+export function deployLoginCommand(options: DeployLoginOptions): void {
+  const token = resolveSpritesToken(options.token);
+  if (!token) {
+    console.error('Missing Sprites token. Pass --token, or set SPRITES_TOKEN before running login.');
+    process.exit(1);
+  }
+  const filePath = saveSpritesToken(token);
+  console.log(`Saved Sprites token to ${filePath}`);
+}
+
+export function deployLogoutCommand(): void {
+  const removed = deleteStoredSpritesToken();
+  if (removed) {
+    console.log(`Removed Sprites token from ${getSpritesCredentialsPath()}`);
+  } else {
+    console.log(`No stored Sprites token found at ${getSpritesCredentialsPath()}`);
+  }
+}
+
 async function deployAll(
   client: SpritesClient,
   options: DeployCommandOptions,
@@ -263,9 +292,9 @@ function formatInstanceLine(instance: InstanceStatus): string {
 }
 
 function requireSpritesToken(explicit?: string): string {
-  const token = (explicit ?? process.env.SPRITES_TOKEN ?? '').trim();
+  const token = resolveSpritesToken(explicit);
   if (!token) {
-    console.error('Missing Sprites token. Set SPRITES_TOKEN (get one at https://sprites.dev) or pass --token.');
+    console.error('Missing Sprites token. Get one at https://sprites.dev, then run "granite deploy login --token <token>", set SPRITES_TOKEN, or pass --token.');
     process.exit(1);
   }
   return token;

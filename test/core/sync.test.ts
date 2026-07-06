@@ -37,6 +37,7 @@ describe('sync core', () => {
     writeFile('notes/notes/example.md', '# Example\n');
     writeFile('.granite/index.db', 'derived');
     writeFile('.granite/sync.json', '{}');
+    writeFile('config/sprites.json', '{"token":"secret"}\n');
 
     const state = createState('local');
     const manifest = buildSyncManifest(tmpDir, state);

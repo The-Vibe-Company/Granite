@@ -1,11 +1,16 @@
 import { jsonSuccess } from '../core/json-output.js';
-import { extractDocument } from '../core/extract-document.js';
+import { extractDocument, isDocumentParsingDisabled } from '../core/extract-document.js';
 
 interface ExtractOptions {
   json?: boolean;
 }
 
 export async function extractDocumentCommand(filePath: string, options: ExtractOptions = {}): Promise<void> {
+  if (isDocumentParsingDisabled()) {
+    console.error('Document parsing is disabled in this deployment (GRANITE_DISABLE_DOCUMENT_PARSING). Extract documents on your local Granite instead.');
+    process.exit(1);
+  }
+
   let extracted;
 
   try {

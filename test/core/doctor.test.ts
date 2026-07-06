@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,6 +31,19 @@ describe('doctor', () => {
     rebuildIndex(tmpDir, config, db);
     return db;
   }
+
+  it('surfaces an info issue when document parsing is disabled', () => {
+    vi.stubEnv('GRANITE_DISABLE_DOCUMENT_PARSING', '1');
+    try {
+      const db = getDb();
+      const issues = runDoctor(tmpDir, config, db);
+      db.close();
+      const info = issues.find(i => i.level === 'info' && i.message.includes('GRANITE_DISABLE_DOCUMENT_PARSING'));
+      expect(info).toBeDefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 
   it('reports no issues for a healthy vault', () => {
     createNote(tmpDir, config, 'note', 'A', 'Links to [[B]].\n');

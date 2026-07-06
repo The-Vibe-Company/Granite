@@ -42,7 +42,7 @@ npx tsx src/index.ts <command>
 
 ## Architecture
 
-- **`src/index.ts`** — CLI entrypoint using Commander. Registers all subcommands (`init`, `new`, `add`, `list`, `edit`, `open`, `search`, `backlinks`, `suggest-links`, `types`, `doctor`, `serve`).
+- **`src/index.ts`** — CLI entrypoint using Commander. Registers all subcommands (`init`, `new`, `add`, `list`, `edit`, `open`, `search`, `backlinks`, `suggest-links`, `types`, `doctor`, `serve`, `deploy`).
 - **`src/core/`** — Pure business logic, no CLI concerns:
   - `types.ts` — All shared interfaces (`Note`, `GraniteConfig`, `WikiLink`, `SearchResult`, etc.)
   - `config.ts` — Loads/writes `granite.yml`, holds default config
@@ -54,6 +54,7 @@ npx tsx src/index.ts <command>
   - `slugify.ts` — Title-to-slug conversion
   - `search.ts`, `backlinks.ts`, `suggest.ts`, `doctor.ts` — Query/validation logic
 - **`src/commands/`** — Thin CLI wrappers that call into `src/core/`
+- **`src/core/deploy/`** — `granite deploy`: one-command serverless Granite on Fly.io Sprites. `sprites-client.ts` is the only file that knows Sprites API shapes; `deploy.ts` orchestrates against the injected `SpritesClient` interface. The sprite is the source of truth (marker file `/home/sprite/.granite-deploy/deploy.json`, kept outside the vault because it holds the MCP token; sprite names prefixed `granite`/`granite-<instance>`); no local state.
 - **`src/web/`** — Hono-based local web UI served by `granite serve`
 
 ## Key Patterns
@@ -62,6 +63,7 @@ npx tsx src/index.ts <command>
 - **Index rebuild**: `ensureIndex()` rebuilds the entire SQLite index on every command when `config.index.auto_rebuild` is true. The index is derived state — the markdown files are the source of truth.
 - **Slug formats**: Granite uses title-based slugs with collision counters by default. Custom note types may still opt into alternate slug formats in `granite.yml`.
 - **Note files**: Each note is `<folder>/<slug>.md` with YAML frontmatter (id, title, type, created, modified, tags, aliases).
+- **Document parsing kill switch**: `GRANITE_DISABLE_DOCUMENT_PARSING=1` (set automatically on cloud deployments) hides the `granite_extract_document`/`granite_import_document` MCP tools and disables `granite extract`/`granite import`. Check with `isDocumentParsingDisabled()` from `src/core/extract-document.ts`.
 
 ## Testing
 

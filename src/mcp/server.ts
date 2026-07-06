@@ -20,6 +20,7 @@ import {
   renderWakeupMarkdown,
 } from '../../shared/mcp-markdown.js';
 import { GRANITE_VERSION } from '../version.js';
+import { isDocumentParsingDisabled } from '../core/extract-document.js';
 import type { GraniteMcpRuntime } from './runtime.js';
 import type { Query } from '../core/query.js';
 
@@ -64,6 +65,7 @@ function buildServerInstructions(runtime: GraniteMcpRuntime, role: McpAccessRole
   const signature = runtime.getTypeRegistrySignature();
   const defaultType = runtime.getDefaultNoteType();
   const canWrite = role === 'write';
+  const canParseDocuments = !isDocumentParsingDisabled();
 
   const lines: string[] = [
     '# Granite — Knowledge Compilation System',
@@ -83,12 +85,16 @@ function buildServerInstructions(runtime: GraniteMcpRuntime, role: McpAccessRole
     '- **granite_compile_context** — compile a typed brief for a topic or slug using the graph',
     '- **granite_plan_garden** — compute the highest-leverage notes or clusters to revisit next',
     '- **granite_list_garden_adjudications** — inspect the active operator adjudications influencing garden planning',
-    '- **granite_extract_document** — read a local document into raw extracted text without importing it',
+    ...(canParseDocuments ? [
+      '- **granite_extract_document** — read a local document into raw extracted text without importing it',
+    ] : []),
     '- **granite_understand_note** — inspect a note in context, not in isolation',
     ...(canWrite ? [
       '- **granite_adjudicate_garden_opportunity** — explicitly downrank or clear a garden opportunity the operator has adjudicated',
       '- **granite_capture_knowledge** — capture new knowledge into the vault',
-      '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
+      ...(canParseDocuments ? [
+        '- **granite_import_document** — attach a file and create a linked source note with caller-provided content',
+      ] : []),
       '- **granite_revise_note** — make targeted edits when workflow prompts are insufficient',
       '- **granite_dispose_note** — archive by default, delete only when intentional',
       '',
@@ -129,7 +135,9 @@ function buildServerInstructions(runtime: GraniteMcpRuntime, role: McpAccessRole
     canWrite
       ? '- **Respect the type registry.** Every note\'s type must exist in the vault config; write tools reject unknown types and report validation issues in their response.'
       : '- **Respect the type registry.** Every note\'s type is governed by the vault config exposed in granite://vault/types.',
-    '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.',
+    canParseDocuments
+      ? '- **Prefer explicit extraction for documents.** Use granite://notes/{slug} for markdown, granite://vault/types for type contracts, and granite_extract_document before summarizing imported documents.'
+      : '- **Document parsing is disabled in this deployment.** Extract and import documents from a local Granite instance; use granite://notes/{slug} for markdown and granite://vault/types for type contracts.',
   );
 
   return lines.join('\n');
@@ -253,6 +261,7 @@ function buildTypeSchema(runtime: GraniteMcpRuntime, describe: string) {
 
 function registerTools(server: McpServer, runtime: GraniteMcpRuntime, role: McpAccessRole): void {
   const canWrite = role === 'write';
+  const canParseDocuments = !isDocumentParsingDisabled();
 
   server.registerTool('granite_wakeup', {
     title: 'Granite Wakeup',
@@ -385,7 +394,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime, role: McpA
     return toolResult(renderMutationResultMarkdown('Captured', result.note, result.recommendations, result.validation));
   });
 
-  if (canWrite) server.registerTool('granite_import_document', {
+  if (canWrite && canParseDocuments) server.registerTool('granite_import_document', {
     title: 'Import Granite Document',
     description: 'Import a local document into the vault by attaching the file, creating a linked source note, and storing caller-provided document content in that note. This tool does not read, clean, or summarize the document for you.',
     inputSchema: {
@@ -409,7 +418,7 @@ function registerTools(server: McpServer, runtime: GraniteMcpRuntime, role: McpA
     };
   });
 
-  server.registerTool('granite_extract_document', {
+  if (canParseDocuments) server.registerTool('granite_extract_document', {
     title: 'Extract Granite Document',
     description: 'Read a local document into raw extracted text without importing it. Use this before LLM cleaning and before granite_import_document when you need actual document understanding.',
     inputSchema: {
@@ -620,7 +629,7 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
             text: [
               'Refine the attached Granite note into a durable, well-structured note.',
               'Keep the meaning intact, avoid inventing facts, preserve useful wikilinks, and use Granite-style headings when appropriate.',
-              linkedAsset ? 'This note is linked to an imported document. If you need to understand that document, call granite_extract_document with the note frontmatter document_path before summarizing or extracting facts.' : '',
+              linkedAsset && !isDocumentParsingDisabled() ? 'This note is linked to an imported document. If you need to understand that document, call granite_extract_document with the note frontmatter document_path before summarizing or extracting facts.' : '',
               'When you are ready to apply the result, use granite_revise_note rather than low-level CRUD operations.',
             ].filter(Boolean).join(' '),
           },
@@ -663,7 +672,9 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '4. **Archive** — If it\'s been processed or is no longer relevant, set status: archived.',
               '',
               'Use granite_understand_note before changing a note, granite_revise_note to apply precise edits, and granite_dispose_note to archive anything that should leave the active loop.',
-              'If granite_understand_note shows that a source note has an imported document attached, call granite_extract_document with the note frontmatter document_path before summarizing, extracting facts, or promoting it.',
+              ...(isDocumentParsingDisabled() ? [] : [
+                'If granite_understand_note shows that a source note has an imported document attached, call granite_extract_document with the note frontmatter document_path before summarizing, extracting facts, or promoting it.',
+              ]),
               '',
               `Vault context: ${overview.note_count} notes total (${Object.entries(overview.notes_by_type).map(([t, c]) => `${c} ${t}s`).join(', ')}).`,
               '',
@@ -707,12 +718,16 @@ function registerPrompts(server: McpServer, runtime: GraniteMcpRuntime): void {
               '- Is more valuable than any individual note because it creates new understanding',
               '',
               'Steps:',
-              '1. Read the related notes below',
-              '2. If a related source note has an imported document attached, call granite_extract_document with that note\'s document_path before summarizing or extracting facts from that source',
-              '3. Draft the synthesis body and create it with granite_capture_knowledge (set type: synthesis and provide an explicit title)',
-              '4. Write a body that connects the key ideas, with [[wikilinks]] to sources',
-              '5. Set derived_from to the source note slugs',
-              '6. Run granite_understand_note on the new synthesis to inspect how well it is connected',
+              ...[
+                'Read the related notes below',
+                ...(isDocumentParsingDisabled() ? [] : [
+                  'If a related source note has an imported document attached, call granite_extract_document with that note\'s document_path before summarizing or extracting facts from that source',
+                ]),
+                'Draft the synthesis body and create it with granite_capture_knowledge (set type: synthesis and provide an explicit title)',
+                'Write a body that connects the key ideas, with [[wikilinks]] to sources',
+                'Set derived_from to the source note slugs',
+                'Run granite_understand_note on the new synthesis to inspect how well it is connected',
+              ].map((step, index) => `${index + 1}. ${step}`),
               '',
               `Related notes (${noteDetails.length} found for "${topic}"):`,
               '',

@@ -1,4 +1,5 @@
 import { loadConfig } from '../core/config.js';
+import { isDocumentParsingDisabled } from '../core/extract-document.js';
 import { importDocument } from '../core/import-document.js';
 import { syncVaultIndexAfterNoteWrite } from '../core/index-db.js';
 import { jsonSuccess } from '../core/json-output.js';
@@ -14,6 +15,11 @@ interface ImportOptions {
 }
 
 export function importDocumentCommand(filePath: string, options: ImportOptions = {}): void {
+  if (isDocumentParsingDisabled()) {
+    console.error('Document parsing is disabled in this deployment (GRANITE_DISABLE_DOCUMENT_PARSING). Import documents on your local Granite instead.');
+    process.exit(1);
+  }
+
   const vaultRoot = requireVaultRoot();
   const config = loadConfig(vaultRoot);
   const content = options.content?.trim();

@@ -6,10 +6,19 @@ import { listNotes } from './note.js';
 import { validateDurability, validateReviewState } from './json-output.js';
 import { parseWikilinks, resolveWikilinks } from './wikilinks.js';
 import { suggestLifecycleTransitions } from './lifecycle.js';
+import { isDocumentParsingDisabled } from './extract-document.js';
 
 export function runDoctor(vaultRoot: string, config: GraniteConfig, db: Database.Database): DoctorIssue[] {
   const issues: DoctorIssue[] = [];
   const notes = listNotes(vaultRoot, config);
+
+  if (isDocumentParsingDisabled()) {
+    issues.push({
+      level: 'info',
+      file: 'environment',
+      message: 'Document parsing is disabled via GRANITE_DISABLE_DOCUMENT_PARSING — granite extract/import and the matching MCP tools are unavailable in this deployment.',
+    });
+  }
 
   // 1. Config: check that all type folders exist
   for (const [name, typeConfig] of Object.entries(config.note_types)) {

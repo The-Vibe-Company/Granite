@@ -19,6 +19,8 @@ granite deploy login --token <sprites-token>
 
 That writes `~/.granite/config/sprites.json` (mode `0600` where supported). It works on macOS, Linux, and Windows via the user's home directory. Commands resolve credentials in this order: `--token`, `SPRITES_TOKEN`, then the stored file. Remove it with `granite deploy logout`.
 
+Shell examples on this page assume a POSIX shell (macOS, Linux, WSL, Git Bash). On Windows PowerShell, set the environment variable with `$env:SPRITES_TOKEN = "…"` instead of `export`.
+
 Deploy prints an MCP URL + bearer token ready to paste into Claude Code or Cursor:
 
 ```bash

@@ -50,5 +50,12 @@ MCP is scoped to one vault per server. Launch a read-only MCP server when an age
 
 ```bash
 granite mcp --vault ~/.granite --role read
-granite mcp --vault ~/.granite --role write
 ```
+
+Use `--role write` (the default) only on the machine where the agent is allowed to mutate the vault.
+
+## Security notes
+
+- Sync speaks plain HTTP and authenticates with bearer tokens. Only run it over a network you trust: a home LAN, Tailscale, or another private overlay. Crossing an untrusted boundary requires a TLS tunnel or reverse proxy in front of `granite sync serve`.
+- `--host 0.0.0.0` exposes the sync server on every interface. Bind to a specific private address (e.g. your Tailscale IP) when in doubt.
+- Treat write-scoped tokens like passwords: anyone holding one can mutate the vault. Revoke tokens you no longer use with `granite sync access revoke <name>`.

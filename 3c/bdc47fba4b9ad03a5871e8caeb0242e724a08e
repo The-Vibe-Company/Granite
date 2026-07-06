@@ -1,0 +1,22 @@
+test/core/sprites-client.test.ts
+  s_51e8e3052acb6d::t_561813f9d5b250 2,116-132,140-149
+  s_51e8e3052acb6d::t_b4beda74d0a1d4 150
+src/core/deploy/sprites-client.ts
+  s_51e8e3052acb6d::t_561813f9d5b250 44-57,134-138,246-250,253-256,263-268,275,277,284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3cbdc47fba4b9ad03a5871e8caeb0242e724a08e",
+  "prompts": {},
+  "sessions": {
+    "s_51e8e3052acb6d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f386d-93aa-78c2-a825-871effb9d50a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

@@ -6,9 +6,11 @@ There is no central admin, no Granite cloud account, no relay: the sprite is **y
 
 ## Quick start
 
+Commands on this page assume the CLI is installed globally (`npm install -g granite-mem`).
+
 ```bash
 export SPRITES_TOKEN=…   # from sprites.dev
-npx granite-mem deploy
+granite deploy
 ```
 
 Or store the Sprites API token once in a user-scoped credentials file:
@@ -17,7 +19,7 @@ Or store the Sprites API token once in a user-scoped credentials file:
 granite deploy login --token <sprites-token>
 ```
 
-On a shared machine, prefer `SPRITES_TOKEN=<token> granite deploy login` so the secret doesn't land in shell history or `ps` output.
+On a shared machine, prefer `SPRITES_TOKEN=<token> granite deploy login` — an inline environment variable stays out of `ps` output, unlike a `--token` argument. Note it still lands in shell history unless you prefix the command with a space (with `HISTCONTROL=ignorespace` or zsh's `HIST_IGNORE_SPACE`) or load the token from a password manager.
 
 That writes `~/.granite/config/sprites.json` (mode `0600` where supported). It works on macOS, Linux, and Windows via the user's home directory. Commands resolve credentials in this order: `--token`, `SPRITES_TOKEN`, then the stored file. Remove it with `granite deploy logout`.
 

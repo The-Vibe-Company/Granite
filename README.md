@@ -80,7 +80,7 @@ Granite is a **deterministic substrate** for knowledge: markdown files as the so
 
 - **Markdown is truth.** Every note is `<folder>/<slug>.md` with YAML frontmatter. Nothing you can't read in `cat`.
 - **The index is disposable.** Full-text search, backlinks, and typed queries live in `.granite/index.db` — rebuilt from the files at any time.
-- **Wikilinks are the graph.** `[[a-note]]` in any body resolves slug → title → alias → id, and the backlink graph falls out for free.
+- **Wikilinks are the graph.** `[[a-note]]` in any body resolves slug → title → alias, and the backlink graph falls out for free.
 
 > Karpathy asked for *"an incredible new product instead of a hacky collection of scripts"* for [LLM knowledge bases](https://x.com/karpathy/status/2039805659525644595).
 >

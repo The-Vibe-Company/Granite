@@ -1,0 +1,47 @@
+CLAUDE.md
+  s_51e8e3052acb6d::t_dcadbc6d1d53c3 57
+src/commands/deploy.ts
+  s_51e8e3052acb6d::t_e2aa39b1ea237b 17-22,49-52,195-213,295
+  s_51e8e3052acb6d::t_a00ca45097f59f 297
+src/commands/serve.ts
+  s_51e8e3052acb6d::t_d03653dbc1f925 29
+  s_51e8e3052acb6d::t_e2aa39b1ea237b 8,19
+scripts/deploy-smoke.md
+  s_51e8e3052acb6d::t_dcadbc6d1d53c3 7-11,55
+src/index.ts
+  s_51e8e3052acb6d::t_c1bea80c90c855 306
+  s_51e8e3052acb6d::t_e2aa39b1ea237b 29,31,312,322-336,344,354,365
+  s_51e8e3052acb6d::t_d03653dbc1f925 255
+README.md
+  s_51e8e3052acb6d::t_dcadbc6d1d53c3 193-200,213,234
+  s_51e8e3052acb6d::t_d03653dbc1f925 210
+  s_51e8e3052acb6d::t_88a58ea5c99311 228
+src/core/sync.ts
+  s_51e8e3052acb6d::t_e2aa39b1ea237b 527
+src/core/deploy/credentials.ts
+  s_51e8e3052acb6d::t_e2aa39b1ea237b 1-76
+test/core/sync.test.ts
+  s_51e8e3052acb6d::t_56a29b88c73e56 40
+test/core/deploy-credentials.test.ts
+  s_51e8e3052acb6d::t_56a29b88c73e56 1-64
+test/commands/deploy.test.ts
+  s_51e8e3052acb6d::t_e1795a52d9268c 2-4
+  s_51e8e3052acb6d::t_56a29b88c73e56 5,7,83-84,87-89,101-106,123-145
+  s_51e8e3052acb6d::t_9e7b0b63cd06a7 146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4b1a10ebe34195db1c054f00b661ed5a9b9045a6",
+  "prompts": {},
+  "sessions": {
+    "s_51e8e3052acb6d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f386d-93aa-78c2-a825-871effb9d50a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

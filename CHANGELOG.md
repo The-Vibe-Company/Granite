@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.12...granite-mem-v0.1.13) (2026-07-17)
+
+
+### Bug Fixes
+
+* **web:** preserve markdown renderer in production bundle ([#48](https://github.com/The-Vibe-Company/Granite/issues/48)) ([7b4cfbb](https://github.com/The-Vibe-Company/Granite/commit/7b4cfbbe8adff085d14e1155b9ed4a4b5cada70a))
+
 ## [0.1.12](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.11...granite-mem-v0.1.12) (2026-07-06)
 
 

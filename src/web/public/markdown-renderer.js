@@ -4,7 +4,7 @@
  * Converts markdown + wikilinks to semantic HTML.
  * Supports: headings, lists, blockquotes, code, tables, inline formatting, wikilinks.
  */
-const MarkdownRenderer = (() => {
+window.MarkdownRenderer = (() => {
 
   function parseInline(text, outgoingLinks) {
     const re = /(\[\[([^\]]+)\]\])|(`([^`]+)`)|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[([^\]]+)\]\(([^)]+)\))|(!\[([^\]]*)\]\(([^)]+)\))/g;

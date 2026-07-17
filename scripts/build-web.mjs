@@ -5,6 +5,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
+import vm from 'node:vm';
 import { build } from 'esbuild';
 
 const root = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
@@ -57,6 +58,31 @@ for (const f of jsFiles) {
     target: 'es2020',
     logLevel: 'error',
   });
+}
+
+// Smoke-test the compiled renderer. It is consumed by app.js through a browser
+// global, so a successful minification must preserve both that global and its
+// rendering behavior.
+const rendererBundle = await fs.readFile(path.join(out, 'markdown-renderer.js'), 'utf8');
+const rendererContext = vm.createContext({ window: {} });
+vm.runInContext(rendererBundle, rendererContext, { filename: 'markdown-renderer.js' });
+
+const renderer = rendererContext.window.MarkdownRenderer;
+if (typeof renderer?.render !== 'function') {
+  throw new Error('Compiled markdown renderer does not expose window.MarkdownRenderer.render');
+}
+
+const renderedMarkdown = renderer.render(
+  '# Build check\nA paragraph with [[Granite]].',
+  [{ target: 'Granite', resolved: true, resolved_slug: 'granite' }],
+);
+if (
+  !renderedMarkdown.includes('<h1 class="md-h1">Build check</h1>')
+  || !renderedMarkdown.includes('<p class="md-body">')
+  || !renderedMarkdown.includes('class="wikilink"')
+  || !renderedMarkdown.includes('data-slug="granite"')
+) {
+  throw new Error('Compiled markdown renderer failed its semantic smoke test');
 }
 
 // Minify each CSS file.

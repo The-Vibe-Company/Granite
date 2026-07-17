@@ -912,7 +912,7 @@
     readerMeta.innerHTML = metaParts.join('');
 
     // Article body
-    readerArticle.innerHTML = MarkdownRenderer.render(note.body || '', note.outgoing_links || []);
+    readerArticle.innerHTML = window.MarkdownRenderer.render(note.body || '', note.outgoing_links || []);
 
     // Links out + backlinks
     renderReaderLinks(note);

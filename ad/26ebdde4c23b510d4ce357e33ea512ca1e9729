@@ -1,0 +1,44 @@
+src/web/public/type-filters.js
+  s_510d998a852a31::t_aa1f4523a53a32 48-57
+  s_510d998a852a31::t_0f7c5a9045582e 1-14,16-47,58
+  s_510d998a852a31::t_65e30482efc494 15
+test/core/search.test.ts
+  s_510d998a852a31::t_b25742b1de275b 22,29,38,45-48,79
+  s_510d998a852a31::t_bab4a633611d6d 73
+src/web/public/style.css
+  s_510d998a852a31::t_a8c6754ddff4a0 673-677
+test/web/type-filters.test.ts
+  s_510d998a852a31::t_aa1f4523a53a32 8,57-64
+  s_510d998a852a31::t_0f7c5a9045582e 1-7,9-56,65-66
+src/core/types.ts
+  s_510d998a852a31::t_b25742b1de275b 116
+src/web/public/app.js
+  s_510d998a852a31::t_aa1f4523a53a32 1132-1133
+  s_510d998a852a31::t_a8c6754ddff4a0 1140
+  s_510d998a852a31::t_0f7c5a9045582e 197
+src/core/search.ts
+  s_510d998a852a31::t_b25742b1de275b 34,48,56,66,77,85
+test/core/querying.test.ts
+  s_510d998a852a31::t_b25742b1de275b 42
+src/web/public/index.html
+  s_510d998a852a31::t_0f7c5a9045582e 147
+scripts/build-web.mjs
+  s_510d998a852a31::t_bf0d5a6089344f 88-101,110
+  s_510d998a852a31::t_aa1f4523a53a32 102-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ad26ebdde4c23b510d4ce357e33ea512ca1e9729",
+  "prompts": {},
+  "sessions": {
+    "s_510d998a852a31": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8614-4941-79b1-9975-11318803d34a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}

@@ -194,17 +194,11 @@
       nodes = graphRes.nodes || [];
       const rawEdges = graphRes.edges || [];
       const typesRaw = typesRes.types || [];
-      types = Array.isArray(typesRaw)
-        ? typesRaw.map(t => typeof t === 'string' ? t : (t.name || t.type))
-        : Object.keys(typesRaw);
+      types = window.GraniteTypeFilters.visibleTypeNames(typesRaw, nodes);
 
       // Map types → palette colors
       typeColor = {};
       types.forEach((t, i) => { typeColor[t] = BRAND_CYCLE[i % BRAND_CYCLE.length]; });
-      // Any types that appear in nodes but weren't in config — assign next colors
-      for (const n of nodes) {
-        if (!typeColor[n.type]) typeColor[n.type] = BRAND_CYCLE[Object.keys(typeColor).length % BRAND_CYCLE.length];
-      }
 
       // De-dup & canonicalise edges (undirected, no self-loops, both ends in nodes)
       const slugSet = new Set(nodes.map(n => n.slug));
@@ -1135,14 +1129,15 @@
       return;
     }
     cmdResults.innerHTML = results.map((r, i) => {
-      const tc = colorForType(r.type);
+      const type = window.GraniteTypeFilters.noteType(r, byslug);
+      const tc = colorForType(type);
       return `<div class="command-result${i === 0 ? ' active' : ''}" data-idx="${i}" data-slug="${escapeHtml(r.slug)}">
         <span class="command-result-dot" style="background:${tc.hex}"></span>
         <div class="command-result-body">
           <div class="command-result-title">${escapeHtml(r.title || r.slug)}</div>
           <div class="command-result-slug">${escapeHtml(r.slug)}</div>
         </div>
-        <span class="command-result-type" style="background:${tc.soft};color:${tc.hex}">${escapeHtml(r.type || 'note')}</span>
+        <span class="command-result-type" title="${escapeHtml(type)}" style="background:${tc.soft};color:${tc.hex}">${escapeHtml(type)}</span>
       </div>`;
     }).join('');
   }

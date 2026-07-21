@@ -39,6 +39,7 @@ describe('querying helpers', () => {
     expect(results[0]).toMatchObject({
       slug: 'graph-memory',
       title: 'Graph Memory',
+      type: 'note',
     });
     expect(results[0].snippet).toContain('>>>');
     expect(typeof results[0].score).toBe('number');

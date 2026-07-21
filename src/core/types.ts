@@ -113,6 +113,7 @@ export interface WikiLink {
 export interface SearchResult {
   slug: string;
   title: string;
+  type: string;
   snippet: string;
   score: number;
 }
@@ -128,4 +129,3 @@ export interface DoctorIssue {
   file: string;
   message: string;
 }
-

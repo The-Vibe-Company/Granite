@@ -670,7 +670,11 @@ button { font: inherit; color: inherit; }
 .command-result-body { flex: 1; min-width: 0; }
 .command-result-title { font-weight: 600; font-size: 0.92rem; color: #fff8ef; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-result-slug { font-family: var(--font-mono); font-size: 0.66rem; color: rgba(255,236,220,0.5); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.command-result-type { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; flex: 0 0 auto; }
+.command-result-type {
+  max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.58rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; flex: 0 1 auto;
+}
 .command-empty {
   padding: 20px 16px; text-align: center; color: rgba(255,236,220,0.5); font-size: 0.86rem;
 }

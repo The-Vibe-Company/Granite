@@ -31,6 +31,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
     SELECT
       n.slug,
       n.title,
+      n.type,
       snippet(notes_fts, 1, '>>>', '<<<', '...', 30) as snippet,
       rank
     FROM notes_fts
@@ -44,6 +45,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
     const rows = stmt.all(ftsQuery, cappedLimit) as Array<{
       slug: string;
       title: string;
+      type: string;
       snippet: string;
       rank: number;
     }>;
@@ -51,6 +53,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
     return rows.map(r => ({
       slug: r.slug,
       title: r.title,
+      type: r.type,
       snippet: r.snippet,
       score: r.rank,
     }));
@@ -60,6 +63,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
       SELECT
         n.slug,
         n.title,
+        n.type,
         substr(n.body, 1, 200) as snippet,
         0 as rank
       FROM notes n
@@ -70,6 +74,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
     const rows = fallback.all(pattern, pattern, cappedLimit) as Array<{
       slug: string;
       title: string;
+      type: string;
       snippet: string;
       rank: number;
     }>;
@@ -77,6 +82,7 @@ export function searchNotes(db: Database.Database, query: string, limit = 20): S
     return rows.map(r => ({
       slug: r.slug,
       title: r.title,
+      type: r.type,
       snippet: r.snippet,
       score: r.rank,
     }));

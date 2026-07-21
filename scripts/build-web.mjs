@@ -85,6 +85,29 @@ if (
   throw new Error('Compiled markdown renderer failed its semantic smoke test');
 }
 
+// The app consumes the type-filter resolver through a browser global too.
+// Verify the production asset keeps custom types while dropping empty ones.
+const typeFiltersBundle = await fs.readFile(path.join(out, 'type-filters.js'), 'utf8');
+const typeFiltersContext = vm.createContext({ window: {} });
+vm.runInContext(typeFiltersBundle, typeFiltersContext, { filename: 'type-filters.js' });
+
+const typeFilters = typeFiltersContext.window.GraniteTypeFilters;
+const visibleTypes = typeFilters?.visibleTypeNames(
+  { note: {}, source: {}, meeting: {} },
+  [{ type: 'note' }, { type: 'meeting' }, { type: 'retro' }],
+);
+if (JSON.stringify(visibleTypes) !== JSON.stringify(['note', 'meeting', 'retro'])) {
+  throw new Error('Compiled type-filter registry failed its semantic smoke test');
+}
+if (
+  typeFilters.noteType(
+    { slug: 'weekly-sync' },
+    { 'weekly-sync': { type: 'meeting' } },
+  ) !== 'meeting'
+) {
+  throw new Error('Compiled type-filter registry failed its legacy search compatibility check');
+}
+
 // Minify each CSS file.
 for (const f of cssFiles) {
   const rel = path.relative(src, f);

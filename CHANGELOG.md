@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.13...granite-mem-v0.1.14) (2026-07-21)
+
+
+### Features
+
+* **web:** show only vault note types ([#50](https://github.com/The-Vibe-Company/Granite/issues/50)) ([3116b15](https://github.com/The-Vibe-Company/Granite/commit/3116b15807959a51465bff9d5f97642f2302a2fd))
+
 ## [0.1.13](https://github.com/The-Vibe-Company/Granite/compare/granite-mem-v0.1.12...granite-mem-v0.1.13) (2026-07-17)
 
 

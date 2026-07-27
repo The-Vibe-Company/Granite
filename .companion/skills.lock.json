@@ -1,0 +1,85 @@
+{
+  "lockfileVersion": 2,
+  "workspaces": {
+    "430850df-2b12-4437-95bf-ec7045879843": {
+      "apiUrl": "https://thecompanion.sh/v1",
+      "skills": {
+        "design-frontend-dev": {
+          "name": "design-frontend-dev",
+          "slug": "design-frontend-dev",
+          "skillId": "02decff6-b4ac-4d06-a494-abeeb08db9f3",
+          "companionSkillId": null,
+          "version": "3.1.1",
+          "checksum": "sha256:8622f4d9885f0f6ad0f140010e4fc7faecf0c1f44fa5c856994c257e637edb84",
+          "targets": [
+            {
+              "tool": "claude-code",
+              "scope": "project",
+              "path": ".claude/skills/design-frontend-dev",
+              "checksum": "sha256:2a5f797adc54654939f9ca22062d161bc5c941f7bbca692a352cfbc61b831090",
+              "version": "3.1.1"
+            },
+            {
+              "tool": "opencode",
+              "scope": "project",
+              "path": ".agents/skills/design-frontend-dev",
+              "checksum": "sha256:2a5f797adc54654939f9ca22062d161bc5c941f7bbca692a352cfbc61b831090",
+              "version": "3.1.1"
+            }
+          ],
+          "addedAt": "2026-07-27T15:27:31.593641Z"
+        },
+        "review-code-dev": {
+          "name": "review-code-dev",
+          "slug": "review-code-dev",
+          "skillId": "b0780a97-6972-4a2b-8e88-f41a528900c7",
+          "companionSkillId": null,
+          "version": "1.0.7",
+          "checksum": "sha256:ee857b250960d0c0430eaa07ee409a6175ef1f59ebef8d17e330efee0ff1c574",
+          "targets": [
+            {
+              "tool": "claude-code",
+              "scope": "project",
+              "path": ".claude/skills/review-code-dev",
+              "checksum": "sha256:8ad977bba35b23e4a8402e6c8bdbab23c47f7f6ec4d6d23c8f098da6d4dfd960",
+              "version": "1.0.7"
+            },
+            {
+              "tool": "opencode",
+              "scope": "project",
+              "path": ".agents/skills/review-code-dev",
+              "checksum": "sha256:8ad977bba35b23e4a8402e6c8bdbab23c47f7f6ec4d6d23c8f098da6d4dfd960",
+              "version": "1.0.7"
+            }
+          ],
+          "addedAt": "2026-07-27T15:27:31.610822Z"
+        },
+        "ship-pr-dev": {
+          "name": "ship-pr-dev",
+          "slug": "ship-pr-dev",
+          "skillId": "bccb0c35-71bf-4fe8-ad7c-7a931889fa84",
+          "companionSkillId": null,
+          "version": "1.0.6",
+          "checksum": "sha256:30403e1dcb20bf449c0c0180cce3cb13dd8045962cf10592fb0f1e875ebd9aad",
+          "targets": [
+            {
+              "tool": "claude-code",
+              "scope": "project",
+              "path": ".claude/skills/ship-pr-dev",
+              "checksum": "sha256:4dba2cc16878dffbbb42b41427623622daf8a2a300f0f08b2e7e639e47fe944f",
+              "version": "1.0.6"
+            },
+            {
+              "tool": "opencode",
+              "scope": "project",
+              "path": ".agents/skills/ship-pr-dev",
+              "checksum": "sha256:4dba2cc16878dffbbb42b41427623622daf8a2a300f0f08b2e7e639e47fe944f",
+              "version": "1.0.6"
+            }
+          ],
+          "addedAt": "2026-07-27T15:27:31.618660Z"
+        }
+      }
+    }
+  }
+}
